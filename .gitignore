@@ -1,0 +1,32 @@
+# BeamNG userfolder cache (in case the userfolder ever ends up inside the repo)
+cache/
+cache.*
+temp/
+*.cdae
+
+# Reference checkouts (read on demand, not committed)
+reference/
+
+# Investigation scratch space
+investigations/scratch/
+
+# Distributables
+*.zip
+!art/dynamicDecals/textures/*.zip
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor junk
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+*~
+
+# Lua build artifacts (LuaJIT bytecode caches if any tool emits them)
+*.luac
+*.out
