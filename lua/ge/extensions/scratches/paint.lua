@@ -16,6 +16,12 @@ local setupAttemptTimer = 0      -- seconds since last attempt
 local SETUP_RETRY       = 1.0    -- seconds between retry attempts
 local lastSkinJBeam     = nil    -- last vehicle jbeam we successfully set skin on
 
+-- Forward declarations so the paint-fill helper (defined right after trySetup
+-- so it can be called from setup) can reach these. The actual assignments
+-- live further down where the synthetic-camera stamping logic is grouped.
+local decalProjection      = nil
+local resolveDecalProjection
+
 -- ---- one-time setup ----
 local function ensureApiLoaded()
   if api then return true end
@@ -102,7 +108,61 @@ local function trySetup()
   ready = true
   pendingSetup = false
   log('I', logTag, "decals API initialized for " .. jbeam .. " (layers=" .. tostring(api.getLayerCount and api.getLayerCount() or "?") .. ")")
+
+  -- Seed @DynamicTextureBaseColor with the vehicle's actual paint color so
+  -- the body doesn't render black after the dynamic-textures skin activates.
+  -- Without this, Stage 1 of the materials.json reads from an empty dynamic
+  -- texture (default 0,0,0) and the vehicle goes solid black wherever the
+  -- skin's opacityMap covers it.
+  M.addPaintFill()
   return true
+end
+
+-- Parse the BeamNG getVehicleColor() string ("r,g,b,a" with floats 0..1) into
+-- numeric RGB. Tolerant of either commas or whitespace as separators and of
+-- nil / non-string returns (some vehicles or transient states don't expose a
+-- color). Returns nil if it can't extract three numbers.
+local function parseVehicleColor(s)
+  if type(s) ~= "string" or s == "" then return nil end
+  local r, g, b = s:match("([%-%d%.]+)[,%s]+([%-%d%.]+)[,%s]+([%-%d%.]+)")
+  r, g, b = tonumber(r), tonumber(g), tonumber(b)
+  if not (r and g and b) then return nil end
+  return r, g, b
+end
+
+-- Bake a fill layer at the bottom of the layer stack with the player vehicle's
+-- current paint color. Direct-bake (same pattern as our scratch stamps) — we
+-- do not use api.addFillLayer because it goes through history machinery and
+-- doesn't accept an explicit color in params.
+M.addPaintFill = function()
+  if not ready then log('W', logTag, "addPaintFill: not ready"); return end
+  if not resolveDecalProjection() then return end
+  local veh = getPlayerVehicle(0)
+  if not veh then return end
+
+  local r, g, b = parseVehicleColor(getVehicleColor and getVehicleColor() or nil)
+  if not r then
+    -- Fallback: a neutral mid-grey so the body isn't black even if we can't
+    -- resolve the actual paint. The user can call M.addPaintFill() again
+    -- manually after the vehicle finishes initializing.
+    r, g, b = 0.5, 0.5, 0.5
+    log('W', logTag, "addPaintFill: getVehicleColor unavailable; using mid-grey fallback")
+  end
+
+  local fillData = {
+    name              = "scratches_base_paint",
+    uid               = string.format("scr-fill-%08x", math.random(0, 0xffffffff)),
+    type              = api.layerTypes.fill,
+    blendMode         = 0,  -- Normal
+    color             = Point4F(r, g, b, 1),
+    colorPaletteMapId = 0,
+    enabled           = true,
+    locked            = false,
+    parentUid         = nil,
+    children          = {},
+  }
+  decalProjection:bakeLayers({fillData}, veh.JBeam or veh.jbeam)
+  log('I', logTag, string.format("paint fill: rgb=(%.2f,%.2f,%.2f) uid=%s", r, g, b, fillData.uid))
 end
 
 -- ---- per-frame ----
@@ -308,9 +368,10 @@ local SCRATCH_BRUSHES = {
 -- BeamNG's own code uses debug.getupvalue (devUtils, powertrain, ai), so the
 -- facility is sandbox-permitted.
 
-local decalProjection = nil
+-- decalProjection and resolveDecalProjection are forward-declared at the top
+-- of the file so the paint-fill helper near trySetup can reach them.
 
-local function resolveDecalProjection()
+resolveDecalProjection = function()
   if decalProjection then return decalProjection end
   if not (api and api.bakeLayers) then return nil end
   local i = 1
@@ -395,7 +456,21 @@ M.stampAtLocal = function(localPos, localNormal, opts)
   local rot      = opts.rot or math.random() * 360.0
   api.setDecalTexturePath("color", colorTex)
   api.setDecalTexturePath("alpha", opts.alphaTex or "/art/dynamicDecals/textures/_one.png")
-  api.setDecalColor(Point4F(opts.r or 0, opts.g or 1, opts.b or 0, 1))
+  -- Default to "polished steel" PBR look: scratches read as exposed metal
+  -- under the paint coat. opts.skipMetal disables this for diagnostic stamps
+  -- (probeBrushes) where the per-channel color is what we want to inspect.
+  if opts.skipMetal then
+    api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_zero.png")
+    api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
+    api.setMetallicIntensity(0)
+    api.setRoughnessIntensity(0.5)
+  else
+    api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_one.png")
+    api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
+    api.setMetallicIntensity(1.0)
+    api.setRoughnessIntensity(0.15)
+  end
+  api.setDecalColor(Point4F(opts.r or 0.7, opts.g or 0.7, opts.b or 0.7, 1))
   api.setDecalScale(vec3(scale, 1, scale))
   api.setDecalRotation(rot)
   api.setUseSurfaceNormal(true)
@@ -537,7 +612,14 @@ M.stampStream = function(points)
   local colorTex = SCRATCH_BRUSHES[math.random(#SCRATCH_BRUSHES)]
   api.setDecalTexturePath("color", colorTex)
   api.setDecalTexturePath("alpha", "/art/dynamicDecals/textures/_one.png")
-  api.setDecalColor(Point4F(0, 1, 0, 1))
+  -- Polished-steel PBR look (matches stampAtLocal's default branch): the
+  -- alpha mask of the brush controls *where* the metallic/roughness write
+  -- happens, the intensity values control *what* gets written.
+  api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_one.png")
+  api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
+  api.setMetallicIntensity(1.0)
+  api.setRoughnessIntensity(0.15)
+  api.setDecalColor(Point4F(0.7, 0.7, 0.7, 1))
   api.setDecalScale(vec3(scale, 1, scale))
   api.setDecalRotation(0)
   api.setUseSurfaceNormal(true)
@@ -655,6 +737,7 @@ M.probeBrushes = function()
       scale = 0.15,
       rot = 0,
       noJitter = true,
+      skipMetal = true,  -- want raw color tint visible, not metal-shaded
     })
   end
   log('I', logTag, "probeBrushes done. Check the right side of the vehicle.")
@@ -686,12 +769,15 @@ M.testStampAtWorld = function(lx, ly, lz, nx, ny, nz)
   return M.stampAt(worldPos, worldNormal)
 end
 
--- Wipe all stamps (clears the layer stack and re-bakes empty texture).
+-- Wipe all stamps (clears the layer stack and re-bakes empty texture), then
+-- re-seed the paint fill so the vehicle's color is preserved instead of
+-- going back to default-black.
 M.clearStamps = function()
   if not ready then log('W', logTag, "clearStamps: not ready"); return end
   if not api or not api.clearLayerStack then log('W', logTag, "api.clearLayerStack unavailable"); return end
   api.clearLayerStack()
   log('I', logTag, "cleared all stamps (layers=" .. tostring(api.getLayerCount and api.getLayerCount()) .. ")")
+  M.addPaintFill()
 end
 
 -- Convenience: dump the current decal config (helpful when iterating).
@@ -763,7 +849,7 @@ end
 
 -- ---- lifecycle ----
 local function onExtensionLoaded()
-  log('I', logTag, "loaded. probes: scratches_paint.{dumpState,kickSetup,testStamp,testStampAt,testStampAtWorld,probeBrushes,stampAt,stampAtLocal,clearStamps,dumpDecalConfig,drawTextures}")
+  log('I', logTag, "loaded. probes: scratches_paint.{dumpState,kickSetup,testStamp,testStampAt,testStampAtWorld,probeBrushes,stampAt,stampAtLocal,stampStream,clearStamps,addPaintFill,dumpDecalConfig,drawTextures}")
   pendingSetup = true
   setupAttemptTimer = SETUP_RETRY  -- try immediately
   trySetup()
