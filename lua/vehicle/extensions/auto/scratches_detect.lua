@@ -29,14 +29,23 @@ local paintCooldown = 0.05   -- seconds between paints per node (rate-limit a sl
 -- per-node counters
 local nodeEventCount = {}    -- nid -> total candidate events seen
 local nodeEventLast  = {}    -- nid -> count at time of last log
-local nodePaintLast  = {}    -- nid -> simTime of last queued paint (slide branch)
+local nodePaintLast  = {}    -- nid -> simTime of last sample appended to stream (slide)
 local nodeImpactLast = {}    -- nid -> simTime of last queued impact stamp
+
+-- Per-node slide stream. Each entry is a small table of contact-point samples
+-- collected while the node is in active slide contact. Flushed as a single
+-- brushStroke layer when the node has been idle for STREAM_IDLE_TIMEOUT or
+-- the stream hits STREAM_MAX_DURATION / STREAM_MAX_POINTS.
+local nodeStreams = {}       -- nid -> { startTime, lastTime, points = {{x,y,z,nx,ny,nz}, ...} }
 
 -- aggregate stats since last dumpStats / since load
 local stats = {
   totalCalls       = 0,  -- onNodeCollision calls reaching us
   filteredCalls    = 0,  -- passed all filters
   impactEvents     = 0,  -- impact-branch stamps fired (subset of filteredCalls)
+  streamsFlushed   = 0,  -- slide brushStroke layers committed
+  streamPointsTotal= 0,  -- total points across all flushed streams (avg = total/flushed)
+  streamFallbacks  = 0,  -- streams that flushed with 1 point (fell back to single stamp)
   byBodyMat        = {}, -- bodyMatId -> count
   bySurfaceMat     = {}, -- surfaceMatId -> count
   maxSlipVel       = 0,
@@ -63,8 +72,21 @@ local MIN_NORMAL_FORCE   = 50     -- N, reject grazing contacts
 -- hit produces slipVel≈0 and perpVel≈0 but normalForce in the kN range
 -- (observed max ≈95 kN). This branch fires on raw normalForce so impacts
 -- register at the moment of contact, not just during the followup grind.
+-- 5 kN catches deformation-noise spikes during slides but those layer with
+-- the slide stream rather than replacing it (impact and slide both fire
+-- when both conditions hold), so the over-firing is desirable visual density.
 local IMPACT_FORCE_THRESHOLD = 5000   -- N
 local IMPACT_COOLDOWN        = 1.0    -- seconds, per-node (vs ~50ms for slide)
+
+-- ---- continuous-slide stream params ----
+-- Slide branch collects per-node samples while contact is active and flushes
+-- as a single brushStroke layer when the node has been idle. The brushStroke
+-- layer interpolates between samples for a continuous swept stroke instead
+-- of stacking discrete stamps at body-relative points.
+local STREAM_IDLE_TIMEOUT = 0.10  -- s; gap before we treat the slide as ended
+local STREAM_MAX_DURATION = 0.50  -- s; force-flush so one camera covers the points
+local STREAM_MAX_POINTS   = 20    -- safety cap; MAX_DURATION should bound this earlier
+local STREAM_MIN_POINTS   = 2     -- below this, fall back to a single discrete stamp
 
 local BODY_MATERIAL_NAMES = {
   "METAL", "PLASTIC", "GLASS",
@@ -92,6 +114,13 @@ local EXCLUDE_PART_PATTERNS = {
   "wheel", "axle", "driveshaft", "halfshaft", "differential",
   "gearbox", "transmission", "radiator", "brakerotor", "brake_rotor",
   "fuel_tank", "battery",
+  -- Glass nodes shatter into pieces that report wildly inconsistent slipVel
+  -- (often 0 even when the rest of the body is sliding fast), and once
+  -- broken they're no longer a paintable target — the synth-camera ray
+  -- passes through and stamps land on whatever paintable surface is behind
+  -- (typically the roof or hood). Excluding them removes both the false
+  -- impact-branch hits and the misplaced stamps.
+  "windshield", "doorglass",
 }
 
 local function buildSets()
@@ -124,6 +153,51 @@ local function buildSets()
     "material sets resolved: %d body materials, %d surface materials",
     tableSize(bodyMatSet), tableSize(surfaceMatSet)))
   return true
+end
+
+-- ---- stream flushing ----
+-- Flush a node's collected stream to GE. Called from updateGFX (idle timeout)
+-- and from the slide branch (force-flush at MAX_DURATION/MAX_POINTS).
+--
+-- 0 points: just clear the entry (nothing to draw).
+-- 1 point:  fall back to a single discrete stamp via stampAt — the brushStroke
+--           layer needs >= 2 dataPoints to interpolate.
+-- 2+:       serialize as a Lua table literal of {x,y,z,nx,ny,nz} entries and
+--           queue a single scratches_paint.stampStream(points) call.
+local function flushStream(id1)
+  local s = nodeStreams[id1]
+  if not s then return end
+  nodeStreams[id1] = nil
+  if not (paintEnabled and obj and obj.queueGameEngineLua) then return end
+
+  local n = #s.points
+  if n == 0 then return end
+  if n < STREAM_MIN_POINTS then
+    stats.streamFallbacks = stats.streamFallbacks + 1
+    local p = s.points[1]
+    obj:queueGameEngineLua(string.format(
+      "if scratches_paint and scratches_paint.stampAt then " ..
+      "  pcall(scratches_paint.stampAt, vec3(%.4f,%.4f,%.4f), vec3(%.4f,%.4f,%.4f)) " ..
+      "end",
+      p.x, p.y, p.z, p.nx, p.ny, p.nz))
+    return
+  end
+
+  -- Build a Lua table-literal payload like {{x,y,z,nx,ny,nz},{...},...}.
+  local parts = {}
+  for i, p in ipairs(s.points) do
+    parts[i] = string.format("{%.4f,%.4f,%.4f,%.4f,%.4f,%.4f}",
+      p.x, p.y, p.z, p.nx, p.ny, p.nz)
+  end
+
+  stats.streamsFlushed    = stats.streamsFlushed + 1
+  stats.streamPointsTotal = stats.streamPointsTotal + n
+
+  obj:queueGameEngineLua(string.format(
+    "if scratches_paint and scratches_paint.stampStream then " ..
+    "  pcall(scratches_paint.stampStream, {%s}) " ..
+    "end",
+    table.concat(parts, ",")))
 end
 
 -- ---- the filter ----
@@ -161,6 +235,11 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   -- magnitude
   local sliding   = slipVel >= SLIP_THRESHOLD
   local impacting = perpVel >= PERP_THRESHOLD
+  -- Impact gate is force-only. Hard slides routinely spike normalForce
+  -- past the threshold; rather than try to suppress those (the velocity-
+  -- discriminator approach we tried earlier dropped real impacts during
+  -- slides too), we let both branches fire when both conditions hold and
+  -- accept the layered density as visual richness.
   local impactHit = normalForce >= IMPACT_FORCE_THRESHOLD
   if not (sliding or impacting or impactHit) then stats.rejBelowThresh = stats.rejBelowThresh + 1; return end
   -- Grazing-contact floor only applies to slide events. impactHit is
@@ -208,13 +287,12 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
       slipVel, perpVel, normalForce, depth, pos.x, pos.y, pos.z))
   end
 
-  -- Paint coupling: queue a GE-side stamp at the impact point.
-  -- Two branches with exclusive priority on a single tick:
-  --   (a) impactHit (high normalForce) — head-on smash. Long per-node
-  --       cooldown, owns the tick: when impactHit is true we always return
-  --       afterward, so the slide branch never double-stamps the same event.
-  --   (b) slide/impacting (high slipVel/perpVel) — the existing rate-limited
-  --       grind path.
+  -- Paint coupling: queue GE-side stamps. Both branches can fire on the
+  -- same tick (intentional layering — user wants density):
+  --   (a) impactHit (high normalForce) — splat at the contact point with
+  --       its own per-node cooldown so we don't get 2000 splats/sec.
+  --   (b) slide/impacting (high slipVel or perpVel) — appends to the
+  --       per-node brushStroke stream, which flushes on idle timeout.
   -- Fire-and-forget: we don't observe the result; failures will surface as
   -- silent missing decals (paint.lua logs its own diagnostics on stampAt).
   if paintEnabled and obj and obj.queueGameEngineLua then
@@ -224,7 +302,6 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
       local lastImpact = nodeImpactLast[id1] or 0
       if now - lastImpact >= IMPACT_COOLDOWN then
         nodeImpactLast[id1] = now
-        nodePaintLast[id1]  = now  -- gate slide briefly; no double-stamp on the same hit
         stats.impactEvents = stats.impactEvents + 1
         obj:queueGameEngineLua(string.format(
           "if scratches_paint and scratches_paint.stampAt then " ..
@@ -232,23 +309,62 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
           "end",
           pos.x, pos.y, pos.z, normal.x, normal.y, normal.z))
       end
-      -- Impact branch owns this tick whether or not it stamped (cooldown).
-      return
+      -- Fall through — slide branch can also fire on this tick.
     end
 
-    -- Slide branch: per-node cooldown so a sliding contact doesn't fire
-    -- 2000 stamps/sec.
+    -- Slide branch: throttle sample collection to paintCooldown per node and
+    -- append to the per-node stream. Real flush happens on idle timeout
+    -- (updateGFX) or on force-flush below. The brushStroke layer the flush
+    -- builds interpolates between samples for a continuous swept stroke.
+    -- Gate on slide/perpVel — pure-impact events (impactHit only) should
+    -- not feed the slide stream; they've already been stamped as splats.
+    if not (sliding or impacting) then return end
     local last = nodePaintLast[id1] or 0
     if now - last >= paintCooldown then
       nodePaintLast[id1] = now
-      -- Guard against scratches_paint being nil (e.g. mid-Ctrl+L when GE is
-      -- between unload and reload). The pcall handles any other transient
-      -- error inside stampAt without taking down the queued chain.
-      obj:queueGameEngineLua(string.format(
-        "if scratches_paint and scratches_paint.stampAt then " ..
-        "  pcall(scratches_paint.stampAt, vec3(%.4f,%.4f,%.4f), vec3(%.4f,%.4f,%.4f)) " ..
-        "end",
-        pos.x, pos.y, pos.z, normal.x, normal.y, normal.z))
+
+      -- Flush-and-restart if the existing stream has gone stale. updateGFX
+      -- normally handles idle flushing per render frame, but a new slide
+      -- event can arrive between render frames, so check inline too.
+      local stream = nodeStreams[id1]
+      if stream and (now - stream.lastTime) >= STREAM_IDLE_TIMEOUT then
+        flushStream(id1)
+        stream = nil
+      end
+      if not stream then
+        stream = { startTime = now, lastTime = now, points = {} }
+        nodeStreams[id1] = stream
+      end
+      stream.lastTime = now
+      table.insert(stream.points, {
+        x = pos.x, y = pos.y, z = pos.z,
+        nx = normal.x, ny = normal.y, nz = normal.z,
+      })
+
+      -- Force-flush if the stream exceeds MAX_DURATION (camera coverage
+      -- starts to fail for points spread over a large body extent) or hits
+      -- MAX_POINTS (memory safety). A long continuous slide produces several
+      -- adjacent brushStroke layers that visually stitch together.
+      if (now - stream.startTime) >= STREAM_MAX_DURATION
+         or #stream.points >= STREAM_MAX_POINTS then
+        flushStream(id1)
+      end
+    end
+  end
+end
+
+-- ---- per-frame: idle-flush streams ----
+-- Walks the stream table once per render frame; cheap because the table is
+-- empty whenever no node is in slide contact. Any stream whose last sample
+-- is older than STREAM_IDLE_TIMEOUT is flushed.
+local function updateGFX(dt)
+  if not (obj and obj.getSimTime) then return end
+  -- Skip if no streams exist (the common case during normal driving).
+  if next(nodeStreams) == nil then return end
+  local now = obj:getSimTime() or 0
+  for nid, s in pairs(nodeStreams) do
+    if (now - s.lastTime) >= STREAM_IDLE_TIMEOUT then
+      flushStream(nid)
     end
   end
 end
@@ -286,6 +402,12 @@ M.dumpStats = function()
   log('I', logTag, string.format("filteredCalls = %d", stats.filteredCalls))
   log('I', logTag, string.format("impactEvents  = %d  (threshold %.0f N, cooldown %.2fs)",
     stats.impactEvents, IMPACT_FORCE_THRESHOLD, IMPACT_COOLDOWN))
+  log('I', logTag, string.format("streams       = %d flushed, %d fallbacks, avg %.1f points/stream",
+    stats.streamsFlushed, stats.streamFallbacks,
+    stats.streamsFlushed > 0 and (stats.streamPointsTotal / stats.streamsFlushed) or 0))
+  log('I', logTag, string.format("active streams= %d", (function()
+    local n = 0; for _ in pairs(nodeStreams) do n = n + 1 end; return n
+  end)()))
   log('I', logTag, string.format("max slipVel   = %.2f m/s", stats.maxSlipVel))
   log('I', logTag, string.format("max perpVel   = %.2f m/s", stats.maxPerpVel))
   log('I', logTag, string.format("max normalForce = %.0f N", stats.maxNormalForce))
@@ -316,6 +438,7 @@ end
 M.resetStats = function()
   stats = {
     totalCalls = 0, filteredCalls = 0, impactEvents = 0,
+    streamsFlushed = 0, streamPointsTotal = 0, streamFallbacks = 0,
     byBodyMat = {}, bySurfaceMat = {},
     maxSlipVel = 0, maxPerpVel = 0, maxNormalForce = 0,
     rejNoNode = 0, rejWheel = 0, rejBodyMat = 0,
@@ -418,6 +541,7 @@ local function onReset()
   M.resetStats()
   table.clear(nodePaintLast)
   table.clear(nodeImpactLast)
+  table.clear(nodeStreams)
   bootstrapPainter()
   -- Wipe baked decals on the GE side so the reset cleans up cosmetics too.
   -- pcall-guarded on GE because scratches_paint may not be loaded yet on a
@@ -439,5 +563,6 @@ M.onExtensionLoaded   = onExtensionLoaded
 M.onExtensionUnloaded = onExtensionUnloaded
 M.onReset             = onReset
 M.onInit              = onInit
+M.updateGFX           = updateGFX
 
 return M

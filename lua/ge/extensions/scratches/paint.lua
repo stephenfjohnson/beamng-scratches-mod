@@ -478,6 +478,140 @@ M.stampAt = function(worldPos, worldNormal, kindOrOpts)
   return M.stampAtLocal(localPos, localNormal, opts)
 end
 
+-- Continuous-slide entry point. detect.lua collects (worldPos, worldNormal)
+-- samples for each contacting body node and flushes them here as a single
+-- batch when the slide ends (or at MAX_DURATION). We bake one brushStroke
+-- layer per stream — the C++ side interpolates between consecutive screen-UV
+-- points with `interpolationSteps` decals between each pair, producing a
+-- continuous swept stroke instead of isolated stamps stacked at body-fixed
+-- points.
+--
+-- Geometry: a brushStroke layer has ONE camera shared by all dataPoints. We
+-- place the camera radially-outside the centroid of all stream points, looking
+-- inward. As long as the stream stays on a single panel (typical for slides),
+-- one camera covers everything; cross-panel slides may degrade gracefully.
+--
+-- Recipe (taken from api.addPathDataPoint, which converts a decal into a path
+-- layer): get a decalData via getDecalData with our synth camera, mutate its
+-- type to brushStroke, fill in dataPoints[] by computing screen-UVs per point
+-- with api.setDecalLocalPos, clear the decal-only fields the bake doesn't
+-- expect (decalPos, decalNorm, cursorPosScreenUv), then bake.
+M.stampStream = function(points)
+  if not ready then log('W', logTag, "stampStream: not ready"); return end
+  if not resolveDecalProjection() then return end
+  if not points or #points < 2 then
+    log('W', logTag, string.format("stampStream: need >=2 points, got %d",
+      points and #points or 0))
+    return
+  end
+
+  local veh = getPlayerVehicle(0)
+  if not veh then return end
+  local refM = veh:getRefNodeMatrix()
+  local invM = refM:fullInverse()
+
+  -- World -> vehicle-local for every point. Track centroid for camera placement.
+  local n = #points
+  local localPos = {}
+  local cx, cy, cz = 0, 0, 0
+  for i = 1, n do
+    local p = points[i]
+    local lp = invM:mulP3F(vec3(p[1], p[2], p[3]))
+    localPos[i] = lp
+    cx = cx + lp.x; cy = cy + lp.y; cz = cz + lp.z
+  end
+  local centroidLocal = vec3(cx / n, cy / n, cz / n)
+
+  -- Synthetic camera at centroid using the same radial-outward trick as
+  -- discrete stamps (avoids the contact-normal-unreliable issue from
+  -- internal panel-on-panel collisions).
+  local camLocal = buildSyntheticCameraLocal(centroidLocal, nil, nil)
+  local projM    = getCameraProjMatrix()
+
+  -- Stamp style: one brush per stroke (uniform look across the slide).
+  -- Slide rotation only — impact_splat is reserved for the impact branch.
+  -- The actual decalRotation gets recomputed below from the slide direction
+  -- so streaks align with the path; the value set here is just a default
+  -- for the getDecalData prototype.
+  local scale    = 0.10
+  local colorTex = SCRATCH_BRUSHES[math.random(#SCRATCH_BRUSHES)]
+  api.setDecalTexturePath("color", colorTex)
+  api.setDecalTexturePath("alpha", "/art/dynamicDecals/textures/_one.png")
+  api.setDecalColor(Point4F(0, 1, 0, 1))
+  api.setDecalScale(vec3(scale, 1, scale))
+  api.setDecalRotation(0)
+  api.setUseSurfaceNormal(true)
+
+  if api.isUseMousePos and api.isUseMousePos() then
+    api.toggleSetting(api.settingsFlags.UseMousePos.value)
+  end
+
+  -- Project once with our synth camera so the depth/normal pass that
+  -- getDecalData samples is consistent with our camera.
+  decalProjection:projectDynamicDecals(camLocal, projM)
+
+  -- Get a decal-shaped prototype layer, then fill dataPoints[] by computing
+  -- the screen-UV that projects to each local point under our camera.
+  local layerData = decalProjection:getDecalData(camLocal, projM)
+  if not layerData then log('W', logTag, "stampStream: getDecalData returned nil"); return end
+
+  local dataPoints = {}
+  for i = 1, n do
+    api.setDecalLocalPos(layerData, localPos[i])
+    -- setDecalLocalPos mutates layerData.cursorPosScreenUv; copy because
+    -- the next iteration will overwrite it.
+    dataPoints[i] = {
+      x = layerData.cursorPosScreenUv.x,
+      y = layerData.cursorPosScreenUv.y,
+    }
+  end
+
+  -- Align the brush's "horizontal" axis with the slide direction in screen-
+  -- UV space. brushStroke layers share ONE rotation across all interpolated
+  -- decals, so without this, every streak in the stroke is at the same
+  -- arbitrary angle — visible as misaligned hatching against the slide.
+  -- atan2 gives radians counter-clockwise from +X, which is what the api
+  -- expects (decalRotation = radians, confirmed in api source).
+  local dx = dataPoints[n].x - dataPoints[1].x
+  local dy = dataPoints[n].y - dataPoints[1].y
+  local slideAngle = (math.abs(dx) + math.abs(dy)) > 1e-5
+    and math.atan2(dy, dx)
+    or  (math.random() * 2 * math.pi)  -- degenerate (all UVs co-located): random
+
+  -- Mutate the prototype into a brushStroke layer. The decal-only fields
+  -- (decalPos/decalNorm/cursorPosScreenUv) get nilled; addPathDataPoint
+  -- in the api source does the same — required so the bake doesn't treat
+  -- this as a single-decal layer.
+  layerData.decalPos          = nil
+  layerData.decalNorm         = nil
+  layerData.cursorPosScreenUv = nil
+  layerData.decalRotation     = slideAngle
+  layerData.type              = api.layerTypes.brushStroke
+  layerData.dataPoints        = dataPoints
+  -- Higher interpolation than the default 3 — slide streams from a single
+  -- contacting node typically hold only 3-4 dataPoints (~150 ms of contact
+  -- before the node lifts off and another takes over), and the default
+  -- yields a dotted line rather than a smear. 8 in-between decals per gap
+  -- gives ~3 + 2*8 = 19 decals across a 3-point stroke, dense enough to
+  -- read as continuous.
+  layerData.interpolationSteps = 8
+  layerData.uid       = string.format("scr-%08x", math.random(0, 0xffffffff))
+  layerData.name      = "scratch-stroke"
+  layerData.enabled   = true
+  layerData.locked    = false
+  layerData.parentUid = nil
+  layerData.children  = {}
+
+  decalProjection:bakeLayers({layerData}, veh.JBeam or veh.jbeam)
+  M._lastDecal = layerData
+  log('I', logTag, string.format(
+    "stampStream: n=%d brush=%s firstUv=(%.3f,%.3f) lastUv=(%.3f,%.3f) uid=%s",
+    n, colorTex,
+    dataPoints[1].x, dataPoints[1].y,
+    dataPoints[n].x, dataPoints[n].y,
+    layerData.uid))
+end
+
 -- Test driver: stamps at a vehicle-local position we know lands on the body.
 -- Defaults are taken from the testStamp dump (decalPos≈(1.16,0.14,0.36),
 -- normal pointing roughly along -X — driver-side door of the sunburst).
