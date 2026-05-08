@@ -109,14 +109,16 @@ def _hairs_around(canvas: np.ndarray, rng: random.Random,
 
 
 def streak_01() -> None:
-    """Single key-scratch — one dominant gouge with a few faint hairs."""
+    """Single key-scratch — one dominant gouge with parallel hairs."""
     rng = random.Random(1)
     c = _new_canvas()
-    # Main gouge: thick, full-intensity. Width 14 px (~3% of canvas).
-    _stamp_streak(c, 50, 256, 462, 256, width=14.0, taper=True, intensity=1.0, blur=1.2)
-    # Secondary parallel hairs — also clearly visible, not subliminal.
-    for _ in range(8):
-        offset = rng.uniform(-30, 30)
+    # Main gouge: thicker than v1 (14 → 16) for more visible presence.
+    _stamp_streak(c, 50, 256, 462, 256, width=16.0, taper=True, intensity=1.0, blur=1.2)
+    # Secondary parallel hairs. v1 used 8 hairs in a ±30 px band → ~5% pixel
+    # coverage. Bumped to 18 hairs in a ±55 px band so streak_01 reads as a
+    # cluster of scratches rather than a lonely single gouge.
+    for _ in range(18):
+        offset = rng.uniform(-55, 55)
         x_start = 60 + rng.uniform(-30, 30)
         x_end = 452 + rng.uniform(-30, 30)
         _stamp_streak(c, x_start, 256 + offset, x_end, 256 + offset,
@@ -198,12 +200,133 @@ def streak_04() -> None:
     _save(c, "scratch_streak_04.png")
 
 
+def _stamp_dot(canvas: np.ndarray, cx: float, cy: float,
+               radius: float, intensity: float, blur: float = 0.5) -> None:
+    """Paint a soft dot (max-blended) at (cx, cy)."""
+    img = Image.new("L", (SIZE, SIZE), 0)
+    ImageDraw.Draw(img).ellipse(
+        [cx - radius, cy - radius, cx + radius, cy + radius],
+        fill=int(255 * intensity))
+    if blur > 0:
+        img = img.filter(ImageFilter.GaussianBlur(radius=blur))
+    arr = np.asarray(img, dtype=np.float32) / 255.0
+    np.maximum(canvas, arr, out=canvas)
+
+
+def impact_splat() -> None:
+    """Radial spray with a dense central core — for the normalForce branch.
+
+    Reads as material blasted outward from a point of impact: a bright disc
+    surrounded by emanating streaks and scattered chips. Designed for short
+    radial extent so it stays readable at typical stamp sizes (~10-20 cm)."""
+    rng = random.Random(5)
+    c = _new_canvas()
+    cx, cy = 256, 256
+
+    # Bright central core — the impact point itself.
+    _stamp_dot(c, cx, cy, radius=24, intensity=1.0, blur=4.0)
+
+    # Inner halo of diffuse damage.
+    _stamp_dot(c, cx, cy, radius=58, intensity=0.55, blur=12.0)
+
+    # Radial streaks emanating outward.
+    for _ in range(34):
+        angle = rng.uniform(0, 2 * math.pi)
+        length = rng.uniform(40, 170)
+        x_start = cx + math.cos(angle) * 10
+        y_start = cy + math.sin(angle) * 10
+        x_end = cx + math.cos(angle) * length
+        y_end = cy + math.sin(angle) * length
+        width = rng.uniform(2.5, 5.5)
+        intensity = rng.uniform(0.7, 1.0)
+        _stamp_streak(c, x_start, y_start, x_end, y_end,
+                      width=width, taper=True, intensity=intensity, blur=0.9)
+
+    # Scattered chips farther out.
+    for _ in range(70):
+        angle = rng.uniform(0, 2 * math.pi)
+        radius = rng.uniform(70, 220)
+        x = cx + math.cos(angle) * radius + rng.uniform(-12, 12)
+        y = cy + math.sin(angle) * radius + rng.uniform(-12, 12)
+        size = rng.uniform(1.5, 4.5)
+        intensity = rng.uniform(0.5, 0.9)
+        _stamp_dot(c, x, y, radius=size, intensity=intensity, blur=0.6)
+
+    _save(c, "scratch_impact_splat.png")
+
+
+def chip_cluster() -> None:
+    """Paint-chip cluster — many small flecks concentrated near center.
+
+    For minor-impact follow-on damage where paint flakes off in a cluster
+    rather than as a continuous scratch."""
+    rng = random.Random(6)
+    c = _new_canvas()
+    cx, cy = 256, 256
+
+    # Dense central cluster — gaussian-distributed dots.
+    for _ in range(180):
+        x = cx + rng.gauss(0, 55)
+        y = cy + rng.gauss(0, 55)
+        size = rng.uniform(1.5, 5.0)
+        intensity = rng.uniform(0.65, 1.0)
+        _stamp_dot(c, x, y, radius=size, intensity=intensity, blur=0.5)
+
+    # Sparse outliers so the edge isn't a hard cutoff.
+    for _ in range(45):
+        x = cx + rng.uniform(-200, 200)
+        y = cy + rng.uniform(-200, 200)
+        size = rng.uniform(1.0, 2.8)
+        intensity = rng.uniform(0.4, 0.7)
+        _stamp_dot(c, x, y, radius=size, intensity=intensity, blur=0.4)
+
+    _save(c, "scratch_chip_cluster.png")
+
+
+def tbone() -> None:
+    """Right-angle scuff — main scratch with a perpendicular branch.
+
+    Reads as a corner/edge impact: one long primary line and a shorter
+    branch joining at one end."""
+    rng = random.Random(7)
+    c = _new_canvas()
+
+    # Main horizontal scratch.
+    _stamp_streak(c, 60, 256, 460, 256,
+                  width=12.0, taper=True, intensity=1.0, blur=1.0)
+    # Perpendicular branch joining near the right end of the main scratch.
+    _stamp_streak(c, 380, 90, 380, 422,
+                  width=10.5, taper=True, intensity=0.95, blur=1.0)
+
+    # Secondary hairs around both axes.
+    for _ in range(14):
+        if rng.random() < 0.5:
+            y = 256 + rng.uniform(-22, 22)
+            x_start = 70 + rng.uniform(-20, 20)
+            x_end = 460 + rng.uniform(-20, 20)
+            _stamp_streak(c, x_start, y, x_end, y,
+                          width=rng.uniform(1.5, 3.0), taper=True,
+                          intensity=rng.uniform(0.45, 0.75), blur=0.9)
+        else:
+            x = 380 + rng.uniform(-22, 22)
+            y_start = 100 + rng.uniform(-20, 20)
+            y_end = 412 + rng.uniform(-20, 20)
+            _stamp_streak(c, x, y_start, x, y_end,
+                          width=rng.uniform(1.5, 3.0), taper=True,
+                          intensity=rng.uniform(0.45, 0.75), blur=0.9)
+
+    _save(c, "scratch_tbone.png")
+
+
 def main() -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
     streak_01()
     streak_02()
     streak_03()
     streak_04()
+    impact_splat()
+    chip_cluster()
+    tbone()
     print("done.")
 
 
