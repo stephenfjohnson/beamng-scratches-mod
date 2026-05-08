@@ -29,12 +29,14 @@ local paintCooldown = 0.05   -- seconds between paints per node (rate-limit a sl
 -- per-node counters
 local nodeEventCount = {}    -- nid -> total candidate events seen
 local nodeEventLast  = {}    -- nid -> count at time of last log
-local nodePaintLast  = {}    -- nid -> simTime of last queued paint
+local nodePaintLast  = {}    -- nid -> simTime of last queued paint (slide branch)
+local nodeImpactLast = {}    -- nid -> simTime of last queued impact stamp
 
 -- aggregate stats since last dumpStats / since load
 local stats = {
   totalCalls       = 0,  -- onNodeCollision calls reaching us
   filteredCalls    = 0,  -- passed all filters
+  impactEvents     = 0,  -- impact-branch stamps fired (subset of filteredCalls)
   byBodyMat        = {}, -- bodyMatId -> count
   bySurfaceMat     = {}, -- surfaceMatId -> count
   maxSlipVel       = 0,
@@ -54,6 +56,15 @@ local stats = {
 local SLIP_THRESHOLD     = 2.5    -- m/s, sliding scrape
 local PERP_THRESHOLD     = 2.5    -- m/s, impact-style penetration speed
 local MIN_NORMAL_FORCE   = 50     -- N, reject grazing contacts
+
+-- ---- impact-branch params ----
+-- Head-on smashes don't trip the slide/perpVel branches: BeamNG's solver
+-- cushions perpendicular velocity to ~0 within one tick, so a hard front-end
+-- hit produces slipVel≈0 and perpVel≈0 but normalForce in the kN range
+-- (observed max ≈95 kN). This branch fires on raw normalForce so impacts
+-- register at the moment of contact, not just during the followup grind.
+local IMPACT_FORCE_THRESHOLD = 5000   -- N
+local IMPACT_COOLDOWN        = 1.0    -- seconds, per-node (vs ~50ms for slide)
 
 local BODY_MATERIAL_NAMES = {
   "METAL", "PLASTIC", "GLASS",
@@ -150,8 +161,12 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   -- magnitude
   local sliding   = slipVel >= SLIP_THRESHOLD
   local impacting = perpVel >= PERP_THRESHOLD
-  if not (sliding or impacting) then stats.rejBelowThresh = stats.rejBelowThresh + 1; return end
-  if normalForce < MIN_NORMAL_FORCE then stats.rejNormalForce = stats.rejNormalForce + 1; return end
+  local impactHit = normalForce >= IMPACT_FORCE_THRESHOLD
+  if not (sliding or impacting or impactHit) then stats.rejBelowThresh = stats.rejBelowThresh + 1; return end
+  -- Grazing-contact floor only applies to slide events. impactHit is
+  -- already gated on a much higher normalForce, so this check is redundant
+  -- (and would never reject) for it.
+  if not impactHit and normalForce < MIN_NORMAL_FORCE then stats.rejNormalForce = stats.rejNormalForce + 1; return end
 
   -- passed all filters
   stats.filteredCalls = stats.filteredCalls + 1
@@ -176,7 +191,16 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   end
 
   if shouldLog then
-    local kind = (sliding and impacting) and "SLIDE+HIT" or (sliding and "SLIDE" or "HIT")
+    local kind
+    if impactHit then
+      kind = "IMPACT"
+    elseif sliding and impacting then
+      kind = "SLIDE+HIT"
+    elseif sliding then
+      kind = "SLIDE"
+    else
+      kind = "HIT"
+    end
     local part = node.partOrigin or node.partPath or "?"
     log('I', logTag, string.format(
       "%s n=%d (#%d) part=%s body=%s surf=%s slipVel=%.2f perpVel=%.2f normF=%.0f depth=%.4f pos=(%.2f,%.2f,%.2f)",
@@ -185,11 +209,35 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   end
 
   -- Paint coupling: queue a GE-side stamp at the impact point.
-  -- Per-node cooldown so a sliding contact doesn't fire 2000 stamps/sec.
+  -- Two branches with exclusive priority on a single tick:
+  --   (a) impactHit (high normalForce) — head-on smash. Long per-node
+  --       cooldown, owns the tick: when impactHit is true we always return
+  --       afterward, so the slide branch never double-stamps the same event.
+  --   (b) slide/impacting (high slipVel/perpVel) — the existing rate-limited
+  --       grind path.
   -- Fire-and-forget: we don't observe the result; failures will surface as
   -- silent missing decals (paint.lua logs its own diagnostics on stampAt).
   if paintEnabled and obj and obj.queueGameEngineLua then
     local now = obj:getSimTime() or 0
+
+    if impactHit then
+      local lastImpact = nodeImpactLast[id1] or 0
+      if now - lastImpact >= IMPACT_COOLDOWN then
+        nodeImpactLast[id1] = now
+        nodePaintLast[id1]  = now  -- gate slide briefly; no double-stamp on the same hit
+        stats.impactEvents = stats.impactEvents + 1
+        obj:queueGameEngineLua(string.format(
+          "if scratches_paint and scratches_paint.stampAt then " ..
+          "  pcall(scratches_paint.stampAt, vec3(%.4f,%.4f,%.4f), vec3(%.4f,%.4f,%.4f), 'impact') " ..
+          "end",
+          pos.x, pos.y, pos.z, normal.x, normal.y, normal.z))
+      end
+      -- Impact branch owns this tick whether or not it stamped (cooldown).
+      return
+    end
+
+    -- Slide branch: per-node cooldown so a sliding contact doesn't fire
+    -- 2000 stamps/sec.
     local last = nodePaintLast[id1] or 0
     if now - last >= paintCooldown then
       nodePaintLast[id1] = now
@@ -236,6 +284,8 @@ M.dumpStats = function()
   log('I', logTag, "----- stats -----")
   log('I', logTag, string.format("totalCalls    = %d", stats.totalCalls))
   log('I', logTag, string.format("filteredCalls = %d", stats.filteredCalls))
+  log('I', logTag, string.format("impactEvents  = %d  (threshold %.0f N, cooldown %.2fs)",
+    stats.impactEvents, IMPACT_FORCE_THRESHOLD, IMPACT_COOLDOWN))
   log('I', logTag, string.format("max slipVel   = %.2f m/s", stats.maxSlipVel))
   log('I', logTag, string.format("max perpVel   = %.2f m/s", stats.maxPerpVel))
   log('I', logTag, string.format("max normalForce = %.0f N", stats.maxNormalForce))
@@ -265,7 +315,7 @@ end
 
 M.resetStats = function()
   stats = {
-    totalCalls = 0, filteredCalls = 0,
+    totalCalls = 0, filteredCalls = 0, impactEvents = 0,
     byBodyMat = {}, bySurfaceMat = {},
     maxSlipVel = 0, maxPerpVel = 0, maxNormalForce = 0,
     rejNoNode = 0, rejWheel = 0, rejBodyMat = 0,
@@ -310,6 +360,13 @@ M.setPaintCooldown = function(secs)
   log('I', logTag, string.format("paintCooldown = %.3fs (per node)", paintCooldown))
 end
 
+M.setImpactParams = function(threshold, cooldown)
+  if threshold then IMPACT_FORCE_THRESHOLD = math.max(0, tonumber(threshold) or 0) end
+  if cooldown  then IMPACT_COOLDOWN        = math.max(0, tonumber(cooldown)  or 0) end
+  log('I', logTag, string.format("impact: threshold>=%.0f N, cooldown=%.2fs",
+    IMPACT_FORCE_THRESHOLD, IMPACT_COOLDOWN))
+end
+
 M.dumpMaterials = function()
   if not buildSets() then log('I', logTag, "materials not yet available"); return end
   log('I', logTag, "----- material id -> name -----")
@@ -348,7 +405,7 @@ end
 local function onExtensionLoaded()
   install()
   bootstrapPainter()
-  log('I', logTag, "loaded. probes: scratches_detect.{dumpStats,dumpMaterials,dumpNode,setLog,setVerbose,setEnabled,setThresholds,setPaintEnabled,setPaintCooldown,resetStats}")
+  log('I', logTag, "loaded. probes: scratches_detect.{dumpStats,dumpMaterials,dumpNode,setLog,setVerbose,setEnabled,setThresholds,setImpactParams,setPaintEnabled,setPaintCooldown,resetStats}")
   return true
 end
 
@@ -360,6 +417,7 @@ local function onReset()
   -- vehicle reset (Ctrl+R)
   M.resetStats()
   table.clear(nodePaintLast)
+  table.clear(nodeImpactLast)
   bootstrapPainter()
   -- Wipe baked decals on the GE side so the reset cleans up cosmetics too.
   -- pcall-guarded on GE because scratches_paint may not be loaded yet on a

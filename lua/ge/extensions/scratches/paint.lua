@@ -440,7 +440,15 @@ end
 
 -- World-space entry point. Detect.lua emits world coordinates; we convert to
 -- vehicle-local here. The conversion mirrors app:getCameraM() in the api.
-M.stampAt = function(worldPos, worldNormal, opts)
+--
+-- Third arg is either:
+--   - a string 'kind' that GELUA expands into a stamp-style opts table
+--     ('impact' currently — larger scale, dedicated brush). Lets the VLUA
+--     bridge stay simple (no Lua-table serialization) while keeping the
+--     visual style decision on the GE side.
+--   - an opts table (legacy / direct callers) — passed through unchanged.
+--   - nil — default slide-stamp style.
+M.stampAt = function(worldPos, worldNormal, kindOrOpts)
   local veh = getPlayerVehicle(0)
   if not veh then log('W', logTag, "stampAt: no player vehicle"); return end
 
@@ -450,6 +458,19 @@ M.stampAt = function(worldPos, worldNormal, opts)
 
   local localPos    = invM:mulP3F(worldPos)
   local localNormal = rotOnly:mulP3F(worldNormal)
+
+  local opts
+  if type(kindOrOpts) == "string" then
+    if kindOrOpts == "impact" then
+      opts = {
+        scale    = 0.18,
+        colorTex = "/art/dynamicDecals/textures/scratch_streak_03.png",
+      }
+    end
+  elseif type(kindOrOpts) == "table" then
+    opts = kindOrOpts
+  end
+
   return M.stampAtLocal(localPos, localNormal, opts)
 end
 
