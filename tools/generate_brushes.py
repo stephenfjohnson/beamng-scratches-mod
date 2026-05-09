@@ -173,31 +173,93 @@ def streak_03() -> None:
     _save(c, "scratch_streak_03.png")
 
 
-def streak_04() -> None:
-    """Drag smear — a wide opaque smudge with internal streaking."""
-    rng = random.Random(4)
+def streak_05_clean() -> None:
+    """Clean single key-scratch — one dominant streak with very few hairs.
+
+    streak_01 has 18 parallel hairs and reads as a "cluster of scratches".
+    This is the cleaner alternative: one assertive line plus 3-5 quiet
+    hairs nearby, for the look of a single sharp object dragged briefly."""
+    rng = random.Random(8)
     c = _new_canvas()
+    # One dominant streak slightly off-center with a small angle.
+    y_main = 256 + rng.uniform(-15, 15)
+    y_main_end = y_main + rng.uniform(-12, 12)
+    _stamp_streak(c, 50, y_main, 462, y_main_end,
+                  width=11.0, taper=True, intensity=1.0, blur=1.1)
+    # A few subtle parallel hairs.
+    for _ in range(5):
+        offset = rng.uniform(-22, 22)
+        x_start = 70 + rng.uniform(-25, 25)
+        x_end = 452 + rng.uniform(-25, 25)
+        _stamp_streak(c, x_start, y_main + offset, x_end, y_main_end + offset,
+                      width=rng.uniform(1.5, 3), taper=True,
+                      intensity=rng.uniform(0.4, 0.6), blur=0.9)
+    _save(c, "scratch_streak_05.png")
 
-    # Stronger base smudge — opacity bumped from 0.45 to 0.85.
-    base = Image.new("L", (SIZE, SIZE), 0)
-    ImageDraw.Draw(base).ellipse([40, 180, 472, 332], fill=200)
-    base = base.filter(ImageFilter.GaussianBlur(radius=18))
-    base_arr = np.asarray(base, dtype=np.float32) / 255.0
-    np.maximum(c, base_arr * 0.85, out=c)
 
-    # Many bright streaks woven into the smear.
-    for _ in range(80):
-        angle = rng.uniform(-0.18, 0.18)
-        length = rng.uniform(40, 200)
-        x_start = rng.uniform(50, 420)
-        y_start = rng.uniform(195, 317)
-        x_end = x_start + length
-        y_end = y_start + math.sin(angle) * length
-        width = rng.uniform(2, 6)
+def raptor_claw_01() -> None:
+    """Three parallel scratches with shared overall direction (3-claw).
+
+    Reads as a curb-drag or 3-finger scrape: 3 dominant parallel lines,
+    tightly spaced (~35 px), with hairs filling the spaces between them."""
+    rng = random.Random(9)
+    c = _new_canvas()
+    tilt = rng.uniform(-0.05, 0.05)
+    spacing = 38
+    cy = 256
+    # 3 main claws.
+    for i in range(-1, 2):
+        offset_y = i * spacing + rng.uniform(-3, 3)
+        x_start = 45 + rng.uniform(-10, 10)
+        x_end = 467 + rng.uniform(-10, 10)
+        y_start = cy + offset_y + tilt * (x_start - 256)
+        y_end   = cy + offset_y + tilt * (x_end   - 256)
+        width = rng.uniform(7, 10)
+        intensity = rng.uniform(0.85, 1.0)
+        _stamp_streak(c, x_start, y_start, x_end, y_end,
+                      width=width, taper=True, intensity=intensity, blur=1.1)
+    # Filler hairs in the gaps between the main claws.
+    for _ in range(12):
+        y_base = cy + rng.uniform(-spacing * 1.2, spacing * 1.2)
+        x_start = 70 + rng.uniform(-25, 25)
+        x_end = 442 + rng.uniform(-25, 25)
+        _stamp_streak(c, x_start, y_base, x_end, y_base + rng.uniform(-2, 2),
+                      width=rng.uniform(1.5, 3), taper=True,
+                      intensity=rng.uniform(0.4, 0.65), blur=0.9)
+    _save(c, "scratch_raptor_claw_01.png")
+
+
+def raptor_claw_02() -> None:
+    """Four parallel scratches with greater variation (4-claw).
+
+    Wider spread than claw_01, individual claws have varying intensity and
+    width — reads as a heavier 4-finger drag with one or two claws biting
+    deeper than the others."""
+    rng = random.Random(10)
+    c = _new_canvas()
+    tilt = rng.uniform(-0.04, 0.04)
+    spacing = 32
+    cy = 256
+    # 4 main claws with per-claw randomization.
+    offsets = [(i - 1.5) * spacing + rng.uniform(-4, 4) for i in range(4)]
+    for offset_y in offsets:
+        x_start = 45 + rng.uniform(-15, 15)
+        x_end = 467 + rng.uniform(-15, 15)
+        y_start = cy + offset_y + tilt * (x_start - 256)
+        y_end   = cy + offset_y + tilt * (x_end   - 256)
+        width = rng.uniform(5, 11)
         intensity = rng.uniform(0.7, 1.0)
         _stamp_streak(c, x_start, y_start, x_end, y_end,
-                      width=width, taper=True, intensity=intensity, blur=0.9)
-    _save(c, "scratch_streak_04.png")
+                      width=width, taper=True, intensity=intensity, blur=1.1)
+    # Background hairs.
+    for _ in range(16):
+        y_base = cy + rng.uniform(-spacing * 1.6, spacing * 1.6)
+        x_start = 70 + rng.uniform(-25, 25)
+        x_end = 442 + rng.uniform(-25, 25)
+        _stamp_streak(c, x_start, y_base, x_end, y_base + rng.uniform(-2, 2),
+                      width=rng.uniform(1.5, 3), taper=True,
+                      intensity=rng.uniform(0.4, 0.65), blur=0.85)
+    _save(c, "scratch_raptor_claw_02.png")
 
 
 def _stamp_dot(canvas: np.ndarray, cx: float, cy: float,
@@ -211,48 +273,6 @@ def _stamp_dot(canvas: np.ndarray, cx: float, cy: float,
         img = img.filter(ImageFilter.GaussianBlur(radius=blur))
     arr = np.asarray(img, dtype=np.float32) / 255.0
     np.maximum(canvas, arr, out=canvas)
-
-
-def impact_splat() -> None:
-    """Radial spray with a dense central core — for the normalForce branch.
-
-    Reads as material blasted outward from a point of impact: a bright disc
-    surrounded by emanating streaks and scattered chips. Designed for short
-    radial extent so it stays readable at typical stamp sizes (~10-20 cm)."""
-    rng = random.Random(5)
-    c = _new_canvas()
-    cx, cy = 256, 256
-
-    # Bright central core — the impact point itself.
-    _stamp_dot(c, cx, cy, radius=24, intensity=1.0, blur=4.0)
-
-    # Inner halo of diffuse damage.
-    _stamp_dot(c, cx, cy, radius=58, intensity=0.55, blur=12.0)
-
-    # Radial streaks emanating outward.
-    for _ in range(34):
-        angle = rng.uniform(0, 2 * math.pi)
-        length = rng.uniform(40, 170)
-        x_start = cx + math.cos(angle) * 10
-        y_start = cy + math.sin(angle) * 10
-        x_end = cx + math.cos(angle) * length
-        y_end = cy + math.sin(angle) * length
-        width = rng.uniform(2.5, 5.5)
-        intensity = rng.uniform(0.7, 1.0)
-        _stamp_streak(c, x_start, y_start, x_end, y_end,
-                      width=width, taper=True, intensity=intensity, blur=0.9)
-
-    # Scattered chips farther out.
-    for _ in range(70):
-        angle = rng.uniform(0, 2 * math.pi)
-        radius = rng.uniform(70, 220)
-        x = cx + math.cos(angle) * radius + rng.uniform(-12, 12)
-        y = cy + math.sin(angle) * radius + rng.uniform(-12, 12)
-        size = rng.uniform(1.5, 4.5)
-        intensity = rng.uniform(0.5, 0.9)
-        _stamp_dot(c, x, y, radius=size, intensity=intensity, blur=0.6)
-
-    _save(c, "scratch_impact_splat.png")
 
 
 def chip_cluster() -> None:
@@ -323,10 +343,11 @@ def main() -> None:
     streak_01()
     streak_02()
     streak_03()
-    streak_04()
-    impact_splat()
+    streak_05_clean()
     chip_cluster()
     tbone()
+    raptor_claw_01()
+    raptor_claw_02()
     print("done.")
 
 
