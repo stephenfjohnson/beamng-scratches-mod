@@ -790,7 +790,6 @@ flushPendingStampsRef = flushPendingStamps
 -- of one per impact. `events` is a list of {x,y,z,nx,ny,nz,kind,sev}.
 --   "i" — collision impact, world coords, sev = normalForce N
 --   "s" — slide fallback, world coords, sev = normalForce N
---   "d" — (J) deformation event, vehicle-local coords, sev = magnitude m
 -- sev drives synth-camera distance and stamp scale (I).
 M.stampBatch = function(events)
   if not ready or not events then return end
@@ -798,32 +797,8 @@ M.stampBatch = function(events)
     local e = events[i]
     local kind = e[7]
     local sev  = e[8]
-
-    if kind == "d" then
-      -- (J) Deformation event — coords already vehicle-local, skip the
-      -- world->local conversion stampAt would do. severity is meters of
-      -- displacement; bigger displacement gets a larger, further-camera
-      -- stamp so dramatic crumpling reads as dramatic damage.
-      --
-      -- (L) Use STRETCH_BRUSHES with a forward-aligned rotation so deform
-      -- stamps on slide-active panels reinforce the slide direction instead
-      -- of breaking it up with non-directional starbursts. The synth camera
-      -- (buildSyntheticCameraLocal) puts vehicle-forward on screen-X for
-      -- side panels and on screen-back-X for roof/floor — both symmetric
-      -- under streak rotation — so rot ≈ 0 ± jitter draws forward/back
-      -- scrape lines on those panels. Front/rear bumpers get cross-car
-      -- streaks under this rule, which is a small fraction of events.
-      local heavy = math.min(1, math.max(0, ((sev or 0) - 0.04) / 0.16))
-      M.stampAtLocal(vec3(e[1], e[2], e[3]), vec3(e[4], e[5], e[6]), {
-        scale    = 0.20 + heavy * 0.20,                       -- 0.20m..0.40m
-        dist     = 0.5  + heavy * 1.5,                        -- 0.5m..2.0m
-        colorTex = pickStretchBrush(),                        -- streak_*
-        rot      = (math.random() - 0.5) * math.rad(40),      -- ±20° around forward
-      })
-    else
-      M.stampAt(vec3(e[1], e[2], e[3]), vec3(e[4], e[5], e[6]),
-                kind == "i" and "impact" or nil, sev)
-    end
+    M.stampAt(vec3(e[1], e[2], e[3]), vec3(e[4], e[5], e[6]),
+              kind == "i" and "impact" or nil, sev)
   end
 end
 
@@ -1304,9 +1279,6 @@ local UI_DEFAULTS = {
   paintCool  = 0.015,
   impForce   = 3000,
   impCool    = 0.25,
-  defT1      = 0.04,
-  defT2      = 0.10,
-  defT3      = 0.20,
   aggCap     = 32,
   clusterRad = 1.5,
 }
@@ -1328,28 +1300,24 @@ local UI_PRESETS = {
   { name = "Light",
     slip = 3.0,  paintCool = 0.05,
     impForce = 7000, impCool = 0.6,
-    defT1 = 0.08, defT2 = 0.18, defT3 = 0.30,
     aggCap = 16,  clusterRad = 2.0,
     desc = "Subtle. Only fast slides + solid hits leave marks.\n" ..
            "Easy on hardware. Realistic 'careful driver' look." },
   { name = "Default",
     slip = 1.5,  paintCool = 0.015,
     impForce = 3000, impCool = 0.25,
-    defT1 = 0.04, defT2 = 0.10, defT3 = 0.20,
     aggCap = 32,  clusterRad = 1.5,
     desc = "Sensible defaults. Realistic damage from real crashes;\n" ..
            "balanced sensitivity, balanced cost." },
   { name = "Heavy",
     slip = 0.9,  paintCool = 0.012,
     impForce = 1800, impCool = 0.18,
-    defT1 = 0.025, defT2 = 0.07, defT3 = 0.14,
     aggCap = 44,  clusterRad = 1.3,
     desc = "More sensitive. Light contacts register; cars accumulate\n" ..
            "visible wear faster. Modest cost increase." },
   { name = "Max",
     slip = 0.6,  paintCool = 0.008,
     impForce = 1200, impCool = 0.10,
-    defT1 = 0.015, defT2 = 0.05, defT3 = 0.10,
     aggCap = 56,  clusterRad = 1.0,
     desc = "Every drag, bump, and dent leaves a mark.\n" ..
            "Banged-up look after one good roll.\n" ..
@@ -1357,7 +1325,6 @@ local UI_PRESETS = {
   { name = "Extreme",
     slip = 0.5,  paintCool = 0.005,
     impForce = 800,  impCool = 0.05,
-    defT1 = 0.010, defT2 = 0.04, defT3 = 0.08,
     aggCap = 64,  clusterRad = 0.7,
     desc = "Built to stress hardware. ~200 samples/sec/node, 50ms impact\n" ..
            "cooldown, tightest cluster radius = most depth-pass renders.\n" ..
@@ -1394,7 +1361,7 @@ end
 
 -- Build slider-backing ImGui pointer values once. Initial values match the
 -- current code defaults; the periodic snapshot from detect.lua refreshes
--- the slide/impact/deform ones to whatever the VLUA side actually has.
+-- the slide/impact ones to whatever the VLUA side actually has.
 local function ensureUIPointers()
   if uiPtrs then return true end
   local im = ui_imgui
@@ -1404,9 +1371,6 @@ local function ensureUIPointers()
     paintCool  = im.FloatPtr(0.015),
     impForce   = im.FloatPtr(3000),
     impCool    = im.FloatPtr(0.25),
-    defT1      = im.FloatPtr(0.04),
-    defT2      = im.FloatPtr(0.10),
-    defT3      = im.FloatPtr(0.20),
     aggCap     = im.IntPtr(AGGREGATE_PER_FRAME_CAP),
     clusterRad = im.FloatPtr(CLUSTER_RADIUS),
   }
@@ -1426,15 +1390,12 @@ local function syncUIPointersFromSnapshot()
   if lastDetectStats.paintCool then uiPtrs.paintCool[0] = lastDetectStats.paintCool end
   if lastDetectStats.impForce  then uiPtrs.impForce[0]  = lastDetectStats.impForce end
   if lastDetectStats.impCool   then uiPtrs.impCool[0]   = lastDetectStats.impCool end
-  if lastDetectStats.defT1     then uiPtrs.defT1[0]     = lastDetectStats.defT1 end
-  if lastDetectStats.defT2     then uiPtrs.defT2[0]     = lastDetectStats.defT2 end
-  if lastDetectStats.defT3     then uiPtrs.defT3[0]     = lastDetectStats.defT3 end
   uiPtrs.aggCap[0]     = AGGREGATE_PER_FRAME_CAP
   uiPtrs.clusterRad[0] = CLUSTER_RADIUS
 end
 
 -- Send a tuning command back to the player vehicle's VLUA. detect.lua
--- exposes setThresholds / setImpactParams / setDeformTiers / setPaintCooldown.
+-- exposes setThresholds / setImpactParams / setPaintCooldown.
 local function sendVehicleCmd(cmd)
   local veh = getPlayerVehicle(0)
   if veh and veh.queueLuaCommand then veh:queueLuaCommand(cmd) end
@@ -1449,9 +1410,6 @@ local function applyPreset(preset)
   uiPtrs.paintCool[0]  = preset.paintCool
   uiPtrs.impForce[0]   = preset.impForce
   uiPtrs.impCool[0]    = preset.impCool
-  uiPtrs.defT1[0]      = preset.defT1
-  uiPtrs.defT2[0]      = preset.defT2
-  uiPtrs.defT3[0]      = preset.defT3
   uiPtrs.aggCap[0]     = preset.aggCap
   uiPtrs.clusterRad[0] = preset.clusterRad
   AGGREGATE_PER_FRAME_CAP = preset.aggCap
@@ -1462,16 +1420,14 @@ local function applyPreset(preset)
     preset.paintCool))
   sendVehicleCmd(string.format("scratches_detect.setImpactParams(%.0f, %.3f)",
     preset.impForce, preset.impCool))
-  sendVehicleCmd(string.format("scratches_detect.setDeformTiers(%.4f, %.4f, %.4f)",
-    preset.defT1, preset.defT2, preset.defT3))
-  log('I', logTag, string.format("preset applied: %s (slip=%.2f cool=%.4f force=%.0f impCool=%.2f tiers=%.3f/%.3f/%.3f cap=%d radius=%.2f)",
+  log('I', logTag, string.format("preset applied: %s (slip=%.2f cool=%.4f force=%.0f impCool=%.2f cap=%d radius=%.2f)",
     preset.name, preset.slip, preset.paintCool, preset.impForce, preset.impCool,
-    preset.defT1, preset.defT2, preset.defT3, preset.aggCap, preset.clusterRad))
+    preset.aggCap, preset.clusterRad))
 end
 
 -- Live debug + tuning panel. Two columns of read-only counters at the top,
--- then grouped slider sections for slide / impact / deformation tunables,
--- then action buttons. Sliders with visible value labels via SliderFloat.
+-- then grouped slider sections for slide / impact tunables, then action
+-- buttons. Sliders with visible value labels via SliderFloat.
 local function drawUI()
   if not uiVisible then return end
   local im = ui_imgui
@@ -1507,14 +1463,6 @@ local function drawUI()
     "One per qualifying contact, gated by the per-node Cooldown.\n" ..
     "Each fires a discrete stamp (chip/claw brush) at the contact point.")
 
-  im.Text(string.format("Deformation events:   %d  (%d skin nodes)",
-    lastDetectStats.deformEvents or 0, lastDetectStats.skinNodes or 0))
-  uiTooltip(
-    "Body-skin nodes that crossed a deformation tier.\n" ..
-    "Catches damage where the skin moved without itself touching ground\n" ..
-    "(internal frame transferring force, sustained crush, etc.).\n" ..
-    "Each skin node fires up to 3 times across a session (one per tier).")
-
   im.Text(string.format("Streams baked:        %d",
     stampStats.streamsBaked))
   uiTooltip(
@@ -1525,7 +1473,7 @@ local function drawUI()
   im.Text(string.format("Discrete stamps:      %d (queued) / %d (skipped)",
     stampStats.stampsEnqueued, stampStats.stampsSkippedMissed))
   uiTooltip(
-    "Impact + deformation + 1-point-fallback stamps reaching the GE bake queue.\n" ..
+    "Impact + 1-point-fallback stamps reaching the GE bake queue.\n" ..
     "'Skipped' = projection landed outside the synth-camera frustum at flush\n" ..
     "(the cluster centroid couldn't see that point); the stamp is dropped.\n" ..
     "Skip rate over a few percent suggests tightening Cluster radius.")
@@ -1602,35 +1550,6 @@ local function drawUI()
     "Performance: lower = potentially many more impact stamps per crash.")
 
   im.Separator()
-  im.Text("--- Deformation tiers (m) ---")
-  local tierChanged = false
-  if im.SliderFloat("Tier 1 (light)", uiPtrs.defT1, 0.01, 0.20, "%.3f") then tierChanged = true end
-  uiTooltip(
-    "Skin-deformation magnitude that fires the first stamp on a node.\n" ..
-    "LOWER -> minor dings show up.\n" ..
-    "HIGHER -> only real dents leave marks.\n" ..
-    "Default: 0.040 m (4 cm).")
-
-  if im.SliderFloat("Tier 2 (mod.) ", uiPtrs.defT2, 0.05, 0.40, "%.3f") then tierChanged = true end
-  uiTooltip(
-    "Second tier — fires a second stamp on the same node when deformation\n" ..
-    "reaches this magnitude.\n" ..
-    "Default: 0.100 m (10 cm).")
-
-  if im.SliderFloat("Tier 3 (heavy)", uiPtrs.defT3, 0.10, 0.60, "%.3f") then tierChanged = true end
-  uiTooltip(
-    "Third tier — final stamp per node, fires on heavy crumpling.\n" ..
-    "Default: 0.200 m (20 cm).\n" ..
-    "Each skin node fires at most #tiers times across the session.\n" ..
-    "Performance: deform scan is round-robin (12 nodes/frame); cost is\n" ..
-    "fixed regardless of tier values.")
-
-  if tierChanged then
-    sendVehicleCmd(string.format("scratches_detect.setDeformTiers(%.4f, %.4f, %.4f)",
-      uiPtrs.defT1[0], uiPtrs.defT2[0], uiPtrs.defT3[0]))
-  end
-
-  im.Separator()
   im.Text("--- Bake limits (GE) ---")
   if im.SliderInt("Aggregate cap (per frame)", uiPtrs.aggCap, 4, 64) then
     AGGREGATE_PER_FRAME_CAP = uiPtrs.aggCap[0]
@@ -1667,9 +1586,6 @@ local function drawUI()
     uiPtrs.paintCool[0]  = UI_DEFAULTS.paintCool
     uiPtrs.impForce[0]   = UI_DEFAULTS.impForce
     uiPtrs.impCool[0]    = UI_DEFAULTS.impCool
-    uiPtrs.defT1[0]      = UI_DEFAULTS.defT1
-    uiPtrs.defT2[0]      = UI_DEFAULTS.defT2
-    uiPtrs.defT3[0]      = UI_DEFAULTS.defT3
     uiPtrs.aggCap[0]     = UI_DEFAULTS.aggCap
     uiPtrs.clusterRad[0] = UI_DEFAULTS.clusterRad
     AGGREGATE_PER_FRAME_CAP = UI_DEFAULTS.aggCap
@@ -1677,8 +1593,6 @@ local function drawUI()
     sendVehicleCmd(string.format("scratches_detect.setThresholds(%.3f, nil, nil)", UI_DEFAULTS.slip))
     sendVehicleCmd(string.format("scratches_detect.setPaintCooldown(%.4f)", UI_DEFAULTS.paintCool))
     sendVehicleCmd(string.format("scratches_detect.setImpactParams(%.0f, %.3f)", UI_DEFAULTS.impForce, UI_DEFAULTS.impCool))
-    sendVehicleCmd(string.format("scratches_detect.setDeformTiers(%.4f, %.4f, %.4f)",
-      UI_DEFAULTS.defT1, UI_DEFAULTS.defT2, UI_DEFAULTS.defT3))
     log('I', logTag, "UI: reset all tunables to defaults")
   end
   uiTooltip("Restore every slider to its canonical default and push the values to VLUA.")

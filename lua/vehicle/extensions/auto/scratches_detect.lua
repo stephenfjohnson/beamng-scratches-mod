@@ -38,63 +38,20 @@ local nodeImpactLast = {}    -- nid -> simTime of last queued impact stamp
 -- the stream hits STREAM_MAX_DURATION / STREAM_MAX_POINTS.
 local nodeStreams = {}       -- nid -> { startTime, lastTime, points = {{x,y,z,nx,ny,nz}, ...} }
 
--- (G) Per-render-frame batch of impact / slide-fallback / deformation events.
+-- (G) Per-render-frame batch of impact / slide-fallback events.
 -- updateGFX packages all of these into one queueGameEngineLua call as
 -- scratches_paint.stampBatch({...}). Each entry is {x,y,z,nx,ny,nz,kind,sev}
 -- where kind is:
 --   "i" — collision impact (world coords; sev = normalForce in N)
 --   "s" — single-point slide fallback (world coords; sev = normalForce in N)
---   "d" — deformation event (vehicle-local coords; sev = magnitude in m)
 -- The GE side dispatches by kind; (I) scales synth-camera distance by sev.
 local pendingDetectEvents = {}
-
--- (J) Deformation-driven stamp source. Per-frame round-robin scan of body
--- skin nodes; when a node's distance from rest position crosses a tier, emit
--- a stamp at its current (deformed) location. Catches the case the user
--- raised: outer skin pushed in by an internal frame node that itself was
--- deny-listed (skidplate/exhaust/etc) — collision detection misses that, but
--- the visible skin-node movement is real.
-local bodySkinNodes      = nil   -- list of {nid, rx, ry, rz} body-skin rest positions
-local nodeDeformTier     = {}    -- nid -> highest tier already fired (0..#DEFORM_TIERS)
-local deformScanCursor   = 1     -- round-robin pointer into bodySkinNodes
-local DEFORM_TIERS       = {0.04, 0.10, 0.20}  -- meters; 4cm/10cm/20cm progression
-local DEFORM_SCAN_PER_FRAME = 12 -- nodes scanned per render frame
--- Settle delay before scanning starts. Right after spawn / Ctrl+R the JBeam
--- nodes haven't equilibrated yet — getNodePosition returns transient poses
--- that differ from the eventual rest by tens of cm. Capturing a baseline
--- there fires phantom tier-2/3 events as the vehicle settles into its real
--- pose. 1.5s is comfortably past suspension settling for any normal car.
-local DEFORM_CALIBRATION_DELAY = 1.5  -- seconds
-local deformAnchorTime         = nil  -- simTime when settle window started
-local deformLogsRemaining      = 5    -- one-time diagnostic on first calibrations
--- Gate deformation event emission on recent collision activity. Body flex
--- under cornering / acceleration legitimately moves skin nodes 3-5cm in
--- vehicle-local frame; without this gate, a hard slide turn fires tier 1
--- on every flexing panel even with no actual damage.
---
--- Two layers:
---   (a) time gate: lastFilteredEventTime — anything outside the window
---       short-circuits the whole scan emit.
---   (b) proximity gate: recentCollisionNodes — even within the time window,
---       only nodes near a recent collision can emit. Stops the case where
---       hitting one side of the car causes opposite-side body strain to
---       paint as damage on a panel that never touched anything.
-local lastFilteredEventTime    = -1e9
-local DEFORM_COLLISION_WINDOW  = 3.0  -- seconds
--- (M) 0.4m is panel-sized — enough that the actual struck panel's deform
--- events fire, but small enough that proximity doesn't chain via chassis-
--- internal contact nodes (body_sedan spine, transmission tunnel) to door /
--- quarterpanel skin nodes that never took a hit. Was 1.0m, which let a
--- frontal-bumper smash propagate visible deform stamps to the rear doors.
-local DEFORM_PROX_RADIUS       = 0.4
-local recentCollisionNodes     = {}   -- nid -> {rx, ry, rz, time} (vehicle-local rest pos cached for cheap proximity test)
 
 -- aggregate stats since last dumpStats / since load
 local stats = {
   totalCalls       = 0,  -- onNodeCollision calls reaching us
   filteredCalls    = 0,  -- passed all filters
   impactEvents     = 0,  -- impact-branch stamps fired (subset of filteredCalls)
-  deformEvents     = 0,  -- (J) deformation-tier crossings emitted as stamps
   streamsFlushed   = 0,  -- slide brushStroke layers committed
   streamPointsTotal= 0,  -- total points across all flushed streams (avg = total/flushed)
   streamFallbacks  = 0,  -- streams that flushed with 1 point (fell back to single stamp)
@@ -157,28 +114,6 @@ local SURFACE_MATERIAL_NAMES = {
   -- Off-road:
   "DIRT", "DIRT_DUSTY", "GRASS", "MUD", "SAND", "SAND_DENSE",
   "ICE", "SNOW",
-}
-
--- (M) Chassis-internal part patterns. These nodes pass the EXCLUDE_PART_PATTERNS
--- filter (they're not mechanical) but their JBeam REST positions are inside
--- the body — frame rails, transmission tunnel, B-pillar internals. They
--- legitimately fire onNodeCollision during major impacts via chassis
--- self-collision (interior nodes touching each other as the body crumples),
--- but using them to drive deform-gate proximity bleeds the gate to outer-skin
--- panels far from the actual external impact point. A frontal-bumper hit on
--- a 2m-long Pigeon ends up "near" every door panel via the spine.
---
--- Used ONLY for the deform-gate population. Slide and impact stamping on
--- these nodes still fires as before — chassis bottom-out scrape marks remain.
-local DEFORM_GATE_INTERNAL_PATTERNS = {
-  "body_sedan", "body_3w", "body_lcv", "body_truck",
-  "body_pickup", "body_van", "body_coupe", "body_wagon",
-  "frame", "chassis", "subframe", "unibody",
-  -- Underbody panels: technically outer skin, but located right under the
-  -- sideskirt on the ETK800 (Z≈-0.05) — within 0.4m proximity of door
-  -- bottom skin nodes (Z≈0.3-0.4). Off-road / sand grinding fills these
-  -- with filtered contacts that chain to door panels.
-  "undertray", "splitter", "diffuser",
 }
 
 -- Part-name substring deny-list. Matched against node.partOrigin (case-insensitive).
@@ -330,35 +265,6 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
 
   -- passed all filters
   stats.filteredCalls = stats.filteredCalls + 1
-  -- (J/M) Open the deformation gate window AND record the contact node's
-  -- rest position so the proximity filter can match nearby skin nodes.
-  -- Keyed by nid so re-impacts on the same node just refresh the timer
-  -- (table stays small even during a long roll).
-  --
-  -- (M) Force-gated: only impactHit-level contacts (>= IMPACT_FORCE_THRESHOLD)
-  -- open the deform window. Pure slides and gentle ground contacts (sand
-  -- grinding, curb taps, undertray scuff) don't represent damage events;
-  -- letting them populate recentCollisionNodes had a 3-second residual
-  -- effect after every off-road excursion that re-opened the gate for
-  -- nodes near the underbody, chaining proximity to body skin panels.
-  local _now = obj and obj.getSimTime and obj:getSimTime() or 0
-  if impactHit then
-    lastFilteredEventTime = _now
-    -- (M) Only outer-skin parts populate the deform gate. Chassis-internal
-    -- nodes (body_sedan/body_3w/frame/...) report contacts during major
-    -- impacts via self-collision but their rest positions are inside the body
-    -- and would chain proximity to far-side panels.
-    local isInternal = false
-    for _, ipat in ipairs(DEFORM_GATE_INTERNAL_PATTERNS) do
-      if partLower:find(ipat, 1, true) then isInternal = true; break end
-    end
-    if not isInternal and node.pos then
-      recentCollisionNodes[id1] = {
-        rx = node.pos.x, ry = node.pos.y, rz = node.pos.z,
-        time = _now,
-      }
-    end
-  end
   stats.byBodyMat[bodyName]      = (stats.byBodyMat[bodyName] or 0) + 1
   stats.bySurfaceMat[surfaceName] = (stats.bySurfaceMat[surfaceName] or 0) + 1
   if slipVel     > stats.maxSlipVel     then stats.maxSlipVel     = slipVel     end
@@ -468,164 +374,6 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   end
 end
 
--- (J) Enumerate body skin nodes once. Same filters as onScrapeContact uses
--- for the impact branch: must have a body material (METAL/PLASTIC/GLASS),
--- must not be a wheel, must not match an EXCLUDE_PART_PATTERNS substring.
--- Caches the result; returns nil while v.data isn't yet ready.
-local function buildBodySkinNodes()
-  if bodySkinNodes then return bodySkinNodes end
-  if not (v and v.data and v.data.nodes) then return nil end
-  if not buildSets() then return nil end
-
-  bodySkinNodes = {}
-  for nid, node in pairs(v.data.nodes) do
-    if not node.wheelID
-       and node.nodeMaterial and bodyMatSet[node.nodeMaterial]
-       and node.pos then
-      local part = (node.partOrigin or node.partPath or ""):lower()
-      local excluded = false
-      for _, pat in ipairs(EXCLUDE_PART_PATTERNS) do
-        if part:find(pat, 1, true) then excluded = true; break end
-      end
-      if not excluded then
-        bodySkinNodes[#bodySkinNodes + 1] = {
-          nid = nid,
-          rx  = node.pos.x, ry = node.pos.y, rz = node.pos.z,
-        }
-      end
-    end
-  end
-  log('I', logTag, "deform scan: registered " .. #bodySkinNodes .. " body skin nodes")
-  return bodySkinNodes
-end
-
--- (J) Per-frame round-robin deformation scan.
---
--- Diagnostic confirmed: obj:getNodePosition(nid) returns vehicle-local
--- coordinates already (close to v.data.nodes[nid].pos for an undeformed
--- node). No world->local conversion needed — direct comparison to a
--- captured baseline gives true deformation magnitude.
---
--- Pipeline:
---   1. Skip until DEFORM_CALIBRATION_DELAY has elapsed since spawn/reset
---      (physics need ~1.5s to settle into rest pose; capturing baseline
---      mid-settle fired phantom events).
---   2. First observation of each node captures pos as the rest baseline.
---      Subsequent observations measure |current - baseline|.
---   3. Tiers (4cm/10cm/20cm by default) fire one stamp each per node.
---   4. Sanity cap >1.5m skips any unforeseen garbage.
---
--- Diagnostic log on the first 5 calibrations prints jbeam_rest vs the
--- captured pos so we can confirm they're close (small offset is normal —
--- jbeam_rest is unsettled rest, pos is settled-under-gravity rest).
-local function scanDeformations()
-  if not (enabled and paintEnabled) then return end
-  if not obj or not obj.getNodePosition or not obj.getSimTime then return end
-  local nodes = buildBodySkinNodes()
-  if not nodes or #nodes == 0 then return end
-
-  local now = obj:getSimTime() or 0
-  if not deformAnchorTime then deformAnchorTime = now end
-  if now - deformAnchorTime < DEFORM_CALIBRATION_DELAY then return end
-
-  -- (J) Collision gate: only emit events while we're within the recent-
-  -- collision window. Outside the window we still scan and capture
-  -- baselines (so the scan never falls behind), but tier crossings are
-  -- silently consumed instead of producing stamps. This kills body-flex
-  -- false positives during pure driving while still firing during real
-  -- crashes (which always have nearby collision events).
-  local timeGateOpen = (now - lastFilteredEventTime) <= DEFORM_COLLISION_WINDOW
-
-  -- Prune stale entries from recentCollisionNodes once per slice (cheap
-  -- amortized cost). After pruning, this table holds only nodes that took
-  -- a contact event in the last DEFORM_COLLISION_WINDOW seconds.
-  if timeGateOpen then
-    for cid, c in pairs(recentCollisionNodes) do
-      if (now - c.time) > DEFORM_COLLISION_WINDOW then
-        recentCollisionNodes[cid] = nil
-      end
-    end
-  else
-    -- Time gate closed; nothing to do, table will get pruned next time it opens.
-  end
-  local proxR2 = DEFORM_PROX_RADIUS * DEFORM_PROX_RADIUS
-
-  local n = #nodes
-  local sliceSize = math.min(DEFORM_SCAN_PER_FRAME, n)
-  for k = 1, sliceSize do
-    local i = ((deformScanCursor - 1 + k - 1) % n) + 1
-    local entry = nodes[i]
-    local nid = entry.nid
-
-    local pos = obj:getNodePosition(nid)
-    if pos then
-      -- Lazy baseline. First observation establishes rest; thereafter we
-      -- measure deviation from THAT, not from JBeam's unsettled rest pos.
-      if not entry.bx then
-        entry.bx, entry.by, entry.bz = pos.x, pos.y, pos.z
-        if deformLogsRemaining > 0 then
-          log('I', logTag, string.format(
-            "deform calibrate nid=%d  jbeam_rest=(%.3f,%.3f,%.3f)  captured_pos=(%.3f,%.3f,%.3f)  delta=(%.3f,%.3f,%.3f)",
-            nid, entry.rx, entry.ry, entry.rz, pos.x, pos.y, pos.z,
-            pos.x - entry.rx, pos.y - entry.ry, pos.z - entry.rz))
-          deformLogsRemaining = deformLogsRemaining - 1
-        end
-      end
-
-      local dx = pos.x - entry.bx
-      local dy = pos.y - entry.by
-      local dz = pos.z - entry.bz
-      local mag = math.sqrt(dx*dx + dy*dy + dz*dz)
-
-      if mag <= 1.5 then
-        local newTier = 0
-        for t = #DEFORM_TIERS, 1, -1 do
-          if mag >= DEFORM_TIERS[t] then newTier = t; break end
-        end
-
-        local prevTier = nodeDeformTier[nid] or 0
-        -- Proximity check: this skin node must be within DEFORM_PROX_RADIUS
-        -- of at least one collision node from the recent window. JBeam rest
-        -- positions (cnode.rx/ry/rz vs entry.rx/ry/rz) are both vehicle-local
-        -- so the distance test is direct.
-        local emitAllowed = false
-        if timeGateOpen then
-          for _, c in pairs(recentCollisionNodes) do
-            local cdx = entry.rx - c.rx
-            local cdy = entry.ry - c.ry
-            local cdz = entry.rz - c.rz
-            if (cdx*cdx + cdy*cdy + cdz*cdz) <= proxR2 then
-              emitAllowed = true
-              break
-            end
-          end
-        end
-        if newTier > prevTier and emitAllowed then
-          local nx, ny, nz
-          if mag > 1e-6 then
-            nx, ny, nz = dx/mag, dy/mag, dz/mag
-          else
-            nx, ny, nz = 0, 0, 1
-          end
-          -- pos is vehicle-local; the GE side dispatches "d" through
-          -- stampAtLocal which expects vehicle-local.
-          pendingDetectEvents[#pendingDetectEvents + 1] = {
-            pos.x, pos.y, pos.z, nx, ny, nz, "d", mag,
-          }
-          nodeDeformTier[nid] = newTier
-          stats.deformEvents = stats.deformEvents + 1
-        end
-        -- Note: when emitAllowed is false, we DON'T mark prevTier consumed.
-        -- The flex magnitude will return to ~0 after the maneuver ends,
-        -- and a future real damage at this same magnitude will still fire.
-      end
-    end
-  end
-
-  deformScanCursor = deformScanCursor + sliceSize
-  if deformScanCursor > n then deformScanCursor = 1 end
-end
-
 -- (G) Flush the per-frame impact+fallback batch as ONE queueGameEngineLua
 -- call. Empty case is the common one (cheap early-out). Builds a Lua table-
 -- literal payload that scratches_paint.stampBatch unpacks on the GE side.
@@ -661,29 +409,24 @@ local function pushStatsToGE(now)
   obj:queueGameEngineLua(string.format(
     "if scratches_paint and scratches_paint.recordDetectStats then " ..
     "  pcall(scratches_paint.recordDetectStats, {" ..
-    "totalCalls=%d,filteredCalls=%d,impactEvents=%d,deformEvents=%d," ..
+    "totalCalls=%d,filteredCalls=%d,impactEvents=%d," ..
     "streamsFlushed=%d,slip=%.3f,perp=%.3f,minForce=%.0f," ..
     "impForce=%.0f,impCool=%.3f,paintCool=%.4f," ..
-    "defT1=%.4f,defT2=%.4f,defT3=%.4f," ..
-    "skinNodes=%d,maxNormalForce=%.0f}) " ..
+    "maxNormalForce=%.0f}) " ..
     "end",
-    stats.totalCalls, stats.filteredCalls, stats.impactEvents, stats.deformEvents,
+    stats.totalCalls, stats.filteredCalls, stats.impactEvents,
     stats.streamsFlushed,
     SLIP_THRESHOLD, PERP_THRESHOLD, MIN_NORMAL_FORCE,
     IMPACT_FORCE_THRESHOLD, IMPACT_COOLDOWN, paintCooldown,
-    DEFORM_TIERS[1], DEFORM_TIERS[2], DEFORM_TIERS[3],
-    bodySkinNodes and #bodySkinNodes or 0, stats.maxNormalForce))
+    stats.maxNormalForce))
 end
 
--- ---- per-frame: deform scan + idle-flush streams + flush event batch ----
--- (J) scanDeformations runs FIRST so its emissions ride out in the same
--- flushDetectEvents call as collision impacts and fallbacks.
+-- ---- per-frame: idle-flush streams + flush event batch ----
 -- Walks the stream table once per render frame; cheap because the table is
 -- empty whenever no node is in slide contact. Any stream whose last sample
 -- is older than STREAM_IDLE_TIMEOUT is flushed.
 local function updateGFX(dt)
   if not (obj and obj.getSimTime) then return end
-  scanDeformations()
   flushDetectEvents()
   local now = obj:getSimTime() or 0
   -- (K) Throttled stats push to drive the GE-side IMGUI panel.
@@ -732,11 +475,6 @@ M.dumpStats = function()
   log('I', logTag, string.format("filteredCalls = %d", stats.filteredCalls))
   log('I', logTag, string.format("impactEvents  = %d  (threshold %.0f N, cooldown %.2fs)",
     stats.impactEvents, IMPACT_FORCE_THRESHOLD, IMPACT_COOLDOWN))
-  log('I', logTag, string.format("deformEvents  = %d  (tiers %.2fm/%.2fm/%.2fm, %d skin nodes, proxR=%.2fm, force-gated, outer-skin-only)",
-    stats.deformEvents,
-    DEFORM_TIERS[1] or 0, DEFORM_TIERS[2] or 0, DEFORM_TIERS[3] or 0,
-    bodySkinNodes and #bodySkinNodes or 0,
-    DEFORM_PROX_RADIUS))
   log('I', logTag, string.format("streams       = %d flushed, %d fallbacks, avg %.1f points/stream",
     stats.streamsFlushed, stats.streamFallbacks,
     stats.streamsFlushed > 0 and (stats.streamPointsTotal / stats.streamsFlushed) or 0))
@@ -781,10 +519,6 @@ M.pushFullDumpToGE = function()
   add(string.format("filteredCalls = %d", stats.filteredCalls))
   add(string.format("impactEvents  = %d  (threshold %.0f N, cooldown %.2fs)",
     stats.impactEvents, IMPACT_FORCE_THRESHOLD, IMPACT_COOLDOWN))
-  add(string.format("deformEvents  = %d  (tiers %.2f/%.2f/%.2fm, %d nodes, proxR=%.2fm, force-gated, outer-skin-only)",
-    stats.deformEvents,
-    DEFORM_TIERS[1] or 0, DEFORM_TIERS[2] or 0, DEFORM_TIERS[3] or 0,
-    bodySkinNodes and #bodySkinNodes or 0, DEFORM_PROX_RADIUS))
   add(string.format("streams       = %d flushed, %d fallbacks, avg %.1f pts/stream",
     stats.streamsFlushed, stats.streamFallbacks,
     stats.streamsFlushed > 0 and (stats.streamPointsTotal / stats.streamsFlushed) or 0))
@@ -825,7 +559,7 @@ end
 
 M.resetStats = function()
   stats = {
-    totalCalls = 0, filteredCalls = 0, impactEvents = 0, deformEvents = 0,
+    totalCalls = 0, filteredCalls = 0, impactEvents = 0,
     streamsFlushed = 0, streamPointsTotal = 0, streamFallbacks = 0,
     byBodyMat = {}, bySurfaceMat = {},
     maxSlipVel = 0, maxPerpVel = 0, maxNormalForce = 0,
@@ -869,18 +603,6 @@ end
 M.setPaintCooldown = function(secs)
   paintCooldown = math.max(0, tonumber(secs) or 0)
   log('I', logTag, string.format("paintCooldown = %.3fs (per node)", paintCooldown))
-end
-
--- (J) Tune the deformation-tier thresholds. Pass any of t1/t2/t3 in meters;
--- nil leaves that tier unchanged. Lower values = more sensitive = more stamps.
-M.setDeformTiers = function(t1, t2, t3)
-  if t1 then DEFORM_TIERS[1] = math.max(0.005, tonumber(t1) or 0.04) end
-  if t2 then DEFORM_TIERS[2] = math.max(0.01,  tonumber(t2) or 0.10) end
-  if t3 then DEFORM_TIERS[3] = math.max(0.02,  tonumber(t3) or 0.20) end
-  log('I', logTag, string.format("deform tiers: %.3fm / %.3fm / %.3fm",
-    DEFORM_TIERS[1], DEFORM_TIERS[2], DEFORM_TIERS[3]))
-  -- Reset the tier-fired memory so we re-evaluate every node against the new tiers.
-  table.clear(nodeDeformTier)
 end
 
 M.setImpactParams = function(threshold, cooldown)
@@ -928,7 +650,7 @@ end
 local function onExtensionLoaded()
   install()
   bootstrapPainter()
-  log('I', logTag, "loaded. probes: scratches_detect.{dumpStats,pushFullDumpToGE,dumpMaterials,dumpNode,setLog,setVerbose,setEnabled,setThresholds,setImpactParams,setDeformTiers,setPaintEnabled,setPaintCooldown,resetStats}")
+  log('I', logTag, "loaded. probes: scratches_detect.{dumpStats,pushFullDumpToGE,dumpMaterials,dumpNode,setLog,setVerbose,setEnabled,setThresholds,setImpactParams,setPaintEnabled,setPaintCooldown,resetStats}")
   return true
 end
 
@@ -943,23 +665,6 @@ local function onReset()
   table.clear(nodeImpactLast)
   table.clear(nodeStreams)
   pendingDetectEvents = {}
-  -- (J) Reset deformation state — fresh-spawn vehicle has no damage, so
-  -- per-node tier history is wrong now. Also clear the per-node baselines
-  -- so they recalibrate against the post-respawn pose on the next scan.
-  -- Node IDs DON'T change on respawn, so keep bodySkinNodes itself.
-  -- And re-anchor the calibration delay so the post-Ctrl+R settle window
-  -- gets the same protection as a fresh spawn.
-  if bodySkinNodes then
-    for _, e in ipairs(bodySkinNodes) do
-      e.bx, e.by, e.bz = nil, nil, nil
-    end
-  end
-  table.clear(nodeDeformTier)
-  table.clear(recentCollisionNodes)
-  deformScanCursor       = 1
-  deformAnchorTime       = nil
-  deformLogsRemaining    = 5
-  lastFilteredEventTime  = -1e9
   bootstrapPainter()
   -- Wipe baked decals on the GE side so the reset cleans up cosmetics too.
   -- pcall-guarded on GE because scratches_paint may not be loaded yet on a
