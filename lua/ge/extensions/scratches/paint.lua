@@ -16,6 +16,22 @@ local setupAttemptTimer = 0      -- seconds since last attempt
 local SETUP_RETRY       = 1.0    -- seconds between retry attempts
 local lastSkinJBeam     = nil    -- last vehicle jbeam we successfully set skin on
 
+-- Material-binding stabilization state. BeamNG's setVehicleMaterialJob runs
+-- as a coroutine that yields after start, so its setMaterialIdx call lands
+-- one or more frames AFTER our setup completes — and it clobbers anything we
+-- did synchronously. To get reliable multi-material binding we instead:
+--   1. Compute desiredMatIndices once at setup using scenetree.findObject
+--      (the same check BeamNG uses internally at dynamicDecals.lua:1999).
+--   2. Each onUpdate tick, additively ensure every desired index is bound.
+--      That cooperates with BeamNG's job instead of racing it — once both
+--      sides have run, bindings = our desired set.
+--   3. Once stable (one tick where every desired index is present), we run
+--      the canvas seed. Doing it earlier risks the seed writing to the
+--      wrong material (the projection's initial materialIdx is 0).
+local desiredMatIndices = nil
+local matBindingsStable = false
+local seedDone          = false
+
 -- ---- per-frame discrete-stamp batching ----
 -- stampAtLocal records a raw input descriptor here (no api calls, no project,
 -- no getDecalData) and returns immediately. onUpdate drains the queue with
@@ -27,12 +43,14 @@ local lastSkinJBeam     = nil    -- last vehicle jbeam we successfully set skin 
 -- Stream path is separate (it already batches its sub-strokes per stream).
 local pendingStampInputs   = {}
 local pendingStampsJBeam   = nil   -- jbeam the queued stamps belong to (drop on vehicle switch)
-local AGGREGATE_PER_FRAME_CAP = 32 -- hard cap per frame; further enqueues drop
+local AGGREGATE_PER_FRAME_CAP = 96 -- hard cap per frame; further enqueues drop
 -- Greedy spatial-cluster radius (vehicle-local meters). Stamps within this
 -- distance share a project camera. Bigger = fewer clusters = fewer projects;
 -- too big and the shared cam can land on the wrong panel for off-axis stamps.
--- 1.5m comfortably covers a single-panel slide; multi-panel rolls partition.
-local CLUSTER_RADIUS         = 1.5
+-- Keep this tighter than a full roof/side span: realism beats a few saved
+-- projection passes here, because an over-broad cluster can aim through a roof
+-- edge and paint side/rear panels that never touched the ground.
+local CLUSTER_RADIUS         = 0.65
 
 -- ---- variation: brush recency avoidance ----
 -- Ring buffer of recently picked brushes. pickBrush() re-rolls once if it lands
@@ -83,6 +101,30 @@ local uiClosePtr      = nil  -- BoolPtr the window's [x] button writes to
 -- live further down where the synthetic-camera stamping logic is grouped.
 local decalProjection      = nil
 local resolveDecalProjection
+local setScratchProjectionFence
+
+-- ---- paint canvas seed tunables ----
+-- The dynamic-decals skin routes the body's metallic and roughness channels
+-- through @DynamicTexture* — if we don't write to them, the body renders with
+-- whatever happened to be in the uninitialized texture (usually matte). These
+-- two scalars are what addPaintFill stamps into the metallic/roughness
+-- channels as the canvas baseline. Defaults model "shiny dielectric paint":
+--   PAINT_METALLIC  0.00  — paint is non-metal (clearcoat does the shine)
+--   PAINT_ROUGHNESS 0.20  — moderately smooth, gives a glossy clearcoat reflection
+-- The K debug panel exposes both as sliders so the user can preview values
+-- in-game; changes there call M.reseedPaintCanvas() to re-bake the canvas.
+local PAINT_METALLIC  = 0.00
+local PAINT_ROUGHNESS = 0.20
+
+-- Whether the seed also writes baseColor. Default false: the seed only writes
+-- metallic/roughness, leaving @DynamicTextureBaseColor whatever the engine
+-- already populated (paint preset livery, custom paint design, factory body
+-- texture). Setting this true makes the seed also stamp the vehicle's chosen
+-- paint color across the whole body — which wipes any preset livery (racing
+-- stripes, decals from the livery editor, etc). Useful only when the body
+-- renders black/wrong AFTER the M/R seed because the engine didn't pre-fill
+-- baseColor on that vehicle/config. Toggled from the K debug panel.
+local PAINT_SEED_COLOR = false
 
 -- ---- one-time setup ----
 local function ensureApiLoaded()
@@ -136,6 +178,78 @@ local function ensureSkin(jbeam)
   return true
 end
 
+-- Walk every material on the active shape and ask the engine whether a
+-- corresponding `.skin.dynamicTextures` variant has been registered. This is
+-- the same existence check BeamNG itself uses at `dynamicDecals.lua:1999`,
+-- so it can't disagree with the actual swap. Returns the list of material
+-- INDICES (the keys getShapeMaterialNames returns) for which a variant
+-- exists — those are the canvases dynamic decals will actually render onto.
+--
+-- Why we don't bind here: BeamNG's own setVehicleMaterialJob is a coroutine
+-- that resumes after our setup returns and calls setMaterialIdx (singular)
+-- using its own heuristic — that would clobber any addMaterialIdx we did
+-- synchronously. Instead the caller stashes this list and the per-tick
+-- ensureDesiredMaterialsBound() additively re-applies it until both sides
+-- have run (typically within 1-2 ticks).
+local function computeDesiredMaterials()
+  if not api or not api.getShapeMaterialNames then return {} end
+  if not scenetree or not scenetree.findObject then return {} end
+  local ok, names = pcall(api.getShapeMaterialNames)
+  if not ok or type(names) ~= "table" then return {} end
+  local desired = {}
+  for k, materialName in pairs(names) do
+    if type(materialName) == "string" then
+      if scenetree.findObject(materialName .. ".skin.dynamicTextures") then
+        desired[#desired + 1] = k
+      end
+    end
+  end
+  return desired
+end
+
+-- Per-tick stabilizer. Idempotent: each call diffs the current bindings
+-- against desiredMatIndices and adds anything missing. Becomes a no-op
+-- once everything we want is present (the matBindingsStable latch). When
+-- the first stable tick lands, fires the deferred canvas seed so it writes
+-- to every dynamic-textures material instead of just whatever was bound
+-- when setup returned.
+local function ensureDesiredMaterialsBound()
+  if matBindingsStable then return end
+  if not (api and api.getMaterialIndices and api.addMaterialIdx) then return end
+  if not (desiredMatIndices and #desiredMatIndices > 0) then
+    -- Nothing to enforce; let BeamNG's heuristic stand and do the seed
+    -- one-shot so single-material vehicles still get glossy paint.
+    if not seedDone then
+      M.addPaintFill()
+      seedDone = true
+    end
+    matBindingsStable = true
+    return
+  end
+  local current = api.getMaterialIndices() or {}
+  local has = {}
+  if type(current) == "table" then
+    for _, idx in ipairs(current) do has[idx] = true end
+  end
+  local addedThisTick = 0
+  for _, want in ipairs(desiredMatIndices) do
+    if not has[want] then
+      api.addMaterialIdx(want)
+      addedThisTick = addedThisTick + 1
+    end
+  end
+  if addedThisTick == 0 then
+    matBindingsStable = true
+    log('I', logTag, string.format(
+      "material bindings stable: desired=%d  current=%d",
+      #desiredMatIndices, type(current) == "table" and #current or 0))
+    if not seedDone then
+      M.addPaintFill()
+      seedDone = true
+    end
+  end
+end
+
 local function trySetup()
   if ready then return true end
   if not ensureApiLoaded() then return false end
@@ -175,12 +289,17 @@ local function trySetup()
   pendingSetup = false
   log('I', logTag, "decals API initialized for " .. jbeam .. " (layers=" .. tostring(api.getLayerCount and api.getLayerCount() or "?") .. ")")
 
-  -- Seed @DynamicTextureBaseColor with the vehicle's actual paint color so
-  -- the body doesn't render black after the dynamic-textures skin activates.
-  -- Without this, Stage 1 of the materials.json reads from an empty dynamic
-  -- texture (default 0,0,0) and the vehicle goes solid black wherever the
-  -- skin's opacityMap covers it.
-  M.addPaintFill()
+  -- Discover which materials on this vehicle have a .skin.dynamicTextures
+  -- variant. Don't bind them here — BeamNG's coroutine job will run later
+  -- with setMaterialIdx (singular) and overwrite us. ensureDesiredMaterialsBound
+  -- additively re-applies our desired set each frame until it sticks, then
+  -- fires the canvas seed so it lands on every dynamic-textures material.
+  desiredMatIndices = computeDesiredMaterials()
+  matBindingsStable = false
+  seedDone          = false
+  log('I', logTag, string.format(
+    "discovered %d dynamicTextures material(s) on %s — stabilizing bindings",
+    #desiredMatIndices, jbeam))
   return true
 end
 
@@ -196,40 +315,141 @@ local function parseVehicleColor(s)
   return r, g, b
 end
 
--- Bake a fill layer at the bottom of the layer stack with the player vehicle's
--- current paint color. Direct-bake (same pattern as our scratch stamps) — we
--- do not use api.addFillLayer because it goes through history machinery and
--- doesn't accept an explicit color in params.
+-- Build an axis-aligned synthetic camera at `axis * dist` looking back toward
+-- the vehicle origin. Same column convention as buildSyntheticCameraLocal:
+-- col0=right(+X), col1=forward(+Y), col2=up(+Z), col3=position. The two-axis
+-- version differs from the existing helper only in that the target is the
+-- origin instead of an arbitrary local point — for the canvas seed we want
+-- coverage of the whole body, not a single contact zone.
+local function buildAxisCameraLocal(axis, dist)
+  local camPos = axis * dist
+  local fwd    = -axis            -- camera looks at origin
+  local upHint = vec3(0, 0, 1)
+  if math.abs(fwd:dot(upHint)) > 0.95 then upHint = vec3(0, 1, 0) end
+  local right = upHint:cross(fwd):normalized()
+  local up    = fwd:cross(right):normalized()
+  local m = MatrixF(true)
+  m:setColumn(0, right)
+  m:setColumn(1, fwd)
+  m:setColumn(2, up)
+  m:setColumn(3, camPos)
+  return m
+end
+
+-- Seed the dynamic-texture canvas with a full-PBR paint baseline.
+--
+-- The `fill` layer type can only write baseColor (dynamicDecals.lua:301‑306 —
+-- it serializes `name/blendMode/color/colorPaletteMapId/type`, nothing else),
+-- so a fill alone leaves @DynamicTextureMetallic / @DynamicTextureRoughness
+-- at whatever the initial texture contained — usually matte. We get around
+-- that by stamping six full-canvas decals — one per cardinal axis — that
+-- carry constant `_one.png` textures for color/metallic/roughness scaled by
+-- PAINT_METALLIC and PAINT_ROUGHNESS via the projection-level intensity
+-- knobs. Six projections gives every external panel at least one cam that
+-- sees it head-on; the per-pixel composite picks the most-aligned write.
+--
+-- Cost: ~6 bakes at vehicle spawn, once. Zero per-frame work. Re-runs only
+-- when the user moves a paint slider or calls clearStamps.
 M.addPaintFill = function()
   if not ready then log('W', logTag, "addPaintFill: not ready"); return end
   if not resolveDecalProjection() then return end
+  setScratchProjectionFence(false)
   local veh = getPlayerVehicle(0)
   if not veh then return end
 
-  local r, g, b = parseVehicleColor(getVehicleColor and getVehicleColor() or nil)
-  if not r then
-    -- Fallback: a neutral mid-grey so the body isn't black even if we can't
-    -- resolve the actual paint. The user can call M.addPaintFill() again
-    -- manually after the vehicle finishes initializing.
-    r, g, b = 0.5, 0.5, 0.5
-    log('W', logTag, "addPaintFill: getVehicleColor unavailable; using mid-grey fallback")
+  -- Resolve the paint color only if we're actually going to write it.
+  -- When PAINT_SEED_COLOR is false the decal color tint goes alpha=0 so
+  -- the baseColor channel isn't disturbed and any paint preset livery
+  -- (racing stripes, custom designs) baked into @DynamicTextureBaseColor
+  -- survives.
+  local r, g, b = 1, 1, 1
+  if PAINT_SEED_COLOR then
+    local pr, pg, pb = parseVehicleColor(getVehicleColor and getVehicleColor() or nil)
+    if pr then
+      r, g, b = pr, pg, pb
+    else
+      r, g, b = 0.5, 0.5, 0.5
+      log('W', logTag, "addPaintFill: getVehicleColor unavailable; using mid-grey fallback")
+    end
+  end
+  local colorAlpha = PAINT_SEED_COLOR and 1 or 0
+
+  -- UseMousePos must be off so the projection cursor lands at screen-center
+  -- (where the camera is aimed) instead of following the mouse pointer.
+  -- Same dance flushPendingStamps does.
+  if api.isUseMousePos and api.isUseMousePos() then
+    api.toggleSetting(api.settingsFlags.UseMousePos.value)
   end
 
-  local fillData = {
-    name              = "scratches_base_paint",
-    uid               = string.format("scr-fill-%08x", math.random(0, 0xffffffff)),
-    type              = api.layerTypes.fill,
-    blendMode         = 0,  -- Normal
-    color             = Point4F(r, g, b, 1),
-    colorPaletteMapId = 0,
-    enabled           = true,
-    locked            = false,
-    parentUid         = nil,
-    children          = {},
+  local projM = getCameraProjMatrix()
+  local AXES = {
+    vec3( 1,  0,  0), vec3(-1,  0,  0),
+    vec3( 0,  1,  0), vec3( 0, -1,  0),
+    vec3( 0,  0,  1), vec3( 0,  0, -1),
   }
-  decalProjection:bakeLayers({fillData}, veh.JBeam or veh.jbeam)
-  log('I', logTag, string.format("paint fill: rgb=(%.2f,%.2f,%.2f) uid=%s", r, g, b, fillData.uid))
+  local SEED_DIST  = 4.0  -- meters from origin; outside any car's bounding box
+  local SEED_SCALE = 6.0  -- decal half-size; >= the largest vehicle dimension
+
+  local bakeList = {}
+  for i, axis in ipairs(AXES) do
+    local camLocal = buildAxisCameraLocal(axis, SEED_DIST)
+    decalProjection:projectDynamicDecals(camLocal, projM)
+
+    -- Metallic/roughness driven by setMetallicIntensity / setRoughnessIntensity
+    -- regardless of mode. Color contribution gated by colorAlpha — when 0
+    -- the decal stamp shouldn't disturb baseColor (alpha-zero color tint).
+    api.setDecalTexturePath("color",     "/art/dynamicDecals/textures/_one.png")
+    api.setDecalTexturePath("alpha",     "/art/dynamicDecals/textures/_one.png")
+    api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_one.png")
+    api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
+    api.setDecalColor(Point4F(r, g, b, colorAlpha))
+    api.setMetallicIntensity(PAINT_METALLIC)
+    api.setRoughnessIntensity(PAINT_ROUGHNESS)
+    api.setDecalScale(vec3(SEED_SCALE, 1, SEED_SCALE))
+    api.setDecalRotation(0)
+    api.setUseSurfaceNormal(true)
+
+    local decalData = decalProjection:getDecalData(camLocal, projM)
+    if decalData then
+      decalData.uid       = string.format("scr-seed-%d-%08x", i, math.random(0, 0xffffffff))
+      decalData.name      = "scratches_base_paint_" .. tostring(i)
+      decalData.enabled   = true
+      decalData.locked    = false
+      decalData.parentUid = nil
+      decalData.children  = {}
+      bakeList[#bakeList + 1] = decalData
+    end
+  end
+
+  if #bakeList > 0 then
+    decalProjection:bakeLayers(bakeList, veh.JBeam or veh.jbeam)
+  end
+  if PAINT_SEED_COLOR then
+    log('I', logTag, string.format(
+      "paint seed: rgb=(%.2f,%.2f,%.2f) M=%.2f R=%.2f layers=%d (color=ON)",
+      r, g, b, PAINT_METALLIC, PAINT_ROUGHNESS, #bakeList))
+  else
+    log('I', logTag, string.format(
+      "paint seed: M=%.2f R=%.2f layers=%d (color=OFF — preserves paint preset)",
+      PAINT_METALLIC, PAINT_ROUGHNESS, #bakeList))
+  end
 end
+
+-- Tunable setters used by the K debug panel sliders. Live-update the module
+-- locals; the caller (drawUI) decides when to call clearStamps to re-seed
+-- (typically on slider release, not while dragging).
+M.setPaintMetallic = function(v)
+  PAINT_METALLIC = math.min(1, math.max(0, tonumber(v) or 0))
+end
+M.setPaintRoughness = function(v)
+  PAINT_ROUGHNESS = math.min(1, math.max(0, tonumber(v) or 0.2))
+end
+M.setPaintSeedColor = function(b)
+  PAINT_SEED_COLOR = b and true or false
+end
+M.getPaintMetallic   = function() return PAINT_METALLIC   end
+M.getPaintRoughness  = function() return PAINT_ROUGHNESS  end
+M.getPaintSeedColor  = function() return PAINT_SEED_COLOR end
 
 -- ---- per-frame ----
 -- Forward declarations so onUpdate can call them; the function bodies are
@@ -240,6 +460,11 @@ local drawUIRef
 
 local function onUpdate(dtReal, dtSim, dtRaw)
   if ready then
+    -- Stabilize material bindings before stamps. BeamNG's coroutine job lands
+    -- a frame or two after setup; this re-applies our desired set until it
+    -- sticks, then fires the deferred canvas seed. Cheap once stable (one
+    -- early-return on the latch).
+    ensureDesiredMaterialsBound()
     -- Drain the per-frame discrete-stamp queue BEFORE api.onUpdate_ so the
     -- combineTextures step inside api.onUpdate_ picks up the freshly baked
     -- layers and the new stamps render this frame instead of next frame.
@@ -270,6 +495,11 @@ local function onVehicleSwitched(oldId, newId, player)
   -- Drop any queued stamps belonging to the previous vehicle.
   pendingStampInputs = {}
   pendingStampsJBeam = nil
+  -- Drop the previous vehicle's material-binding state so the new vehicle
+  -- runs the discover/stabilize cycle from scratch.
+  desiredMatIndices = nil
+  matBindingsStable = false
+  seedDone          = false
   -- The API has its own onVehicleSwitched that refreshes the projection shape;
   -- forward it.
   if api and api.onVehicleSwitched then api.onVehicleSwitched() end
@@ -450,6 +680,13 @@ local STRETCH_BRUSHES = {
   "/art/dynamicDecals/textures/scratch_streak_05.png",
 }
 
+-- Long straight slides used to become one large projected rectangle. On roof
+-- slides that rectangle could span past the roof edge and mark the rear/side,
+-- while visually reading as sparse because it was still a single layer. Chunk
+-- by path length so long slides become many short, local scratches.
+local STRETCH_MAX_SEGMENT_LEN = 0.22
+local STRETCH_MAX_SEGMENTS_PER_STREAM = 40
+
 -- Recency-aware random picker. Avoids the last RECENT_BRUSH_MAX picks if
 -- possible. One re-roll max so small brush sets don't loop. The recentBrushes
 -- ring is shared across both sets — keeps the picker simple and avoids
@@ -525,20 +762,101 @@ resolveDecalProjection = function()
   return nil
 end
 
--- Build a 4x4 camera transform (camera -> vehicle-local) for a synthetic
--- view that's OUTSIDE the body at `localPos` looking IN along the radial
--- direction. The contact normal arg is ignored: in practice it's unreliable
--- (internal panel-on-panel collisions during deformation point in random
--- directions, putting the synth camera inside the body and projecting the
--- decal onto the opposite side). The radial direction
--- `(localPos - origin):normalized()` always puts the camera outside the
--- body's outer hull looking in, regardless of contact geometry.
--- BeamNG/Torque convention: col0=right(+X), col1=forward(+Y), col2=up(+Z),
--- col3=position. (Verified in lua/ge/spawn.lua lines 98-101.)
-local function buildSyntheticCameraLocal(localPos, _localNormal_unused, dist)
-  dist = dist or 0.5
+local function vecLen(v)
+  if not v then return 0 end
+  return math.sqrt((v.x or 0) * (v.x or 0) + (v.y or 0) * (v.y or 0) + (v.z or 0) * (v.z or 0))
+end
+
+local function axisVec(axis, sign)
+  if axis == "x" then return vec3(sign, 0, 0) end
+  if axis == "y" then return vec3(0, sign, 0) end
+  return vec3(0, 0, sign)
+end
+
+local function getSpawnAabb()
+  local veh = getPlayerVehicle(0)
+  if not veh then return nil end
+  local ok, box = pcall(function() return veh:getSpawnLocalAABB() end)
+  if not ok or not box or not box.minExtents or not box.maxExtents then return nil end
+  return box
+end
+
+-- Pick the exterior hull face that owns a local contact point. The detector's
+-- collision normal is useful for axis selection (roof/floor vs side/front),
+-- but its sign can point from the world surface into the vehicle depending on
+-- pose, so the sign comes from the point's position in the vehicle AABB.
+-- This matters most for roof slides: the old radial camera aimed diagonally
+-- outward on rear/side roof contacts and could see the trunk/doors; a roof
+-- contact now gets a roof-normal camera.
+local function chooseHullOutward(localPos, localNormal)
+  local box = getSpawnAabb()
+  if box then
+    local minE, maxE = box.minExtents, box.maxExtents
+    local cx = (minE.x + maxE.x) * 0.5
+    local cy = (minE.y + maxE.y) * 0.5
+    local cz = (minE.z + maxE.z) * 0.5
+    local hx = math.max(0.001, (maxE.x - minE.x) * 0.5)
+    local hy = math.max(0.001, (maxE.y - minE.y) * 0.5)
+    local hz = math.max(0.001, (maxE.z - minE.z) * 0.5)
+
+    if localNormal and vecLen(localNormal) > 1e-3 then
+      local ax, ay, az = math.abs(localNormal.x), math.abs(localNormal.y), math.abs(localNormal.z)
+      local axis = "x"
+      if ay > ax and ay >= az then axis = "y" end
+      if az > ax and az > ay then axis = "z" end
+      if axis == "x" then return axisVec(axis, localPos.x >= cx and 1 or -1) end
+      if axis == "y" then return axisVec(axis, localPos.y >= cy and 1 or -1) end
+      return axisVec(axis, localPos.z >= cz and 1 or -1)
+    end
+
+    local sx = (localPos.x - cx) / hx
+    local sy = (localPos.y - cy) / hy
+    local sz = (localPos.z - cz) / hz
+    local asx, asy, asz = math.abs(sx), math.abs(sy), math.abs(sz)
+
+    -- Roof/floor panels are broad and easy to pollute through an oblique
+    -- rear/side radial camera. Give Z a slight bias once the point is plainly
+    -- in the upper/lower shell; otherwise use the nearest normalized face.
+    if asz >= 0.45 and asz + 0.15 >= math.max(asx, asy) then
+      return vec3(0, 0, sz >= 0 and 1 or -1)
+    end
+    if asx >= asy and asx >= asz then return vec3(sx >= 0 and 1 or -1, 0, 0) end
+    if asy >= asz then return vec3(0, sy >= 0 and 1 or -1, 0) end
+    return vec3(0, 0, sz >= 0 and 1 or -1)
+  end
+
   local outward = localPos:normalized()
   if outward:length() < 1e-3 then outward = vec3(0, 0, 1) end
+  return outward
+end
+
+local function averageNormals(samples)
+  local sx, sy, sz, n = 0, 0, 0, 0
+  for _, s in ipairs(samples) do
+    local ln = s.localNormal
+    if ln and vecLen(ln) > 1e-3 then
+      sx = sx + ln.x; sy = sy + ln.y; sz = sz + ln.z; n = n + 1
+    end
+  end
+  if n == 0 then return nil end
+  return vec3(sx / n, sy / n, sz / n)
+end
+
+setScratchProjectionFence = function(_enabled)
+  -- BeamNG exposes a depth-lock flag for authored decal editing, but in the
+  -- free-standing bake path it can produce layers that project successfully
+  -- yet write no visible pixels. Keep automated scratch bakes unfenced and
+  -- rely on hull-face camera aiming plus tighter clustering for panel locality.
+  if api and api.setLockDepth then api.setLockDepth(false) end
+end
+
+-- Build a 4x4 camera transform (camera -> vehicle-local) for a synthetic
+-- view that's OUTSIDE the owning hull face at `localPos` looking IN.
+-- BeamNG/Torque convention: col0=right(+X), col1=forward(+Y), col2=up(+Z),
+-- col3=position. (Verified in lua/ge/spawn.lua lines 98-101.)
+local function buildSyntheticCameraLocal(localPos, localNormal, dist)
+  dist = dist or 0.5
+  local outward = chooseHullOutward(localPos, localNormal)
 
   local fwd = -outward                  -- camera looks inward toward impact
   local camPos = localPos + outward * dist  -- camera placed outside the body
@@ -698,8 +1016,9 @@ local function flushPendingStamps()
         clusterDist = s.dist
       end
     end
-    local camLocal = buildSyntheticCameraLocal(centroid, nil, clusterDist)
+    local camLocal = buildSyntheticCameraLocal(centroid, averageNormals(cluster.members), clusterDist)
     -- ONE project pass for the whole cluster.
+    setScratchProjectionFence(true)
     decalProjection:projectDynamicDecals(camLocal, projM)
     stampStats.projectsIssued = stampStats.projectsIssued + 1
 
@@ -760,6 +1079,7 @@ local function flushPendingStamps()
         end
       end
     end
+    setScratchProjectionFence(false)
   end
 
   if skipped > 0 then
@@ -822,10 +1142,10 @@ M.stampAt = function(worldPos, worldNormal, kindOrOpts, force)
       -- crunches leave a bigger, more-grazing-angle mark instead of dying
       -- in the deformed cavity.
       local f = force or 0
-      local heavy = math.min(1, math.max(0, (f - 3000) / 30000))  -- 0..1 over 3-33 kN
+      local heavy = math.min(1, math.max(0, (f - 800) / 20000))  -- 0..1 over 0.8-20.8 kN
       opts = {
-        scale    = 0.18 + heavy * 0.15,                        -- 0.18..0.33m
-        dist     = 0.5  + heavy * 1.5,                         -- 0.5..2.0m
+        scale    = 0.28 + heavy * 0.35,                        -- 0.28..0.63m
+        dist     = 0.7  + heavy * 1.6,                         -- 0.7..2.3m
         colorTex = pickBrush(),
       }
     end
@@ -835,9 +1155,9 @@ M.stampAt = function(worldPos, worldNormal, kindOrOpts, force)
 
   -- For 1-point slide fallbacks, also widen the synth cam distance with
   -- force. We don't have a kindOrOpts string for these — pickup directly.
-  if not opts and force and force > 3000 then
-    local heavy = math.min(1, math.max(0, (force - 3000) / 30000))
-    opts = { dist = 0.5 + heavy * 1.5 }
+  if not opts and force and force > 800 then
+    local heavy = math.min(1, math.max(0, (force - 800) / 20000))
+    opts = { dist = 0.7 + heavy * 1.6, scale = 0.14 + heavy * 0.10 }
   end
 
   return M.stampAtLocal(localPos, localNormal, opts)
@@ -916,19 +1236,51 @@ local function buildStretchSegments(localPos)
   return segments
 end
 
+local function distLocal(a, b)
+  local dx = b.x - a.x
+  local dy = b.y - a.y
+  local dz = b.z - a.z
+  return math.sqrt(dx*dx + dy*dy + dz*dz)
+end
+
+local function chunkStretchSegments(localPos, rawSegments)
+  local chunks = {}
+  for _, r in ipairs(rawSegments) do
+    local startIdx = r.firstIdx
+    local accum = 0
+    for i = r.firstIdx + 1, r.lastIdx do
+      accum = accum + distLocal(localPos[i - 1], localPos[i])
+      if accum >= STRETCH_MAX_SEGMENT_LEN and i > startIdx then
+        chunks[#chunks + 1] = {firstIdx = startIdx, lastIdx = i}
+        if #chunks >= STRETCH_MAX_SEGMENTS_PER_STREAM then return chunks end
+        startIdx = i
+        accum = 0
+      end
+    end
+    if r.lastIdx > startIdx then
+      chunks[#chunks + 1] = {firstIdx = startIdx, lastIdx = r.lastIdx}
+      if #chunks >= STRETCH_MAX_SEGMENTS_PER_STREAM then return chunks end
+    end
+  end
+  if #chunks == 0 and #localPos >= 2 then
+    chunks[1] = {firstIdx = 1, lastIdx = #localPos}
+  end
+  return chunks
+end
+
 -- Continuous-slide entry point. detect.lua collects (worldPos, worldNormal)
 -- samples for each contacting body node and flushes them here as a batch
 -- when the slide ends (or at MAX_DURATION).
 --
--- (H) Each stream becomes 1-3 stretched decals along the slide direction
--- instead of N interpolated brushStroke decals. The path is split by
--- curvature: straight slides → 1 elongated decal; curving slides → 2-3
--- shorter ones at the highest-turn points. Brushes come from STRETCH_BRUSHES
--- (streak_*) only — the impact splatter shapes don't tile cleanly when
--- stretched at high aspect ratios.
+-- (H/N) Each stream becomes short stretched decals along the slide direction
+-- instead of N interpolated brushStroke decals. The path is first split by
+-- curvature, then any long straight section is chopped by length so one roof
+-- slide cannot stamp a giant rectangle across roof/rear/side at once.
+-- Brushes come from STRETCH_BRUSHES (streak_*) only — the impact splatter
+-- shapes don't tile cleanly when stretched at high aspect ratios.
 --
 -- Geometry: same single-camera trick as before. Centroid of all segment
--- centers gets a synthetic radial-outward camera. One projectDynamicDecals.
+-- centers gets a synthetic hull-face camera. One projectDynamicDecals.
 -- Per segment: set per-segment style → getDecalData (snapshots into a fresh
 -- layer) → setDecalLocalPos to position cursor at segment center. One bake.
 M.stampStream = function(points)
@@ -944,17 +1296,23 @@ M.stampStream = function(points)
   if not veh then return end
   local refM = veh:getRefNodeMatrix()
   local invM = refM:fullInverse()
+  local rotOnly = invM:copy(); rotOnly:setColumn(3, vec3(0, 0, 0))
 
   -- World -> vehicle-local
   local n = #points
   local localPos = {}
+  local localNormals = {}
   for i = 1, n do
     local p = points[i]
     localPos[i] = invM:mulP3F(vec3(p[1], p[2], p[3]))
+    if p[4] and p[5] and p[6] then
+      localNormals[i] = rotOnly:mulP3F(vec3(p[4], p[5], p[6]))
+    end
   end
 
-  -- Curvature analysis -> 1/2/3 segments
-  local rawSegments = buildStretchSegments(localPos)
+  -- Curvature analysis + length chunking. Curvature catches bends; length
+  -- chunking keeps straight roof slides local and visibly denser.
+  local rawSegments = chunkStretchSegments(localPos, buildStretchSegments(localPos))
 
   -- Materialize each segment's geometry (start/end/center/length/width).
   -- Drop any segment shorter than 0.05m as degenerate (jittered noise).
@@ -972,7 +1330,7 @@ M.stampStream = function(points)
         endP   = eP,
         center = vec3((sP.x + eP.x) * 0.5, (sP.y + eP.y) * 0.5, (sP.z + eP.z) * 0.5),
         length = len,
-        width  = 0.06 + math.random() * 0.12,  -- 0.06m..0.18m
+        width  = 0.10 + math.random() * 0.12,  -- 0.10m..0.22m
       }
     end
   end
@@ -985,7 +1343,11 @@ M.stampStream = function(points)
     cx = cx + s.center.x; cy = cy + s.center.y; cz = cz + s.center.z
   end
   local centroidLocal = vec3(cx / #segments, cy / #segments, cz / #segments)
-  local camLocal = buildSyntheticCameraLocal(centroidLocal, nil, nil)
+  local normalSamples = {}
+  for _, ln in ipairs(localNormals) do
+    normalSamples[#normalSamples + 1] = {localNormal = ln}
+  end
+  local camLocal = buildSyntheticCameraLocal(centroidLocal, averageNormals(normalSamples), nil)
   local projM    = getCameraProjMatrix()
 
   if api.isUseMousePos and api.isUseMousePos() then
@@ -993,13 +1355,18 @@ M.stampStream = function(points)
   end
 
   -- One project for the whole stream.
+  setScratchProjectionFence(true)
   decalProjection:projectDynamicDecals(camLocal, projM)
 
   -- Helper layer used only to compute screen-UV for start/end points (cheap;
   -- we mutate cursor and read it back without baking). Does NOT enter the
   -- bake list — we get a fresh styled layer per segment below.
   local probe = decalProjection:getDecalData(camLocal, projM)
-  if not probe then log('W', logTag, "stampStream: getDecalData returned nil"); return end
+  if not probe then
+    setScratchProjectionFence(false)
+    log('W', logTag, "stampStream: getDecalData returned nil")
+    return
+  end
 
   local bakeList = {}
   for si, seg in ipairs(segments) do
@@ -1044,6 +1411,7 @@ M.stampStream = function(points)
       end
     end
   end
+  setScratchProjectionFence(false)
 
   if #bakeList == 0 then return end
 
@@ -1135,18 +1503,47 @@ M.testStampAtWorld = function(lx, ly, lz, nx, ny, nz)
 end
 
 -- Wipe all stamps (clears the layer stack and re-bakes empty texture), then
--- re-seed the paint fill so the vehicle's color is preserved instead of
--- going back to default-black.
+-- re-seed the paint canvas so metallic/roughness baseline is restored.
+--
+-- Why we don't just call api.clearLayerStack: that path goes through the
+-- editor's history machinery (history:commitAction at dynamicDecals.lua:1638),
+-- which dedups identical actions (history.lua:149). Repeated clears with the
+-- same layer-stack snapshot get skipped — the Redo (which is what actually
+-- calls clearBakedTextures) never runs and the visible scratches survive.
+-- We still call api.clearLayerStack to keep the Lua-side layerStack tracking
+-- in sync, but the actual texture wipe is done directly via the same
+-- flushDynamicTextures + combineTextures sequence BeamNG uses internally at
+-- dynamicDecals.lua:2143-2145 when disabling decals — no history, no dedup,
+-- guaranteed wipe.
 M.clearStamps = function()
   if not ready then log('W', logTag, "clearStamps: not ready"); return end
-  if not api or not api.clearLayerStack then log('W', logTag, "api.clearLayerStack unavailable"); return end
+  if not resolveDecalProjection() then return end
   -- Drop any pending stamps before clearing — otherwise the next onUpdate
   -- flushes them into the freshly-cleared layer stack and the wipe is
   -- partially undone.
   pendingStampInputs = {}
   pendingStampsJBeam = nil
-  api.clearLayerStack()
-  log('I', logTag, "cleared all stamps (layers=" .. tostring(api.getLayerCount and api.getLayerCount()) .. ")")
+  -- (a) Reset Lua-side layerStack tracking so the api's layer count and our
+  --     visible state agree. pcall-guarded because the history call can
+  --     short-circuit on dedup, which would otherwise propagate as nil.
+  if api and api.clearLayerStack then
+    pcall(api.clearLayerStack)
+  end
+  -- (b) Direct texture wipe. Skips history entirely. flush resets the
+  --     dynamic textures; combine pushes the cleared content into the
+  --     vehicle's texture set so the GPU samples zeros instead of the
+  --     previous composite.
+  if decalProjection.flushDynamicTextures then
+    decalProjection:flushDynamicTextures()
+    if decalProjection.combineTextures and api and api.getTextureSet then
+      local ts = api.getTextureSet()
+      if ts then decalProjection:combineTextures(ts) end
+    end
+  end
+  log('I', logTag, "cleared all stamps (textures flushed)")
+  -- Re-seed the metallic/roughness baseline. After flush every channel is
+  -- zero — without re-seeding the body would render perfectly matte (or
+  -- chrome, depending on the variant defaults) regardless of paint config.
   M.addPaintFill()
 end
 
@@ -1165,11 +1562,16 @@ M.deepProbe = function()
     log('I', logTag, "veh:getDecalProjectionShape() ok=" .. tostring(ok) .. " shape=" .. tostring(shape))
     local ok2, refM = pcall(function() return veh:getRefNodeMatrix() end)
     log('I', logTag, "veh:getRefNodeMatrix() ok=" .. tostring(ok2) .. " m=" .. tostring(refM))
+    local box = getSpawnAabb()
+    if box then
+      log('I', logTag, "spawn AABB min=" .. tostring(box.minExtents) .. " max=" .. tostring(box.maxExtents))
+    end
   end
 
   -- API state
   log('I', logTag, "api.ready = " .. tostring(api.ready))
   log('I', logTag, "api.projectDynamicDecals = " .. tostring(api.projectDynamicDecals))
+  log('I', logTag, "api.lockDepth = " .. tostring(api.getLockDepth and api.getLockDepth()))
   log('I', logTag, "api.isUseMousePos = " .. tostring(api.isUseMousePos and api.isUseMousePos()))
   log('I', logTag, "api.layerCount = " .. tostring(api.getLayerCount and api.getLayerCount()))
   log('I', logTag, "api.getMeshObjectCount = " .. tostring(api.getMeshObjectCount and api.getMeshObjectCount()))
@@ -1208,7 +1610,7 @@ end
 -- Per-frame bake-queue cap. Raise on a fast machine, lower if frames hitch
 -- during spectacular rolls.
 M.setAggregateCap = function(n)
-  AGGREGATE_PER_FRAME_CAP = math.max(1, math.floor(tonumber(n) or 24))
+  AGGREGATE_PER_FRAME_CAP = math.max(1, math.floor(tonumber(n) or 96))
   log('I', logTag, "AGGREGATE_PER_FRAME_CAP = " .. tostring(AGGREGATE_PER_FRAME_CAP))
 end
 
@@ -1231,6 +1633,8 @@ M.dumpPaintStats = function()
   log('I', logTag, string.format("streamSubstrokesTotal  = %d  (avg %.2f sub-strokes/stream)",
     stampStats.streamSubstrokesTotal,
     stampStats.streamsBaked > 0 and (stampStats.streamSubstrokesTotal / stampStats.streamsBaked) or 0))
+  log('I', logTag, string.format("stretchChunkLen        = %.2fm  (cap=%d segments/stream)",
+    STRETCH_MAX_SEGMENT_LEN, STRETCH_MAX_SEGMENTS_PER_STREAM))
   log('I', logTag, string.format("queueLen now           = %d", #pendingStampInputs))
   if stampStats.stampsAttempted > 0 then
     log('I', logTag, string.format("missed-projection rate = %.1f%%",
@@ -1263,7 +1667,7 @@ end
 -- Tune the clustering radius. Smaller = more clusters = more projects, but
 -- shared cam covers a tighter area (more accurate for off-axis stamps).
 M.setClusterRadius = function(meters)
-  CLUSTER_RADIUS = math.max(0.1, tonumber(meters) or 1.5)
+  CLUSTER_RADIUS = math.max(0.1, tonumber(meters) or 0.65)
   log('I', logTag, string.format("CLUSTER_RADIUS = %.2fm", CLUSTER_RADIUS))
 end
 
@@ -1275,12 +1679,15 @@ end
 -- scratches_detect.lua and the AGGREGATE_PER_FRAME_CAP / CLUSTER_RADIUS
 -- definitions further up this file.
 local UI_DEFAULTS = {
-  slip       = 1.5,
-  paintCool  = 0.015,
-  impForce   = 3000,
-  impCool    = 0.25,
-  aggCap     = 32,
-  clusterRad = 1.5,
+  slip       = 0.6,
+  paintCool  = 0.003,
+  impForce   = 800,
+  impCool    = 0.025,
+  aggCap     = 96,
+  clusterRad = 0.65,
+  paintMet   = 0.00,
+  paintRou   = 0.20,
+  paintColor = false,
 }
 
 -- One-click presets. Each row is a complete tunable set the user can swap
@@ -1300,32 +1707,32 @@ local UI_PRESETS = {
   { name = "Light",
     slip = 3.0,  paintCool = 0.05,
     impForce = 7000, impCool = 0.6,
-    aggCap = 16,  clusterRad = 2.0,
+    aggCap = 16,  clusterRad = 1.3,
     desc = "Subtle. Only fast slides + solid hits leave marks.\n" ..
            "Easy on hardware. Realistic 'careful driver' look." },
   { name = "Default",
-    slip = 1.5,  paintCool = 0.015,
-    impForce = 3000, impCool = 0.25,
-    aggCap = 32,  clusterRad = 1.5,
-    desc = "Sensible defaults. Realistic damage from real crashes;\n" ..
-           "balanced sensitivity, balanced cost." },
+    slip = 0.6,  paintCool = 0.003,
+    impForce = 800, impCool = 0.025,
+    aggCap = 96,  clusterRad = 0.65,
+    desc = "Aggressive 10x damage. Long slides build dense scratches;\n" ..
+           "light smashes leave visible chip/claw marks." },
   { name = "Heavy",
-    slip = 0.9,  paintCool = 0.012,
-    impForce = 1800, impCool = 0.18,
-    aggCap = 44,  clusterRad = 1.3,
-    desc = "More sensitive. Light contacts register; cars accumulate\n" ..
-           "visible wear faster. Modest cost increase." },
+    slip = 0.45,  paintCool = 0.0025,
+    impForce = 650, impCool = 0.020,
+    aggCap = 112,  clusterRad = 0.55,
+    desc = "Very aggressive. More contact noise turns into visible wear;\n" ..
+           "use when the scene should look heavily abused." },
   { name = "Max",
-    slip = 0.6,  paintCool = 0.008,
-    impForce = 1200, impCool = 0.10,
-    aggCap = 56,  clusterRad = 1.0,
+    slip = 0.35,  paintCool = 0.002,
+    impForce = 500, impCool = 0.015,
+    aggCap = 128,  clusterRad = 0.45,
     desc = "Every drag, bump, and dent leaves a mark.\n" ..
            "Banged-up look after one good roll.\n" ..
            "Notable CPU+GPU cost; should still hold steady framerate." },
   { name = "Extreme",
-    slip = 0.5,  paintCool = 0.005,
-    impForce = 800,  impCool = 0.05,
-    aggCap = 64,  clusterRad = 0.7,
+    slip = 0.25,  paintCool = 0.0015,
+    impForce = 350,  impCool = 0.010,
+    aggCap = 160,  clusterRad = 0.35,
     desc = "Built to stress hardware. ~200 samples/sec/node, 50ms impact\n" ..
            "cooldown, tightest cluster radius = most depth-pass renders.\n" ..
            "Expect frame hitches on slower GPUs during heavy crashes." },
@@ -1367,12 +1774,15 @@ local function ensureUIPointers()
   local im = ui_imgui
   if not im then return false end
   uiPtrs = {
-    slip       = im.FloatPtr(1.5),
-    paintCool  = im.FloatPtr(0.015),
-    impForce   = im.FloatPtr(3000),
-    impCool    = im.FloatPtr(0.25),
+    slip       = im.FloatPtr(UI_DEFAULTS.slip),
+    paintCool  = im.FloatPtr(UI_DEFAULTS.paintCool),
+    impForce   = im.FloatPtr(UI_DEFAULTS.impForce),
+    impCool    = im.FloatPtr(UI_DEFAULTS.impCool),
     aggCap     = im.IntPtr(AGGREGATE_PER_FRAME_CAP),
     clusterRad = im.FloatPtr(CLUSTER_RADIUS),
+    paintMet   = im.FloatPtr(PAINT_METALLIC),
+    paintRou   = im.FloatPtr(PAINT_ROUGHNESS),
+    paintColor = im.BoolPtr(PAINT_SEED_COLOR),
   }
   uiClosePtr = im.BoolPtr(true)
   return true
@@ -1392,6 +1802,9 @@ local function syncUIPointersFromSnapshot()
   if lastDetectStats.impCool   then uiPtrs.impCool[0]   = lastDetectStats.impCool end
   uiPtrs.aggCap[0]     = AGGREGATE_PER_FRAME_CAP
   uiPtrs.clusterRad[0] = CLUSTER_RADIUS
+  uiPtrs.paintMet[0]   = PAINT_METALLIC
+  uiPtrs.paintRou[0]   = PAINT_ROUGHNESS
+  uiPtrs.paintColor[0] = PAINT_SEED_COLOR
 end
 
 -- Send a tuning command back to the player vehicle's VLUA. detect.lua
@@ -1495,7 +1908,7 @@ local function drawUI()
   uiTooltip(
     "Average depth-pass renders per frame (each is a real GPU cost).\n" ..
     "Pre-clustering this would equal the stamp count per frame.\n" ..
-    "After clustering: usually 1.0-1.5; a higher number means stamps are\n" ..
+    "After clustering: usually near 1.0; a higher number means stamps are\n" ..
     "spreading across the body and forcing multiple cameras.")
 
   im.Text(string.format("Max normalForce:      %.0f N",
@@ -1514,44 +1927,44 @@ local function drawUI()
     "Minimum slipping velocity (m/s) for a node to count as actively scraping.\n" ..
     "LOWER -> lighter brushes register (slow parking-lot drags get marks).\n" ..
     "HIGHER -> only fast slides register; bodywork stays cleaner.\n" ..
-    "Default: 1.50 m/s.\n" ..
+    "Default: 0.60 m/s.\n" ..
     "Performance: lower bumps stream count; cheap thanks to stretched decals.")
 
-  if im.SliderFloat("Sample period (s)", uiPtrs.paintCool, 0.005, 0.10, "%.3f") then
+  if im.SliderFloat("Sample period (s)", uiPtrs.paintCool, 0.001, 0.10, "%.3f") then
     sendVehicleCmd(string.format("scratches_detect.setPaintCooldown(%.4f)", uiPtrs.paintCool[0]))
   end
   uiTooltip(
     "How often a sliding node contributes a sample to its active stream.\n" ..
     "LOWER -> denser sample chains, longer streams (rich curve detection).\n" ..
     "HIGHER -> chunkier sampling, lighter CPU cost per slide.\n" ..
-    "Default: 0.015 s (~66 samples/second per node).\n" ..
+    "Default: 0.003 s (~333 samples/second per node).\n" ..
     "Performance: every 30 samples force-flushes a stream; lower = more flushes.")
 
   im.Separator()
   im.Text("--- Impact marks ---")
-  if im.SliderFloat("Force threshold (N)", uiPtrs.impForce, 500, 10000, "%.0f") then
+  if im.SliderFloat("Force threshold (N)", uiPtrs.impForce, 250, 10000, "%.0f") then
     sendVehicleCmd(string.format("scratches_detect.setImpactParams(%.0f, nil)", uiPtrs.impForce[0]))
   end
   uiTooltip(
     "Minimum normalForce (newtons) for a contact to fire as an IMPACT stamp.\n" ..
     "LOWER -> light bumps register (door dings, curb rubs).\n" ..
     "HIGHER -> only solid hits leave a mark.\n" ..
-    "Default: 3000 N.\n" ..
+    "Default: 800 N.\n" ..
     "Performance: every impact joins the per-frame bake; cap=Aggregate cap.")
 
-  if im.SliderFloat("Cooldown (s)", uiPtrs.impCool, 0.05, 1.5, "%.2f") then
+  if im.SliderFloat("Cooldown (s)", uiPtrs.impCool, 0.005, 1.5, "%.3f") then
     sendVehicleCmd(string.format("scratches_detect.setImpactParams(nil, %.3f)", uiPtrs.impCool[0]))
   end
   uiTooltip(
     "Minimum seconds between impact stamps on the SAME node.\n" ..
     "LOWER -> sustained collisions leave tighter mark sequences.\n" ..
     "HIGHER -> a single mark per period even if hammering continues.\n" ..
-    "Default: 0.25 s.\n" ..
+    "Default: 0.025 s.\n" ..
     "Performance: lower = potentially many more impact stamps per crash.")
 
   im.Separator()
   im.Text("--- Bake limits (GE) ---")
-  if im.SliderInt("Aggregate cap (per frame)", uiPtrs.aggCap, 4, 64) then
+  if im.SliderInt("Aggregate cap (per frame)", uiPtrs.aggCap, 4, 192) then
     AGGREGATE_PER_FRAME_CAP = uiPtrs.aggCap[0]
   end
   uiTooltip(
@@ -1570,8 +1983,52 @@ local function drawUI()
     "SMALLER -> more clusters = more depth-pass renders, but each cam\n" ..
     "  covers a tighter area (more accurate for off-axis stamps).\n" ..
     "LARGER -> fewer projections, but stamps spread wide may clip.\n" ..
-    "Default: 1.50 m.\n" ..
+    "Default: 0.65 m.\n" ..
     "Performance: avg projects/frame ~= avg clusters/frame.")
+
+  im.Separator()
+  im.Text("--- Paint canvas (PBR seed) ---  (re-bake on slider release)")
+  -- Color seed toggle. Default off: seed only touches metallic/roughness so
+  -- preset liveries / paint designs survive the dynamicTextures swap. Flip
+  -- it on if the body renders black/wrong on a vehicle whose engine didn't
+  -- pre-fill @DynamicTextureBaseColor. Reseeds immediately on change.
+  if im.Checkbox("Seed base color (wipes paint preset livery)", uiPtrs.paintColor) then
+    PAINT_SEED_COLOR = uiPtrs.paintColor[0]
+    M.clearStamps()
+  end
+  uiTooltip(
+    "Whether the canvas seed also writes the vehicle's chosen color into\n" ..
+    "@DynamicTextureBaseColor. Default OFF — the engine's pre-populated\n" ..
+    "baseColor (paint preset livery, racing stripes, etc.) is preserved.\n" ..
+    "Turn ON only if the body renders black/wrong with this off.")
+  -- Live-update PAINT_METALLIC while dragging so the slider feels responsive,
+  -- but only call clearStamps (which re-seeds) on release — that's a 6-bake
+  -- operation and we don't want to thrash it every frame of a drag.
+  if im.SliderFloat("Paint metallic", uiPtrs.paintMet, 0.0, 1.0, "%.2f") then
+    PAINT_METALLIC = uiPtrs.paintMet[0]
+  end
+  if im.IsItemDeactivatedAfterEdit and im.IsItemDeactivatedAfterEdit() then
+    M.clearStamps()
+  end
+  uiTooltip(
+    "Metallic value the canvas seed writes to @DynamicTextureMetallic.\n" ..
+    "0 = dielectric paint (default), 1 = bare polished metal.\n" ..
+    "Most car paints are dielectric — keep at 0 unless you want a chrome look.\n" ..
+    "Default: 0.00.\n" ..
+    "Note: re-seeding wipes existing scratches; happens on slider release.")
+
+  if im.SliderFloat("Paint roughness", uiPtrs.paintRou, 0.0, 1.0, "%.2f") then
+    PAINT_ROUGHNESS = uiPtrs.paintRou[0]
+  end
+  if im.IsItemDeactivatedAfterEdit and im.IsItemDeactivatedAfterEdit() then
+    M.clearStamps()
+  end
+  uiTooltip(
+    "Roughness value the canvas seed writes to @DynamicTextureRoughness.\n" ..
+    "0 = mirror (sharp specular), 1 = matte (no specular).\n" ..
+    "Glossy clearcoat paint is around 0.15-0.25; satin around 0.4-0.6.\n" ..
+    "Default: 0.20.\n" ..
+    "Note: re-seeding wipes existing scratches; happens on slider release.")
 
   im.Separator()
   if im.Button("Reset stats") then
@@ -1588,11 +2045,18 @@ local function drawUI()
     uiPtrs.impCool[0]    = UI_DEFAULTS.impCool
     uiPtrs.aggCap[0]     = UI_DEFAULTS.aggCap
     uiPtrs.clusterRad[0] = UI_DEFAULTS.clusterRad
+    uiPtrs.paintMet[0]   = UI_DEFAULTS.paintMet
+    uiPtrs.paintRou[0]   = UI_DEFAULTS.paintRou
+    uiPtrs.paintColor[0] = UI_DEFAULTS.paintColor
     AGGREGATE_PER_FRAME_CAP = UI_DEFAULTS.aggCap
     CLUSTER_RADIUS          = UI_DEFAULTS.clusterRad
+    PAINT_METALLIC          = UI_DEFAULTS.paintMet
+    PAINT_ROUGHNESS         = UI_DEFAULTS.paintRou
+    PAINT_SEED_COLOR        = UI_DEFAULTS.paintColor
     sendVehicleCmd(string.format("scratches_detect.setThresholds(%.3f, nil, nil)", UI_DEFAULTS.slip))
     sendVehicleCmd(string.format("scratches_detect.setPaintCooldown(%.4f)", UI_DEFAULTS.paintCool))
     sendVehicleCmd(string.format("scratches_detect.setImpactParams(%.0f, %.3f)", UI_DEFAULTS.impForce, UI_DEFAULTS.impCool))
+    M.clearStamps()  -- re-seed canvas with the restored M/R values
     log('I', logTag, "UI: reset all tunables to defaults")
   end
   uiTooltip("Restore every slider to its canonical default and push the values to VLUA.")

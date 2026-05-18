@@ -24,7 +24,7 @@ local logEveryNth   = 50     -- per-node, when not verbose
 
 -- painter coupling
 local paintEnabled  = true   -- on in dev; toggle via M.setPaintEnabled(false)
-local paintCooldown = 0.015  -- seconds between paints per node (~66 samples/sec/node)
+local paintCooldown = 0.003  -- seconds between paints per node (~333 samples/sec/node)
 
 -- per-node counters
 local nodeEventCount = {}    -- nid -> total candidate events seen
@@ -74,9 +74,9 @@ local stats = {
 -- Tuned more sensitive after H landed: stretched-decal streams are ~25x
 -- cheaper than the old brushStroke pipeline, so we can afford to register
 -- lighter scrapes / brushes / impacts without overrunning the bake budget.
-local SLIP_THRESHOLD     = 1.5    -- m/s, sliding scrape (was 2.5)
-local PERP_THRESHOLD     = 2.0    -- m/s, impact-style penetration speed (was 2.5)
-local MIN_NORMAL_FORCE   = 30     -- N, reject grazing contacts (was 50)
+local SLIP_THRESHOLD     = 0.6    -- m/s, sliding scrape (was 2.5)
+local PERP_THRESHOLD     = 0.8    -- m/s, impact-style penetration speed (was 2.5)
+local MIN_NORMAL_FORCE   = 10     -- N, reject grazing contacts (was 50)
 
 -- ---- impact-branch params ----
 -- Head-on smashes don't trip the slide/perpVel branches: BeamNG's solver
@@ -87,8 +87,8 @@ local MIN_NORMAL_FORCE   = 30     -- N, reject grazing contacts (was 50)
 -- 5 kN catches deformation-noise spikes during slides but those layer with
 -- the slide stream rather than replacing it (impact and slide both fire
 -- when both conditions hold), so the over-firing is desirable visual density.
-local IMPACT_FORCE_THRESHOLD = 3000   -- N (was 5000; lighter impacts now register)
-local IMPACT_COOLDOWN        = 0.25   -- seconds, per-node (was 0.4; F+G+H made
+local IMPACT_FORCE_THRESHOLD = 800    -- N (was 5000; lighter impacts now register)
+local IMPACT_COOLDOWN        = 0.025  -- seconds, per-node (was 0.4; F+G+H made
                                        -- per-stamp cost low enough that a node
                                        -- re-impacting during a roll can fire
                                        -- ~4x more often than the original 1.0s)
@@ -98,9 +98,9 @@ local IMPACT_COOLDOWN        = 0.25   -- seconds, per-node (was 0.4; F+G+H made
 -- as a single brushStroke layer when the node has been idle. The brushStroke
 -- layer interpolates between samples for a continuous swept stroke instead
 -- of stacking discrete stamps at body-relative points.
-local STREAM_IDLE_TIMEOUT = 0.10  -- s; gap before we treat the slide as ended
-local STREAM_MAX_DURATION = 0.45  -- s; force-flush so one camera covers the points
-local STREAM_MAX_POINTS   = 30    -- safety cap; MAX_DURATION should bound this earlier
+local STREAM_IDLE_TIMEOUT = 0.06  -- s; gap before we treat the slide as ended
+local STREAM_MAX_DURATION = 0.25  -- s; force-flush so one camera covers the points
+local STREAM_MAX_POINTS   = 80    -- safety cap; MAX_DURATION should bound this earlier
 local STREAM_MIN_POINTS   = 2     -- below this, fall back to a single discrete stamp
 
 local BODY_MATERIAL_NAMES = {
