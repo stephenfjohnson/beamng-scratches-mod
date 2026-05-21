@@ -7,6 +7,31 @@ local M = {}
 
 local logTag = "scratches"
 
+-- ---- debug log ring buffer (Phase 1.2) ----
+-- Mirrors every mod log line into a fixed-size ring. The GE-side debug panel
+-- can't read this VM's console, so updateGFX ships new lines to GE piggybacked
+-- on the 0.25s stats push. The local `log` below shadows the global logger so
+-- every existing call site in this file is captured for free.
+local LOG_RING_MAX = 160
+local LOG_PUSH_CAP = 30   -- max lines shipped to GE per push (bounds payload)
+local logRing      = {}   -- {seq, lvl, msg}; oldest at [1], newest at [#]
+local logRingSeq   = 0    -- monotonic id, survives drops
+local logPushedSeq = 0    -- highest seq already shipped to GE
+local _log         = log  -- the real global logger, captured before shadowing
+
+local function ringPush(lvl, msg)
+  logRingSeq = logRingSeq + 1
+  logRing[#logRing + 1] = { seq = logRingSeq, lvl = lvl, msg = msg }
+  if #logRing > LOG_RING_MAX then table.remove(logRing, 1) end
+end
+
+-- Shadow the global `log`. Every log(level, tag, msg) call in this file now
+-- also lands in the ring. Args are coerced defensively.
+local function log(level, tag, msg)
+  ringPush(level or 'I', tostring(msg))
+  _log(level, tag, msg)
+end
+
 -- ---- state ----
 local origOnNodeCollision = nil
 local materials           = nil   -- particles material table (lazy-loaded)
@@ -421,6 +446,28 @@ local function pushStatsToGE(now)
     stats.maxNormalForce))
 end
 
+-- (1.2) Ship VLUA log lines newer than logPushedSeq to GE so they land in the
+-- shared log ring the debug panel reads. string.format("%q") escapes each
+-- message safely for embedding in the generated Lua source. Capped per push.
+local function pushLogsToGE()
+  if not (obj and obj.queueGameEngineLua) then return end
+  local parts, count = {}, 0
+  for i = 1, #logRing do
+    local e = logRing[i]
+    if e.seq > logPushedSeq then
+      parts[#parts + 1] = string.format("{%q,%q}", e.lvl or 'I', e.msg or '')
+      logPushedSeq = e.seq
+      count = count + 1
+      if count >= LOG_PUSH_CAP then break end
+    end
+  end
+  if count == 0 then return end
+  obj:queueGameEngineLua(
+    "if scratches_paint and scratches_paint.recordDetectLog then " ..
+    "  pcall(scratches_paint.recordDetectLog, {" .. table.concat(parts, ",") .. "}) " ..
+    "end")
+end
+
 -- ---- per-frame: idle-flush streams + flush event batch ----
 -- Walks the stream table once per render frame; cheap because the table is
 -- empty whenever no node is in slide contact. Any stream whose last sample
@@ -432,6 +479,7 @@ local function updateGFX(dt)
   -- (K) Throttled stats push to drive the GE-side IMGUI panel.
   if (now - lastStatsPush) >= STATS_PUSH_PERIOD then
     pushStatsToGE(now)
+    pushLogsToGE()
     lastStatsPush = now
   end
   if next(nodeStreams) == nil then return end

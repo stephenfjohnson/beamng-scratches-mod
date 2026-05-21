@@ -1778,6 +1778,21 @@ end
 -- table-literal per ~0.25s; we just store the latest.
 M.recordDetectStats = function(s) lastDetectStats = s or {} end
 
+-- (1.2) Receiver for vehicle-side (VLUA) log lines. The detector mirrors its
+-- log lines into a ring and ships new ones piggybacked on the stats push; we
+-- merge them into the same GE log ring tagged src='VEH' so the panel and the
+-- copy-report show one unified, labeled timeline. `lines` is an array of
+-- {level, message} pairs.
+M.recordDetectLog = function(lines)
+  if type(lines) ~= 'table' then return end
+  for i = 1, #lines do
+    local e = lines[i]
+    if type(e) == 'table' then
+      ringPush(e[1] or 'I', 'VEH', tostring(e[2]))
+    end
+  end
+end
+
 -- (M) Receiver for the on-demand full dump pushed by scratches_detect when
 -- the user clicks "Dump Stats" in the IMGUI panel. The text is rendered
 -- inline below the button row so the whole state fits in one screenshot.
