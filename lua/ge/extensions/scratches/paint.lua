@@ -141,15 +141,15 @@ local setScratchProjectionFence
 local PAINT_METALLIC  = 0.00
 local PAINT_ROUGHNESS = 0.20
 
--- Whether the seed also writes baseColor. Default false: the seed only writes
--- metallic/roughness, leaving @DynamicTextureBaseColor whatever the engine
--- already populated (paint preset livery, custom paint design, factory body
--- texture). Setting this true makes the seed also stamp the vehicle's chosen
--- paint color across the whole body — which wipes any preset livery (racing
--- stripes, decals from the livery editor, etc). Useful only when the body
--- renders black/wrong AFTER the M/R seed because the engine didn't pre-fill
--- baseColor on that vehicle/config. Toggled from the K debug panel.
-local PAINT_SEED_COLOR = false
+-- Whether the seed also writes baseColor (the vehicle's paint color). Default
+-- TRUE, and it needs to be: clearStamps now calls clearBakedTextures(), which
+-- zeroes the baseColor channel — so the seed must repaint the body or it
+-- renders black after every clear/reset. There's no livery to protect: the
+-- mod skips any vehicle that already has a livery part (see ensureSkin), so
+-- @DynamicTextureBaseColor only ever holds a plain paint color we can safely
+-- re-stamp. Off is debug-only (metallic/roughness seeded, baseColor left
+-- wiped). Toggled from the K debug panel.
+local PAINT_SEED_COLOR = true
 
 -- ---- one-time setup ----
 local function ensureApiLoaded()
@@ -1785,7 +1785,7 @@ local UI_DEFAULTS = {
   clusterRad = 0.65,
   paintMet   = 0.00,
   paintRou   = 0.20,
-  paintColor = false,
+  paintColor = true,
 }
 
 -- One-click presets. Each row is a complete tunable set the user can swap
@@ -2033,7 +2033,7 @@ local function buildDebugReport()
   w("- lastSkinJBeam: " .. tostring(lastSkinJBeam))
   w("- matBindingsStable: " .. tostring(matBindingsStable) .. "   seedDone: " .. tostring(seedDone))
   w("- layer count: " .. tostring(layerCount))
-  w("- paint seed color (ON wipes livery): " .. tostring(PAINT_SEED_COLOR))
+  w("- paint seed color: " .. tostring(PAINT_SEED_COLOR))
   w("")
   w("### stats")
   w(string.format("- GE  : enqueued=%d skippedMissed=%d dropped=%d bakes=%d streams=%d framesFlushed=%d",
@@ -2266,19 +2266,18 @@ local function drawUI()
     im.TextDisabled("painter not ready - these controls are inactive")
   end
   im.BeginDisabled(not ready)
-  -- Color seed toggle. Default off: seed only touches metallic/roughness so
-  -- preset liveries / paint designs survive the dynamicTextures swap. Flip
-  -- it on if the body renders black/wrong on a vehicle whose engine didn't
-  -- pre-fill @DynamicTextureBaseColor. Reseeds immediately on change.
-  if im.Checkbox("Seed base color (wipes paint preset livery)", uiPtrs.paintColor) then
+  -- Paint-color seed. On by default: the clear/reset wipe (clearBakedTextures)
+  -- zeroes the baseColor channel, so the seed must restore the vehicle's paint
+  -- color or the body goes black. Liveried cars are skipped entirely, so
+  -- there's no livery at risk. Reseeds immediately on change.
+  if im.Checkbox("Seed paint color", uiPtrs.paintColor) then
     PAINT_SEED_COLOR = uiPtrs.paintColor[0]
     M.clearStamps()
   end
   uiTooltip(
-    "Whether the canvas seed also writes the vehicle's chosen color into\n" ..
-    "@DynamicTextureBaseColor. Default OFF — the engine's pre-populated\n" ..
-    "baseColor (paint preset livery, racing stripes, etc.) is preserved.\n" ..
-    "Turn ON only if the body renders black/wrong with this off.")
+    "Writes the vehicle's chosen paint color into the canvas baseColor.\n" ..
+    "Keep this ON: the clear/reset wipe zeroes baseColor, and without the\n" ..
+    "color seed the body renders black. Off is debug-only.")
   -- Live-update PAINT_METALLIC while dragging so the slider feels responsive,
   -- but only call clearStamps (which re-seeds) on release — that's a 6-bake
   -- operation and we don't want to thrash it every frame of a drag.
