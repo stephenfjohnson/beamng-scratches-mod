@@ -64,13 +64,19 @@ deliberately. The Phase 2.3 livery detection is the first half of this.
 
 ## Phase 3 — Reset Car (R) clears all scratches & slides
 
-Bug: `onReset` queues `clearStamps` but baked marks still survive a Ctrl+R.
+Bug (confirmed): `onReset` queues `clearStamps`, and `clearStamps` *runs* fine
+on Ctrl+R (not a timing/ready issue). It used the wrong wipe primitive —
+`flushDynamicTextures` resets only the working/dynamic texture stage, while
+the mod bakes stamps additively into the *baked* textures.
 
-- [ ] **3.1** Diagnose: timing (painter not `ready` on reset), new vehicle id
-  after respawn, `clearStamps`'s `ready` guard short-circuiting.
-- [ ] **3.2** Make the post-reset wipe reliable — defer until ready,
-  re-resolve projection, target the respawned vehicle.
-- [ ] **3.3** Verify R removes both baked impact stamps and slide streaks.
+- [x] **3.1** Diagnosed via a Ctrl+R repro report: `clearStamps` runs, but
+  `flushDynamicTextures` doesn't touch the baked textures. BeamNG's own
+  wipes (`reprojectLayers`, `clearLayerStack_Redo`) use `clearBakedTextures`.
+- [x] **3.2** `clearStamps` now calls `decalProjection:clearBakedTextures()`
+  — the same primitive BeamNG uses — before the flush/combine. Fixes both
+  the Ctrl+R path and the panel's "Clear stamps" button.
+- [ ] **3.3** Verify R removes both baked impact stamps and slide streaks
+  (check both sides of the car).
 
 ## Phase 4 — Auto-load both sides + bindable hotkey
 
