@@ -52,15 +52,24 @@ does the same — coexistence isn't a supported mode.
 - [x] **2.3** Preservation by skip: `ensureSkin` inspects the slot first; if
   a real livery is present it skips the vehicle entirely (no swap, no
   scratches) instead of evicting. Empty slot / our own skin -> proceed.
-- [ ] **2.4** Verify: liveried car keeps its livery (and is skipped), plain
-  car still gets scratches.
+- [x] **2.4** Verified: liveried car (itasha) keeps its livery and is
+  skipped; plain car still gets scratches.
 
-### Future TODO — livery + scratches compositing
+### Dedicated session — livery + paint-canvas rework (deferred)
 
-Liveried cars currently get no scratches. To support both: before the swap,
-capture the livery's body textures and re-stamp them as a base layer in the
-dynamic-decal canvas, so scratches composite on top. Significant R&D — parked
-deliberately. The Phase 2.3 livery detection is the first half of this.
+The user wants this in its own session/context. Two bundled items:
+
+1. **Livery + scratches compositing.** Liveried cars currently get no
+   scratches (skipped by `ensureSkin`). To support both: before the skin
+   swap, capture the livery's body textures and re-stamp them as a base
+   layer in the dynamic canvas so scratches composite on top.
+2. **Paint-canvas seed rework.** `clearBakedTextures` (Phase 3.2) wipes the
+   whole canvas, so `addPaintFill` must repaint baseColor + metallic/
+   roughness. The current 6-axis decal + separate fill-layer seed has uneven
+   coverage — a two-tone seam on the body and a matte roof. The seed needs
+   rethinking for clean, even, glossy re-paint.
+
+See memory `livery-paintseed-dedicated-session`.
 
 ## Phase 3 — Reset Car (R) clears all scratches & slides
 
@@ -75,8 +84,10 @@ the mod bakes stamps additively into the *baked* textures.
 - [x] **3.2** `clearStamps` now calls `decalProjection:clearBakedTextures()`
   — the same primitive BeamNG uses — before the flush/combine. Fixes both
   the Ctrl+R path and the panel's "Clear stamps" button.
-- [ ] **3.3** Verify R removes both baked impact stamps and slide streaks
-  (check both sides of the car).
+- [x] **3.3** Verified: Ctrl+R removes baked impact stamps and slide
+  streaks. Side effect — `clearBakedTextures` also wipes baseColor/M-R, so
+  the re-seed shows uneven paint (two-tone body, matte roof). Deferred to
+  the dedicated livery + paint-canvas session above.
 
 ## Phase 4 — Auto-load both sides + bindable hotkey
 
