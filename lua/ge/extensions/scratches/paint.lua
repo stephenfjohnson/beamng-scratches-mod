@@ -1890,10 +1890,11 @@ local function logLevelColor(lvl)
   local im = ui_imgui
   if not uiLogColors then
     uiLogColors = {
-      E = im.ImVec4(1.00, 0.42, 0.42, 1.0),  -- error  - red
-      W = im.ImVec4(1.00, 0.84, 0.36, 1.0),  -- warn   - amber
-      I = im.ImVec4(0.82, 0.84, 0.88, 1.0),  -- info   - light grey
-      D = im.ImVec4(0.55, 0.58, 0.63, 1.0),  -- debug  - dim grey
+      E  = im.ImVec4(1.00, 0.42, 0.42, 1.0),  -- error      - red
+      W  = im.ImVec4(1.00, 0.84, 0.36, 1.0),  -- warn       - amber
+      I  = im.ImVec4(0.82, 0.84, 0.88, 1.0),  -- info       - light grey
+      D  = im.ImVec4(0.55, 0.58, 0.63, 1.0),  -- debug      - dim grey
+      OK = im.ImVec4(0.45, 0.86, 0.50, 1.0),  -- status ok  - green
     }
   end
   return uiLogColors[lvl] or uiLogColors.I
@@ -2031,6 +2032,27 @@ local function drawUI()
   uiTooltip("Copy a compact, paste-ready report to the clipboard:\n" ..
             "environment + stats + tunables + relevant log lines.\n" ..
             "Reproduce a bug, click this, paste it straight into a report.")
+
+  -- (1.5) Status header — at-a-glance painter health, so one look (or one
+  -- screenshot) tells you whether the controls below will actually do
+  -- anything. The paint-canvas controls grey out when the painter isn't
+  -- ready; everything else degrades safely on its own.
+  do
+    local veh = getPlayerVehicle(0)
+    local jbeam = veh and (veh.JBeam or veh.jbeam)
+    if ready then
+      im.TextColored(logLevelColor('OK'), "Painter: READY")
+    else
+      im.TextColored(logLevelColor('E'),
+        pendingSetup and "Painter: setting up..." or "Painter: NOT READY")
+    end
+    im.SameLine()
+    if jbeam then
+      im.TextColored(logLevelColor('D'), "   vehicle: " .. tostring(jbeam))
+    else
+      im.TextColored(logLevelColor('W'), "   no player vehicle")
+    end
+  end
   im.Separator()
 
   im.Text("--- Presets ---  (one click swaps every slider below)")
@@ -2164,6 +2186,13 @@ local function drawUI()
 
   im.Separator()
   im.Text("--- Paint canvas (PBR seed) ---  (re-bake on slider release)")
+  -- (1.5) These controls re-bake the canvas, which needs a bound projection.
+  -- Grey them out (with a reason) instead of letting clicks silently no-op
+  -- while the painter is still setting up.
+  if not ready then
+    im.TextDisabled("painter not ready - these controls are inactive")
+  end
+  im.BeginDisabled(not ready)
   -- Color seed toggle. Default off: seed only touches metallic/roughness so
   -- preset liveries / paint designs survive the dynamicTextures swap. Flip
   -- it on if the body renders black/wrong on a vehicle whose engine didn't
@@ -2205,6 +2234,7 @@ local function drawUI()
     "Glossy clearcoat paint is around 0.15-0.25; satin around 0.4-0.6.\n" ..
     "Default: 0.20.\n" ..
     "Note: re-seeding wipes existing scratches; happens on slider release.")
+  im.EndDisabled()  -- paint canvas (ready-gated)
 
   im.Separator()
   if im.Button("Reset stats") then
@@ -2238,10 +2268,13 @@ local function drawUI()
   uiTooltip("Restore every slider to its canonical default and push the values to VLUA.")
 
   im.SameLine()
+  im.BeginDisabled(not ready)
   if im.Button("Clear stamps") then
     M.clearStamps()
   end
-  uiTooltip("Wipe every baked decal off the vehicle (keeps the underlying paint color).\nKeyboard equivalent: Ctrl+L.")
+  im.EndDisabled()
+  uiTooltip("Wipe every baked decal off the vehicle (keeps the underlying paint color).\n" ..
+            "Disabled until the painter is ready. Keyboard equivalent: Ctrl+L.")
 
   im.SameLine()
   if im.Button("Dump Stats") then
