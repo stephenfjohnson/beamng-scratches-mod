@@ -40,17 +40,27 @@ Design notes:
 
 ## Phase 2 — Livery-wipe bug
 
-Bug: cars with an existing livery / paint preset / custom livery lose those
-decals when the mod activates. Suspect either the `_skin_dynamicTextures`
-skin-part swap (a vehicle has one skin slot) or `addPaintFill` seeding
-baseColor over the whole body.
+Bug (confirmed): a livery is a part in BeamNG's single `paint_design` slot.
+`core_vehicle_partmgmt.setSkin("dynamicTextures")` overwrites that slot's
+`chosenPartName`, evicting the livery. BeamNG's own dynamic-decals editor
+does the same — coexistence isn't a supported mode.
 
-- [ ] **2.1** Add targeted diagnostics on the skin-swap and `addPaintFill`
-  code paths so the log pane shows the smoking gun.
-- [ ] **2.2** Diagnose: reproduce on a liveried car, copy debug report.
-- [ ] **2.3** Decide strategy (composite over the livery vs. capture-and-
-  restore into the dynamic canvas) and implement livery preservation.
-- [ ] **2.4** Verify on a liveried vehicle and a plain vehicle.
+- [x] **2.1** Diagnostics: `currentPaintDesignPart()` logs the slot's chosen
+  part before the swap; `clearStamps` logs layer count before the wipe.
+- [x] **2.2** Diagnosed: `paint_design` held `sunburst2_skin_itasha` — a
+  factory/mod livery skin part, evicted by the swap (Case A).
+- [x] **2.3** Preservation by skip: `ensureSkin` inspects the slot first; if
+  a real livery is present it skips the vehicle entirely (no swap, no
+  scratches) instead of evicting. Empty slot / our own skin -> proceed.
+- [ ] **2.4** Verify: liveried car keeps its livery (and is skipped), plain
+  car still gets scratches.
+
+### Future TODO — livery + scratches compositing
+
+Liveried cars currently get no scratches. To support both: before the swap,
+capture the livery's body textures and re-stamp them as a base layer in the
+dynamic-decal canvas, so scratches composite on top. Significant R&D — parked
+deliberately. The Phase 2.3 livery detection is the first half of this.
 
 ## Phase 3 — Reset Car (R) clears all scratches & slides
 
