@@ -8,6 +8,31 @@ local M = {}
 
 local logTag = "scratches.paint"
 
+-- ---- debug log ring buffer (Phase 1.1) ----
+-- Every mod log line is mirrored into a fixed-size ring so the in-panel log
+-- pane and the one-click "Copy debug report" can show recent activity without
+-- a console session. The local `log` below shadows the global logger for the
+-- rest of this file, so every existing log() call site is captured for free.
+local LOG_RING_MAX = 240
+local logRing      = {}   -- {seq, t, lvl, src, msg}; oldest at [1], newest at [#]
+local logRingSeq   = 0    -- monotonic id, survives drops — used for display/diff
+local _log         = log  -- the real global logger, captured before shadowing
+
+-- Append one line to the ring, dropping the oldest when full.
+local function ringPush(lvl, src, msg)
+  logRingSeq = logRingSeq + 1
+  logRing[#logRing + 1] = { seq = logRingSeq, t = os.clock(), lvl = lvl, src = src, msg = msg }
+  if #logRing > LOG_RING_MAX then table.remove(logRing, 1) end
+end
+
+-- Shadow the global `log`. Every log(level, tag, msg) call in this file now
+-- also lands in the ring tagged src='GE'. Args are coerced defensively — a
+-- stray nil/non-string must never break logging or capture.
+local function log(level, tag, msg)
+  ringPush(level or 'I', 'GE', tostring(msg))
+  _log(level, tag, msg)
+end
+
 -- ---- state ----
 local api               = nil    -- editor_api_dynamicDecals module
 local ready             = false  -- decals projection bound, skin set, ready to bake
