@@ -708,6 +708,7 @@ end
 
 local function onReset()
   -- vehicle reset (Ctrl+R)
+  log('I', logTag, "onReset (Ctrl+R) - clearing detect state, requesting GE clearStamps")
   M.resetStats()
   table.clear(nodePaintLast)
   table.clear(nodeImpactLast)
