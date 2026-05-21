@@ -1594,10 +1594,11 @@ end
 -- same layer-stack snapshot get skipped — the Redo (which is what actually
 -- calls clearBakedTextures) never runs and the visible scratches survive.
 -- We still call api.clearLayerStack to keep the Lua-side layerStack tracking
--- in sync, but the actual texture wipe is done directly via the same
--- flushDynamicTextures + combineTextures sequence BeamNG uses internally at
--- dynamicDecals.lua:2143-2145 when disabling decals — no history, no dedup,
--- guaranteed wipe.
+-- in sync, but the actual texture wipe is done directly: clearBakedTextures()
+-- erases the baked scratches (the same primitive BeamNG's reprojectLayers and
+-- clearLayerStack_Redo use), then flushDynamicTextures + combineTextures
+-- clears the working stage and pushes the blank into the vehicle's texture set
+-- immediately. No history, no dedup.
 M.clearStamps = function()
   if not ready then log('W', logTag, "clearStamps: not ready"); return end
   if not resolveDecalProjection() then return end
@@ -1616,10 +1617,19 @@ M.clearStamps = function()
   if api and api.clearLayerStack then
     pcall(api.clearLayerStack)
   end
-  -- (b) Direct texture wipe. Skips history entirely. flush resets the
-  --     dynamic textures; combine pushes the cleared content into the
-  --     vehicle's texture set so the GPU samples zeros instead of the
-  --     previous composite.
+  -- (b) Direct texture wipe. Skips history entirely.
+  --   clearBakedTextures() is what actually erases the scratches: the mod
+  --   bakes stamps additively into the BAKED textures, and this is the
+  --   primitive BeamNG's own reprojectLayers / clearLayerStack_Redo use to
+  --   wipe baked content. The old code only called flushDynamicTextures,
+  --   which resets the working/dynamic stage — baked scratches survived
+  --   untouched, which is exactly why Ctrl+R never cleared them.
+  if decalProjection.clearBakedTextures then
+    decalProjection:clearBakedTextures()
+  end
+  --   flush resets the dynamic/working textures; combine pushes the cleared
+  --   content into the vehicle's texture set so the wipe shows immediately
+  --   (otherwise it only appears on the next per-frame combine).
   if decalProjection.flushDynamicTextures then
     decalProjection:flushDynamicTextures()
     if decalProjection.combineTextures and api and api.getTextureSet then
