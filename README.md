@@ -1,109 +1,220 @@
 # scratches_mod
 
 Procedural scratches, scrape streaks, and impact chips for BeamNG.drive vehicle
-panels. Vehicle-side Lua listens to real node contact events, filters them down
-to paintable body contact, and game-engine Lua bakes scratch decals into
-BeamNG's Dynamic Decals texture set.
+panels. The mod listens to real physics contact events and bakes cosmetic
+scratch decals onto the body where the car actually touched something — slide
+on your roof and the roof panels get long scrape marks; clip a wall and that
+corner gets a chip cluster.
 
-The goal is visual damage that follows actual contact. If a car slides on its
-roof, roof panels get the long scrape marks; side and rear panels should only
-get marked when they actually touch something.
+It is purely cosmetic. It does **not** change BeamNG's soft-body deformation;
+it paints texture damage on top of whatever the physics already did.
 
-## Current Behavior
+---
 
-- Sliding contacts create short stretched scrape decals along the contact path.
-- Impacts create larger chip/claw/splatter decals scaled by normal force.
-- Long straight slide streams are chunked into many local segments so a roof
-  slide builds dense damage without one giant projection bleeding over panel
-  edges.
-- Synthetic decal cameras are aimed from the owning vehicle hull face using the
-  contact normal and spawn AABB. This keeps roof, side, front, rear, and floor
-  projections localized to the panel face that is actually contacting.
-- Dynamic-texture material bindings are stabilized after vehicle setup so
-  multi-material vehicles keep all supported paint materials writable.
-- The paint canvas is seeded for metallic/roughness so the dynamic-textures skin
-  keeps glossy paint behavior.
+## Installation
 
-## Aggressive Damage Defaults
+The mod is two Lua extensions plus brush art. It targets a recent version of
+BeamNG.drive that includes the **Dynamic Decals** system (developed and tested
+on 0.38).
 
-The current default profile is intentionally heavy for visible crash testing:
+### Players — packaged mod
 
-| Setting | Default |
-| --- | ---: |
-| Slide threshold | `0.6 m/s` |
-| Impact/perpendicular threshold | `0.8 m/s` |
-| Minimum normal force | `10 N` |
-| Impact force threshold | `800 N` |
-| Impact cooldown per node | `0.025 s` |
-| Slide sample period per node | `0.003 s` |
-| Stream max duration | `0.25 s` |
-| Stream max points | `80` |
-| Stretched scrape chunk length | `0.22 m` |
-| Stretched scrape segment cap | `40` per stream |
-| GE aggregate cap | `96` discrete stamps per frame |
-| GE cluster radius | `0.65 m` |
+1. Get `scratches_mod.zip` (see [Packaging for release](#packaging-for-release)
+   if you are building it yourself).
+2. Drop the zip into your BeamNG user folder's `mods/` directory:
+   `Documents/BeamNG.drive/<version>/mods/`  *(or `%LOCALAPPDATA%\BeamNG\
+   BeamNG.drive\<version>\mods\`)*.
+3. Launch BeamNG; the mod manager picks it up automatically.
+4. Spawn a [supported vehicle](#supported-vehicles--limitations) and drive.
 
-Impact decals scale from about `0.28 m` to `0.63 m` based on normal force. This
-is a high-density profile; use the in-game debug UI's lighter presets if frame
-hitches become a problem.
+Nothing else is required — both halves of the mod load themselves (see
+[How it works](#how-it-works)). No console commands.
 
-## Repo Layout
+### Developers — unpacked
+
+For iteration, work on the mod unpacked so edits hot-reload. Junction (or copy)
+the repo into the user folder's `mods/unpacked/` directory:
 
 ```text
-lua/vehicle/extensions/auto/scratches_detect.lua  # VLUA contact detection
-lua/ge/extensions/scratches/paint.lua             # GELUA dynamic-decal painter
-art/dynamicDecals/textures/                       # scratch brush PNGs + metadata
-docs/plans/                                       # implementation notes
-investigations/                                   # BeamNG API investigations
-tools/                                            # brush generation utilities
+%LOCALAPPDATA%\BeamNG\BeamNG.drive\current\mods\unpacked\scratches_mod
+  ->  <this repo>
 ```
+
+BeamNG treats each folder under `mods/unpacked/` as a mounted mod.
+
+---
+
+## Using the mod
+
+Once installed, the mod is automatic — drive, crash, and scratches accumulate.
+
+| Action | Effect |
+| --- | --- |
+| Slide a panel along a surface | Long stretched scrape streaks along the contact path |
+| Hit something hard | Chip / claw / splatter decals, sized by impact force |
+| **Reset Car** (`Ctrl+R`) | Clears all baked scratches and resets the vehicle |
+| **Toggle Scratches Debug Panel** | Opens/closes the in-game debug + tuning panel |
+
+The panel toggle is a **bindable key**. After first launch, open
+**Options → Controls → Bindings**, find **"Toggle Scratches Debug Panel"** in
+the **Debug** category, and assign a key. It works in any context.
+
+---
+
+## The debug panel
+
+A two-pane in-game window for diagnosing and tuning the mod.
+
+**Left — log pane.** A live, color-coded feed of every mod log line, merged
+from both Lua VMs and tagged `[GE]` (painter) or `[VEH]` (detector). Includes a
+`W/E only` filter and a `Clear log` button.
+
+**Right — controls.**
+
+- **Copy debug report** — one click copies a compact, paste-ready report
+  (environment, stats, tunables, relevant log lines) to the clipboard. This is
+  the fastest way to report a bug.
+- **Status header** — `Painter: READY` / `NOT READY` plus the current vehicle.
+- **Presets** — `Light` · `Default` · `Heavy` · `Max` · `Extreme`, one click to
+  swap every tunable.
+- **Live counters** — impacts, streams, baked stamps, projection cost, etc.
+- **Sliders** — slide/impact thresholds, bake limits, and the PBR paint seed.
+- **Buttons** — reset stats, restore defaults, clear stamps, dump full stats.
+
+Controls that need a bound projection grey out until the painter is ready.
+
+---
+
+## How it works
+
+The mod spans BeamNG's two Lua virtual machines and a texture pipeline.
+
+### 1. Detection — vehicle Lua (`scratches_detect.lua`)
+
+Runs per vehicle (auto-loaded from `lua/vehicle/extensions/auto/`). It wraps
+the global `onNodeCollision` callback and filters the firehose of contacts
+down to *paintable body contacts*: body-material nodes touching a hard surface,
+with glass, wheels, and internal/mechanical parts rejected.
+
+Surviving contacts split into two event kinds:
+
+- **Impacts** — single hard hits past a normal-force threshold.
+- **Slides** — sustained slipping contact, accumulated into multi-point
+  *streams* that describe the scrape path.
+
+Each render frame, all new events are batched and shipped to the game-engine
+side in **one** `queueGameEngineLua` call — cheap even during a violent roll.
+
+### 2. Painting — game-engine Lua (`scratches_paint.lua`)
+
+Owns a **Dynamic Decals** projection for the player vehicle. On setup it
+selects the vehicle's `dynamicTextures` skin (the canvas the decal system
+paints onto) and seeds the canvas with a PBR paint baseline.
+
+For each batched event it bakes decals:
+
+- **Impacts** → discrete chip/claw/splatter decals, scaled by force. Nearby
+  stamps are spatially clustered so one synthetic camera projection serves the
+  whole cluster.
+- **Slides** → elongated, stretched scrape decals following the stream path,
+  split into 1–3 segments by curvature.
+
+Decals are baked into the vehicle's dynamic texture set. Counters and tunables
+are pushed back to the detector ↔ painter every 0.25 s to drive the debug panel.
+
+### Loading
+
+The vehicle side auto-loads (it lives in an `extensions/auto/` directory). The
+game-engine side has no auto-load directory, so the vehicle side bootstraps it
+with `extensions.load('scratches_paint')` on its lifecycle hooks. The result:
+both sides come up on their own with no console commands.
+
+For the full design history, see `docs/plans/` and `investigations/`.
+
+---
+
+## Supported vehicles & limitations
+
+- **Requires the Dynamic Decals system** and a vehicle that ships a
+  `<jbeam>_skin_dynamicTextures` part. Vehicles without it are unsupported and
+  the mod cleanly does nothing (the debug panel reports `NOT READY`).
+- **Liveried vehicles are skipped.** A livery and the dynamic-decal canvas both
+  occupy BeamNG's single skin slot. Rather than evict a livery, the mod leaves
+  liveried cars untouched — they keep their livery but get no scratches.
+  Livery + scratches together is planned (see [Known issues](#known-issues)).
+- **Cosmetic only.** The mod paints texture damage from contact events; it does
+  not add or replace soft-body deformation.
+- **Glass and selected mechanical/internal parts are filtered out** so stray
+  projection rays don't mark unrelated panels.
+
+---
+
+## Repo layout
+
+```text
+lua/vehicle/extensions/auto/scratches_detect.lua   # VLUA contact detection
+lua/ge/extensions/scratches/paint.lua              # GELUA dynamic-decal painter
+lua/ge/extensions/core/input/actions/scratches.json # bindable panel hotkey
+art/dynamicDecals/textures/                        # scratch brush PNGs + metadata
+tools/generate_brushes.py                          # brush generation utility
+docs/plans/                                        # design notes
+investigations/                                    # BeamNG API investigations
+```
+
+Every brush PNG must have a matching `.png.dynDecalTexture.json` sidecar next
+to it, or the dynamic-decal system loads it invisibly.
+
+---
 
 ## Development
 
-This repo is junctioned into the BeamNG userfolder so edits hot-reload:
+With the repo mounted under `mods/unpacked/` (see
+[Installation](#developers--unpacked)):
 
-```text
-C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\mods\unpacked\scratches_mod
-  -> C:\Users\sforr\Documents\Code\Games\beamng-scratches-mod
-```
+| Key | Reloads |
+| --- | --- |
+| `Ctrl+L` | Game-engine Lua (`paint.lua`) |
+| `Ctrl+R` | Respawns the vehicle, reloads vehicle Lua (`scratches_detect.lua`); also clears baked scratches |
 
-Reload steps:
+After changing detector constants, respawn the vehicle so the new values load.
+A full game restart is safest after changing textures, material/JBeam, or skin
+data.
 
-- `Ctrl+L` reloads GELUA.
-- `Ctrl+R` respawns the vehicle and reloads VLUA.
-- After changing detector constants, reset/respawn the vehicle so
-  `scratches_detect.lua` reloads.
-- Full game restart is still safest after changing textures, material files, or
-  JBeam/skin data.
+Both Lua files are plain Lua 5.1 and can be syntax-checked with `luac -p`.
 
-## Debugging
+### Debugging
 
-Useful BeamNG console commands:
+The fastest loop: reproduce a problem, open the debug panel, click **Copy
+debug report**, and paste it. Useful console probes (game-engine Lua) still
+exist — `scratches_paint.dumpState()`, `scratches_paint.deepProbe()`,
+`scratches_paint.dumpPaintStats()`, `scratches_paint.buildDebugReport()` — and
+on the vehicle side, `scratches_detect.dumpStats()`.
 
-```lua
-extensions.load("scratches_paint")
-scratches_paint.toggleUI()
-scratches_paint.dumpPaintStats()
-scratches_paint.deepProbe()
-scratches_paint.clearStamps()
-```
+---
 
-Vehicle-side full dump from the GE console:
+## Packaging for release
 
-```lua
-be:getPlayerVehicle(0):queueLuaCommand("scratches_detect.pushFullDumpToGE()")
-```
+The mod is the `lua/` and `art/` directory trees. To build a distributable
+zip:
 
-The debug UI includes presets, live counters, paint-canvas controls, aggregate
-cap, and cluster radius. If the UI is already open after a code reload, use
-`Reset defaults` once to push the current defaults back into the vehicle-side
-detector.
+1. Zip `lua/` and `art/` with their paths preserved (so `lua/...` and `art/...`
+   sit at the **zip root**, not inside a subfolder).
+2. Name it `scratches_mod.zip`.
+3. Test it: remove the unpacked dev mount, drop the zip into `mods/`, restart
+   BeamNG, and confirm a [clean install](#players--packaged-mod) works.
 
-## Notes
+`docs/`, `investigations/`, `tools/`, and `README.md` are repo-only and do not
+belong in the shipped zip.
 
-- The mod relies on BeamNG's Dynamic Decals support and vehicles with a
-  `dynamicTextures` skin.
-- It does not replace BeamNG soft-body deformation. It paints cosmetic texture
-  damage based on contact events emitted by the physics system.
-- Glass and selected mechanical/internal parts are filtered out to avoid
-  projection rays stamping unrelated body panels.
+---
+
+## Known issues
+
+- **Liveried cars get no scratches** — they are skipped to preserve the livery.
+  Livery + scratches compositing (capturing the livery into the dynamic canvas
+  so scratches layer on top) is planned future work.
+- **Paint canvas re-seed** — after a clear/reset the canvas is repainted from
+  scratch; coverage is currently uneven on some panels. Tracked alongside the
+  livery work.
+
+See `docs/plans/2026-05-21-release-roadmap.md` for the current roadmap.
