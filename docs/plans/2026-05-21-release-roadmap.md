@@ -20,22 +20,23 @@ Design notes:
 - Round K already pushes a VLUA->GE stats snapshot every 0.25s via
   `recordDetectStats`; the vehicle-side log lines piggyback on that channel.
 
-- [ ] **1.1** Log ring buffer + `log` capture wrapper (GE / `paint.lua`).
-  Fixed-size ring of `{t, lvl, src='GE', msg}`; local `log` shadow appends
-  then calls the real `log()`.
-- [ ] **1.2** Vehicle-side capture + labeled piping to GE. Same `log` shadow
-  in `scratches_detect.lua` (`src='VEH'`); extend the 0.25s push to ship new
-  lines since last push, capped per push. GE merges into one timeline.
-- [ ] **1.3** Panel restructure: left log pane (scrolling, auto-scroll,
-  color-coded — red errors / yellow warnings, lines tagged `[GE]`/`[VEH]`)
-  and right controls (existing stats, sliders, presets).
-- [ ] **1.4** "Copy debug report" button. Curated markdown block: short env
-  header (mod version, vehicle jbeam, painter-ready, skin/livery state, layer
-  count) + one-line stats & tunables summary + log lines filtered to
-  warnings/errors plus recent diagnostics, each labeled. Not an `I`-spam dump.
-- [ ] **1.5** UI hardening: every button/slider gets a not-ready / no-vehicle
-  guard (disabled + tooltip, never an error); panel survives Ctrl+L reload
-  and vehicle swaps.
+- [x] **1.1** Log ring buffer + `log` capture wrapper (GE / `paint.lua`).
+  Fixed-size ring of `{seq, t, lvl, src='GE', msg}`; local `log` shadow
+  appends then calls the real `log()`.
+- [x] **1.2** Vehicle-side capture + labeled piping to GE. Same `log` shadow
+  in `scratches_detect.lua` (`src='VEH'`); `pushLogsToGE` ships new lines
+  (`%q`-escaped, capped 30/push) on the 0.25s channel; `recordDetectLog`
+  merges them into the GE ring.
+- [x] **1.3** Panel restructure: left log pane (scrolling, auto-scroll,
+  color-coded — red errors / amber warnings, lines tagged `[GE]`/`[VEH]`,
+  `W/E only` filter) and right controls (existing stats, sliders, presets).
+- [x] **1.4** "Copy debug report" button. Curated markdown block: env header
+  (vehicle jbeam, painter-ready, skin state, layer count) + one-line stats &
+  tunables summary + log lines filtered to warnings/errors plus recent
+  context, each labeled. Not an `I`-spam dump.
+- [x] **1.5** UI hardening: status header (painter READY/NOT READY +
+  vehicle); paint-canvas controls and Clear stamps grey out via
+  `BeginDisabled` when not ready; other controls self-guard.
 
 ## Phase 2 — Livery-wipe bug
 
