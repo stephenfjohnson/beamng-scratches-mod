@@ -1,0 +1,11 @@
+{
+"scratches_toggle_ui": {
+  "cat": "debug",
+  "order": 100,
+  "ctx": "tlua",
+  "actionMap": "Global",
+  "onDown": "if not scratches_paint then extensions.load('scratches_paint') end if scratches_paint and scratches_paint.toggleUI then scratches_paint.toggleUI() end",
+  "title": "Toggle Scratches Debug Panel",
+  "desc": "Show or hide the scratches_mod debug + tuning panel."
+}
+}
