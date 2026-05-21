@@ -168,6 +168,34 @@ local function ensureApiLoaded()
   return true
 end
 
+-- (2.1) Read the part currently chosen in the vehicle's "paint_design" slot
+-- — the single slot that holds either a livery skin OR our dynamicTextures
+-- skin. setSkin() overwrites this slot outright, so whatever livery sits here
+-- is evicted by the swap. Diagnostic only: returns the chosenPartName string
+-- ("" if the slot is empty/default), or nil if the config isn't readable yet.
+local function currentPaintDesignPart()
+  if not (extensions.core_vehicle_partmgmt and extensions.core_vehicle_partmgmt.getConfig) then
+    return nil
+  end
+  local ok, cfg = pcall(extensions.core_vehicle_partmgmt.getConfig)
+  if not ok or type(cfg) ~= "table" or type(cfg.partsTree) ~= "table" then
+    return nil
+  end
+  local found = nil
+  local function walk(node)
+    if found ~= nil or type(node) ~= "table" then return end
+    if node.id == "paint_design" then
+      found = node.chosenPartName or ""
+      return
+    end
+    if type(node.children) == "table" then
+      for _, child in pairs(node.children) do walk(child) end
+    end
+  end
+  walk(cfg.partsTree)
+  return found
+end
+
 -- Auto-select the dynamicTextures skin on the player vehicle if available.
 -- Returns true if (a) skin was set or (b) skin is already in use.
 -- Returns false if the vehicle's data isn't ready yet (transient — try again next tick).
@@ -194,9 +222,21 @@ local function ensureSkin(jbeam)
     pendingSetup = false  -- stop polling; this vehicle is a permanent no-go
     return false
   end
+  -- (2.1) Capture the paint_design slot BEFORE the swap. setSkin() replaces
+  -- its chosenPartName outright — if a livery sits here, this is where it
+  -- gets evicted. Read it only on the first swap for this vehicle.
+  local prevPart = (lastSkinJBeam ~= jbeam) and currentPaintDesignPart() or nil
   -- Idempotent: setSkin no-ops if already selected
   extensions.core_vehicle_partmgmt.setSkin("dynamicTextures")
   if lastSkinJBeam ~= jbeam then
+    local dtPart = jbeam .. "_skin_dynamicTextures"
+    if prevPart and prevPart ~= "" and prevPart ~= dtPart then
+      log('W', logTag, "paint_design slot was '" .. tostring(prevPart) ..
+        "' before swap — that livery is EVICTED by the dynamicTextures skin")
+    else
+      log('I', logTag, "paint_design slot pre-swap: '" .. tostring(prevPart) ..
+        "' (no livery to preserve)")
+    end
     log('I', logTag, "set skin 'dynamicTextures' on vehicle " .. jbeam)
     lastSkinJBeam = jbeam
   end
@@ -1543,6 +1583,10 @@ end
 M.clearStamps = function()
   if not ready then log('W', logTag, "clearStamps: not ready"); return end
   if not resolveDecalProjection() then return end
+  -- (2.1) Diagnostic: how many layers are about to be wiped. On a vehicle
+  -- whose livery is editor-painted (dynamic-decal layers), a high count here
+  -- means the wipe is destroying the player's livery, not just our scratches.
+  local preClearLayers = (api and api.getLayerCount and api.getLayerCount()) or "?"
   -- Drop any pending stamps before clearing — otherwise the next onUpdate
   -- flushes them into the freshly-cleared layer stack and the wipe is
   -- partially undone.
@@ -1565,7 +1609,8 @@ M.clearStamps = function()
       if ts then decalProjection:combineTextures(ts) end
     end
   end
-  log('I', logTag, "cleared all stamps (textures flushed)")
+  log('I', logTag, "cleared all stamps (textures flushed); layers before clear=" ..
+    tostring(preClearLayers))
   -- Re-seed the metallic/roughness baseline. After flush every channel is
   -- zero — without re-seeding the body would render perfectly matte (or
   -- chrome, depending on the variant defaults) regardless of paint config.
