@@ -1823,6 +1823,7 @@ local function ensureUIPointers()
     paintMet   = im.FloatPtr(PAINT_METALLIC),
     paintRou   = im.FloatPtr(PAINT_ROUGHNESS),
     paintColor = im.BoolPtr(PAINT_SEED_COLOR),
+    logWErr    = im.BoolPtr(false),  -- log pane: warnings & errors only
   }
   uiClosePtr = im.BoolPtr(true)
   return true
@@ -1881,6 +1882,57 @@ end
 -- Live debug + tuning panel. Two columns of read-only counters at the top,
 -- then grouped slider sections for slide / impact tunables, then action
 -- buttons. Sliders with visible value labels via SliderFloat.
+-- ---- (1.3) log pane ----
+-- Lazily-built log-level -> colour map. ImVec4 needs ui_imgui loaded, which
+-- isn't guaranteed at module-load time, so build it on first use.
+local uiLogColors = nil
+local function logLevelColor(lvl)
+  local im = ui_imgui
+  if not uiLogColors then
+    uiLogColors = {
+      E = im.ImVec4(1.00, 0.42, 0.42, 1.0),  -- error  - red
+      W = im.ImVec4(1.00, 0.84, 0.36, 1.0),  -- warn   - amber
+      I = im.ImVec4(0.82, 0.84, 0.88, 1.0),  -- info   - light grey
+      D = im.ImVec4(0.55, 0.58, 0.63, 1.0),  -- debug  - dim grey
+    }
+  end
+  return uiLogColors[lvl] or uiLogColors.I
+end
+
+-- Left pane: the merged GE+VEH log ring. A header row (count, filter, clear)
+-- above a scrolling, colour-coded, [SRC]-tagged, word-wrapped list that pins
+-- to the bottom only while the user is already scrolled there. TextColored is
+-- safe for arbitrary log text here — passed as the single fmt arg, the imgui
+-- binding skips string.format when no extra args follow.
+local function drawLogPane()
+  local im = ui_imgui
+  im.Text(string.format("Log  (%d lines)", #logRing))
+  im.SameLine()
+  im.Checkbox("W/E only", uiPtrs.logWErr)
+  uiTooltip("Show only warnings and errors here.\n" ..
+            "Info/debug lines stay captured and still go into the copied report.")
+  im.SameLine()
+  if im.Button("Clear log") then table.clear(logRing) end
+  uiTooltip("Drop every captured log line. Does not touch baked decals or stats.")
+  im.Separator()
+
+  local weOnly = uiPtrs.logWErr[0]
+  im.BeginChild1("scratchesLogScroll", im.ImVec2(0, 0), false)
+  im.PushTextWrapPos(0)
+  for i = 1, #logRing do
+    local e = logRing[i]
+    if (not weOnly) or e.lvl == 'W' or e.lvl == 'E' then
+      im.TextColored(logLevelColor(e.lvl),
+        "[" .. (e.src or '?') .. "] " .. (e.msg or ''))
+    end
+  end
+  im.PopTextWrapPos()
+  -- Auto-scroll only when the user is already at the bottom — don't yank them
+  -- down while they're scrolled up reading.
+  if im.GetScrollY() >= im.GetScrollMaxY() then im.SetScrollHereY(1.0) end
+  im.EndChild()
+end
+
 local function drawUI()
   if not uiVisible then return end
   local im = ui_imgui
@@ -1890,12 +1942,23 @@ local function drawUI()
 
   -- The window's close button writes to uiClosePtr[0]; mirror to uiVisible.
   uiClosePtr[0] = true
+  im.SetNextWindowSize(im.ImVec2(820, 560), im.Cond_FirstUseEver)
   if not im.Begin("Scratches Debug", uiClosePtr, 0) then
     im.End()
     if not uiClosePtr[0] then uiVisible = false end
     return
   end
   if not uiClosePtr[0] then uiVisible = false end
+
+  -- (1.3) Two-pane layout: scrolling log pane on the left, controls on the
+  -- right. The log column is bordered so the split reads clearly.
+  local avail = im.GetContentRegionAvail()
+  local logW = math.max(300, math.floor((avail.x or 800) * 0.42))
+  im.BeginChild1("scratchesLogCol", im.ImVec2(logW, 0), true)
+  drawLogPane()
+  im.EndChild()
+  im.SameLine()
+  im.BeginChild1("scratchesCtrlCol", im.ImVec2(0, 0), false)
 
   im.Text("--- Presets ---  (one click swaps every slider below)")
   for idx, preset in ipairs(UI_PRESETS) do
@@ -2129,6 +2192,7 @@ local function drawUI()
     im.TextUnformatted(lastFullDump)
   end
 
+  im.EndChild()  -- scratchesCtrlCol
   im.End()
 end
 drawUIRef = drawUI
