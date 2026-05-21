@@ -470,42 +470,22 @@ M.addPaintFill = function()
   local SEED_DIST  = 4.0  -- meters from origin; outside any car's bounding box
   local SEED_SCALE = 6.0  -- decal half-size; >= the largest vehicle dimension
 
+  -- (1) Metallic/roughness (and colour) via 6 axis-aligned projected decals,
+  -- one per cardinal direction so every panel gets a near-head-on camera.
+  -- This is the original, known-good seed — it drives the glossy PBR.
   local bakeList = {}
-
-  -- Uniform baseColor via a projection-free fill layer. Unlike the 6-axis
-  -- decal seed, a fill writes every UV texel, so the roof — which the axis
-  -- cameras leave gapped — gets painted too. decalProjection:bakeLayers
-  -- dispatches on layer.type, so this fill table rides in the same bake as
-  -- the metallic/roughness decals below.
-  if PAINT_SEED_COLOR then
-    bakeList[#bakeList + 1] = {
-      name              = "scratches_base_color",
-      type              = (api.layerTypes and api.layerTypes.fill) or 1,
-      blendMode         = (api.blendModesMap and api.blendModesMap.Normal) or 1,
-      color             = Point4F(r, g, b, 1),
-      colorPaletteMapId = 0,
-      enabled           = true,
-      locked            = false,
-      uid               = string.format("scr-fill-%08x", math.random(0, 0xffffffff)),
-      parentUid         = nil,
-      children          = {},
-    }
-  end
-
+  local colorAlpha = PAINT_SEED_COLOR and 1 or 0
   for i, axis in ipairs(AXES) do
     local camLocal = buildAxisCameraLocal(axis, SEED_DIST)
     decalProjection:projectDynamicDecals(camLocal, projM)
 
-    -- Metallic/roughness driven by setMetallicIntensity / setRoughnessIntensity
-    -- regardless of mode. Color contribution gated by colorAlpha — when 0
-    -- the decal stamp shouldn't disturb baseColor (alpha-zero color tint).
+    -- Metallic/roughness driven by setMetallicIntensity / setRoughnessIntensity.
+    -- Colour contribution gated by colorAlpha (0 = M/R only).
     api.setDecalTexturePath("color",     "/art/dynamicDecals/textures/_one.png")
     api.setDecalTexturePath("alpha",     "/art/dynamicDecals/textures/_one.png")
     api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_one.png")
     api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
-    -- Colour comes from the fill layer above; these decals carry metallic/
-    -- roughness only, so the colour tint is alpha-0 (writes no baseColor).
-    api.setDecalColor(Point4F(1, 1, 1, 0))
+    api.setDecalColor(Point4F(r, g, b, colorAlpha))
     api.setMetallicIntensity(PAINT_METALLIC)
     api.setRoughnessIntensity(PAINT_ROUGHNESS)
     api.setDecalScale(vec3(SEED_SCALE, 1, SEED_SCALE))
@@ -523,9 +503,29 @@ M.addPaintFill = function()
       bakeList[#bakeList + 1] = decalData
     end
   end
-
   if #bakeList > 0 then
     decalProjection:bakeLayers(bakeList, veh.JBeam or veh.jbeam)
+  end
+
+  -- (2) Uniform baseColor via a projection-free fill layer, in its OWN bake
+  -- call so it cannot perturb the decal bake above. The 6-axis decals leave
+  -- the roof gapped; a fill writes every UV texel, so the roof gets the
+  -- colour too. A fill writes baseColor only (not M/R): the body keeps the
+  -- decals' gloss, the roof gets colour but stays matte (no M/R coverage
+  -- there — acceptable, and far better than a black roof).
+  if PAINT_SEED_COLOR then
+    decalProjection:bakeLayers({ {
+      name              = "scratches_base_color",
+      type              = (api.layerTypes and api.layerTypes.fill) or 1,
+      blendMode         = (api.blendModesMap and api.blendModesMap.Normal) or 1,
+      color             = Point4F(r, g, b, 1),
+      colorPaletteMapId = 0,
+      enabled           = true,
+      locked            = false,
+      uid               = string.format("scr-fill-%08x", math.random(0, 0xffffffff)),
+      parentUid         = nil,
+      children          = {},
+    } }, veh.JBeam or veh.jbeam)
   end
   if PAINT_SEED_COLOR then
     log('I', logTag, string.format(
