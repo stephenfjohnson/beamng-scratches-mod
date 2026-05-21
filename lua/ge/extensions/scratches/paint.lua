@@ -1933,6 +1933,68 @@ local function drawLogPane()
   im.EndChild()
 end
 
+-- ---- (1.4) debug report ----
+-- Assemble a compact, paste-ready report: environment + a one-line stats and
+-- tunables summary + log lines that matter (every warning/error plus recent
+-- context for ordering), each [GE]/[VEH]-tagged. Curated on purpose — not a
+-- full ring dump. The "Copy debug report" button drops the result onto the
+-- clipboard; M.buildDebugReport exposes it for the console.
+local REPORT_RECENT_LINES = 50   -- always keep this many most-recent lines
+local REPORT_MAX_LINES    = 140  -- hard cap on log lines in the report
+
+local function buildDebugReport()
+  local veh   = getPlayerVehicle(0)
+  local jbeam = veh and (veh.JBeam or veh.jbeam) or "(no vehicle)"
+  local layerCount = (api and api.getLayerCount and api.getLayerCount()) or "?"
+  local ds    = lastDetectStats or {}
+  local out   = {}
+  local function w(s) out[#out + 1] = s end
+
+  w("## scratches_mod debug report")
+  w("time: " .. os.date("%Y-%m-%d %H:%M:%S"))
+  w("")
+  w("### environment")
+  w("- vehicle jbeam: " .. tostring(jbeam))
+  w("- painter ready: " .. tostring(ready) .. "   pendingSetup: " .. tostring(pendingSetup))
+  w("- lastSkinJBeam: " .. tostring(lastSkinJBeam))
+  w("- matBindingsStable: " .. tostring(matBindingsStable) .. "   seedDone: " .. tostring(seedDone))
+  w("- layer count: " .. tostring(layerCount))
+  w("- paint seed color (ON wipes livery): " .. tostring(PAINT_SEED_COLOR))
+  w("")
+  w("### stats")
+  w(string.format("- GE  : enqueued=%d skippedMissed=%d dropped=%d bakes=%d streams=%d framesFlushed=%d",
+    stampStats.stampsEnqueued, stampStats.stampsSkippedMissed, stampStats.aggregateDropped,
+    stampStats.bakesIssued, stampStats.streamsBaked, stampStats.framesFlushed))
+  w(string.format("- VEH : total=%s filtered=%s impacts=%s streams=%s maxForce=%s",
+    tostring(ds.totalCalls), tostring(ds.filteredCalls), tostring(ds.impactEvents),
+    tostring(ds.streamsFlushed), tostring(ds.maxNormalForce)))
+  w("")
+  w("### tunables")
+  w(string.format("- slip=%s perp=%s minForce=%s impForce=%s impCool=%s paintCool=%s",
+    tostring(ds.slip), tostring(ds.perp), tostring(ds.minForce),
+    tostring(ds.impForce), tostring(ds.impCool), tostring(ds.paintCool)))
+  w(string.format("- aggregateCap=%d clusterRadius=%.2f metallic=%.2f roughness=%.2f",
+    AGGREGATE_PER_FRAME_CAP, CLUSTER_RADIUS, PAINT_METALLIC, PAINT_ROUGHNESS))
+  w("")
+  w("### log  (warnings/errors + recent context; [GE]=painter [VEH]=detector)")
+  local n = #logRing
+  local firstRecent = math.max(1, n - REPORT_RECENT_LINES + 1)
+  local picked = {}
+  for i = 1, n do
+    local e = logRing[i]
+    if e.lvl == 'W' or e.lvl == 'E' or i >= firstRecent then
+      picked[#picked + 1] = string.format("%s [%s] %s", e.lvl or 'I', e.src or '?', e.msg or '')
+    end
+  end
+  -- Cap from the front so the most recent lines always survive.
+  local startAt = math.max(1, #picked - REPORT_MAX_LINES + 1)
+  if startAt > 1 then w("(" .. (startAt - 1) .. " older lines omitted)") end
+  for i = startAt, #picked do w(picked[i]) end
+
+  return table.concat(out, "\n")
+end
+M.buildDebugReport = buildDebugReport
+
 local function drawUI()
   if not uiVisible then return end
   local im = ui_imgui
@@ -1959,6 +2021,17 @@ local function drawUI()
   im.EndChild()
   im.SameLine()
   im.BeginChild1("scratchesCtrlCol", im.ImVec2(0, 0), false)
+
+  -- (1.4) One-click debug report. Top of the column so it's the obvious
+  -- action: reproduce a bug, click, paste the clipboard into a report.
+  if im.Button("Copy debug report") then
+    im.SetClipboardText(buildDebugReport())
+    log('I', logTag, "debug report copied to clipboard")
+  end
+  uiTooltip("Copy a compact, paste-ready report to the clipboard:\n" ..
+            "environment + stats + tunables + relevant log lines.\n" ..
+            "Reproduce a bug, click this, paste it straight into a report.")
+  im.Separator()
 
   im.Text("--- Presets ---  (one click swaps every slider below)")
   for idx, preset in ipairs(UI_PRESETS) do
@@ -2219,7 +2292,7 @@ end
 
 -- ---- lifecycle ----
 local function onExtensionLoaded()
-  log('I', logTag, "loaded. probes: scratches_paint.{dumpState,kickSetup,testStamp,testStampAt,testStampAtWorld,probeBrushes,stampAt,stampAtLocal,stampStream,stampBatch,clearStamps,addPaintFill,dumpDecalConfig,drawTextures,setStampVerbose,setAggregateCap,setClusterRadius,dumpPaintStats,resetPaintStats,toggleUI}")
+  log('I', logTag, "loaded. probes: scratches_paint.{dumpState,kickSetup,testStamp,testStampAt,testStampAtWorld,probeBrushes,stampAt,stampAtLocal,stampStream,stampBatch,clearStamps,addPaintFill,dumpDecalConfig,drawTextures,setStampVerbose,setAggregateCap,setClusterRadius,dumpPaintStats,resetPaintStats,toggleUI,buildDebugReport}")
   pendingSetup = true
   setupAttemptTimer = SETUP_RETRY  -- try immediately
   trySetup()
