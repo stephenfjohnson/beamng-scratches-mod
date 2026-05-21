@@ -222,24 +222,42 @@ local function ensureSkin(jbeam)
     pendingSetup = false  -- stop polling; this vehicle is a permanent no-go
     return false
   end
-  -- (2.1) Capture the paint_design slot BEFORE the swap. setSkin() replaces
-  -- its chosenPartName outright — if a livery sits here, this is where it
-  -- gets evicted. Read it only on the first swap for this vehicle.
-  local prevPart = (lastSkinJBeam ~= jbeam) and currentPaintDesignPart() or nil
-  -- Idempotent: setSkin no-ops if already selected
-  extensions.core_vehicle_partmgmt.setSkin("dynamicTextures")
-  if lastSkinJBeam ~= jbeam then
-    local dtPart = jbeam .. "_skin_dynamicTextures"
-    if prevPart and prevPart ~= "" and prevPart ~= dtPart then
-      log('W', logTag, "paint_design slot was '" .. tostring(prevPart) ..
-        "' before swap — that livery is EVICTED by the dynamicTextures skin")
-    else
-      log('I', logTag, "paint_design slot pre-swap: '" .. tostring(prevPart) ..
-        "' (no livery to preserve)")
-    end
-    log('I', logTag, "set skin 'dynamicTextures' on vehicle " .. jbeam)
-    lastSkinJBeam = jbeam
+  local dtPart = jbeam .. "_skin_dynamicTextures"
+
+  -- Already swapped this vehicle on an earlier tick — nothing to do. (Also
+  -- avoids re-calling setSkin, which respawns the vehicle.)
+  if lastSkinJBeam == jbeam then return true end
+
+  -- (2.3) Inspect the paint_design slot before claiming it. BeamNG gives a
+  -- vehicle exactly one skin slot and setSkin() overwrites it outright, so
+  -- swapping in dynamicTextures evicts any livery sitting there. We refuse to
+  -- do that silently: a car the player deliberately liveried is left
+  -- untouched (no scratches) rather than stripped.
+  -- TODO (future): livery+scratches compositing — capture the livery's
+  -- textures and re-stamp them as a base layer in the dynamic canvas so
+  -- liveried cars can get scratches too. Until then, preservation wins.
+  local prevPart = currentPaintDesignPart()
+  if prevPart == nil then
+    return false  -- config not readable yet; transient, retry next tick
   end
+  if prevPart == dtPart then
+    -- Our skin is already in the slot (persisted from a prior session).
+    log('I', logTag, "dynamicTextures skin already active on " .. jbeam)
+    lastSkinJBeam = jbeam
+    return true
+  end
+  if prevPart ~= "" then
+    log('W', logTag, "vehicle '" .. jbeam .. "' has livery '" .. tostring(prevPart) ..
+      "' in the paint_design slot — SKIPPING to preserve it. No scratches on " ..
+      "this car (livery+scratches compositing is a planned future feature).")
+    pendingSetup = false  -- intentional, permanent skip for this vehicle
+    return false
+  end
+
+  -- Slot is empty: safe to claim it for the dynamic-decals canvas.
+  extensions.core_vehicle_partmgmt.setSkin("dynamicTextures")
+  log('I', logTag, "set skin 'dynamicTextures' on vehicle " .. jbeam)
+  lastSkinJBeam = jbeam
   return true
 end
 
