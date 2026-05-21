@@ -91,9 +91,12 @@ the mod bakes stamps additively into the *baked* textures.
 
 ## Phase 4 — Auto-load both sides + bindable hotkey
 
-- [ ] **4.1** Auto-load GELUA `scratches_paint` on game start — no manual
-  `extensions.load`, no two-command bootstrap.
-- [ ] **4.2** Verify clean load on fresh game start and on mod enable/disable.
+- [x] **4.1** Already satisfied by design: the vehicle side auto-loads from
+  `extensions/auto/`, and it bootstraps the GE painter via
+  `extensions.load('scratches_paint')` on its lifecycle hooks. No manual
+  command, no code change needed.
+- [x] **4.2** Verified — both sides come up with zero console commands;
+  combined with the 4.3 hotkey, the mod needs no console interaction.
 - [x] **4.3** Add a mod input-action file (`lua/ge/extensions/core/input/
   actions/scratches.json`) registering `scratches_toggle_ui`, bindable in
   Options > Controls > Debug. (Done early, out of phase order.)
@@ -104,11 +107,15 @@ the mod bakes stamps additively into the *baked* textures.
 
 ## Phase 5 — In-depth README + packaging
 
-- [ ] **5.1** Installation section (end-user mod install, not the dev junction).
-- [ ] **5.2** "How it works" — detection -> event batching -> decal painting.
-- [ ] **5.3** Supported vehicles, requirements, limitations.
-- [ ] **5.4** Controls + debug-panel guide.
-- [ ] **5.5** Packaging checklist (zip layout, mod metadata).
+Done — `README.md` rewritten as a full install + tech guide.
+
+- [x] **5.1** Installation section (player packaged install + developer
+  unpacked junction).
+- [x] **5.2** "How it works" — detection -> event batching -> decal painting,
+  across both Lua VMs, plus the auto-load path.
+- [x] **5.3** Supported vehicles, requirements, limitations.
+- [x] **5.4** Controls + debug-panel guide.
+- [x] **5.5** Packaging checklist (zip layout — `lua/` + `art/` at zip root).
 
 ## Phase 6 — More variation + performance
 
