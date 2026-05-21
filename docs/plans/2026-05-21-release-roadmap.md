@@ -67,9 +67,13 @@ Bug: `onReset` queues `clearStamps` but baked marks still survive a Ctrl+R.
 - [ ] **4.1** Auto-load GELUA `scratches_paint` on game start — no manual
   `extensions.load`, no two-command bootstrap.
 - [ ] **4.2** Verify clean load on fresh game start and on mod enable/disable.
-- [ ] **4.3** Add a mod input-action map registering "Toggle Scratches Panel"
-  with a sensible default key, bindable in Options > Controls.
-- [ ] **4.4** Wire the action to `toggleUI()`; verify it appears in controls.
+- [x] **4.3** Add a mod input-action file (`lua/ge/extensions/core/input/
+  actions/scratches.json`) registering `scratches_toggle_ui`, bindable in
+  Options > Controls > Debug. (Done early, out of phase order.)
+- [x] **4.4** Wire the action to `toggleUI()` (lazy-loads the extension
+  first); appears in Controls > Debug. User binds their own key — BeamNG
+  has no clean way for a mod to ship a pre-bound default without
+  overwriting the game's keyboard map.
 
 ## Phase 5 — In-depth README + packaging
 
