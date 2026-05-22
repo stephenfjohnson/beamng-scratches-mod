@@ -56,6 +56,9 @@ local nodeEventCount = {}    -- nid -> total candidate events seen
 local nodeEventLast  = {}    -- nid -> count at time of last log
 local nodePaintLast  = {}    -- nid -> simTime of last sample appended to stream (slide)
 local nodeImpactLast = {}    -- nid -> simTime of last queued impact stamp
+local nodeLastContactTime = {} -- nid -> simTime onNodeCollision last fired for this
+                               --   node (drives impact-onset detection — see
+                               --   IMPACT_REARM_GAP)
 
 -- Per-node slide stream. Each entry is a small table of contact-point samples
 -- collected while the node is in active slide contact. Flushed as a single
@@ -117,6 +120,18 @@ local IMPACT_COOLDOWN        = 0.025  -- seconds, per-node (was 0.4; F+G+H made
                                        -- per-stamp cost low enough that a node
                                        -- re-impacting during a roll can fire
                                        -- ~4x more often than the original 1.0s)
+-- Impact-onset re-arm gap. A genuine impact is the ONSET of contact — a node
+-- that was contact-free and is now bearing force. A wrecked car AT REST does
+-- the opposite: body nodes lean on the ground and sustain a kN-range
+-- normalForce every physics tick indefinitely (observed ~1.4 kN on a settled
+-- sideskirt node), which a force-LEVEL gate re-reads as a fresh impact
+-- forever. So the impact branch additionally requires the node to have been
+-- contact-free for this long before a contact counts as fresh. A resting node
+-- fires exactly once (as it settles); a node re-impacting during a roll
+-- re-arms each time it leaves and re-touches the ground; an uninterrupted
+-- slide never trips the impact branch (its force spikes are slide texture,
+-- already carried by the slide stream).
+local IMPACT_REARM_GAP = 0.15  -- s; contact-free time before a contact re-arms
 
 -- ---- continuous-slide stream params ----
 -- Slide branch collects per-node samples while contact is active and flushes
@@ -274,14 +289,24 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   if not surfaceName then stats.rejSurfaceMat = stats.rejSurfaceMat + 1; return end
 
   -- magnitude
+  local now = (obj and obj.getSimTime and obj:getSimTime()) or 0
   local sliding   = slipVel >= SLIP_THRESHOLD
   local impacting = perpVel >= PERP_THRESHOLD
-  -- Impact gate is force-only. Hard slides routinely spike normalForce
-  -- past the threshold; rather than try to suppress those (the velocity-
-  -- discriminator approach we tried earlier dropped real impacts during
-  -- slides too), we let both branches fire when both conditions hold and
-  -- accept the layered density as visual richness.
-  local impactHit = normalForce >= IMPACT_FORCE_THRESHOLD
+  -- Impact-onset gate. The impact branch fires on raw normalForce because a
+  -- head-on smash cushions slipVel/perpVel to ~0 within a tick but spikes
+  -- force into the kN range. The catch: a wrecked car AT REST produces the
+  -- same signature — body nodes resting on the ground sustain kN-range
+  -- normalForce every tick — so a force-level gate alone re-fires that
+  -- "impact" forever. We additionally require the node to have been
+  -- contact-free for IMPACT_REARM_GAP: a fresh contact is an impact, a
+  -- sustained load is not. nodeLastContactTime is refreshed below for every
+  -- body-vs-surface contact tick, so a continuously-loaded node never
+  -- re-arms (and an uninterrupted slide, being continuous contact, no longer
+  -- double-fires the impact branch — its texture is the slide stream's job).
+  local prevContact  = nodeLastContactTime[id1]
+  local freshContact = (prevContact == nil) or ((now - prevContact) >= IMPACT_REARM_GAP)
+  nodeLastContactTime[id1] = now
+  local impactHit = (normalForce >= IMPACT_FORCE_THRESHOLD) and freshContact
   if not (sliding or impacting or impactHit) then stats.rejBelowThresh = stats.rejBelowThresh + 1; return end
   -- Grazing-contact floor only applies to slide events. impactHit is
   -- already gated on a much higher normalForce, so this check is redundant
@@ -337,8 +362,7 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   -- Fire-and-forget: we don't observe the result; failures will surface as
   -- silent missing decals (paint.lua logs its own diagnostics on stampAt).
   if paintEnabled and obj and obj.queueGameEngineLua then
-    local now = obj:getSimTime() or 0
-
+    -- `now` is the simTime resolved in the magnitude section above.
     if impactHit then
       local lastImpact = nodeImpactLast[id1] or 0
       if now - lastImpact >= IMPACT_COOLDOWN then
@@ -712,6 +736,7 @@ local function onReset()
   M.resetStats()
   table.clear(nodePaintLast)
   table.clear(nodeImpactLast)
+  table.clear(nodeLastContactTime)
   table.clear(nodeStreams)
   pendingDetectEvents = {}
   bootstrapPainter()
