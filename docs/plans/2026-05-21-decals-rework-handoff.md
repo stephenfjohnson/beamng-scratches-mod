@@ -4,6 +4,28 @@ Date: 2026-05-21
 Purpose: self-contained brief for a fresh session tackling the deferred
 "decals issue". Read this top to bottom before touching code.
 
+## Status (updated 2026-05-23)
+
+- **Problem 1 (paint-canvas re-seed)**: ✅ resolved. Solution: take metallic
+  and roughness off the dynamic-decals canvas entirely. `restoreFactoryMR`
+  in `paint.lua` re-points each body material's `metallicMap` /
+  `roughnessMap` (on the `.skin.dynamicTextures` variant) at static PNGs
+  shipped with the mod (`_zero.png` for metallic, `_paint_roughness.png`
+  for roughness), then `flush()` + `reload()` so the renderer picks them up.
+  Base gloss is now uniform across the whole body and never needs seeding;
+  `addPaintFill` collapsed to a single `fill` layer for baseColor. Trade-off:
+  scratches lose metal-glint (their M/R intensity writes go to an unused
+  dynamic canvas; the scratches still read as color marks). The body of
+  this brief describes the *original* attempt (six axis-projected decals)
+  for context — that approach was abandoned because projected decals
+  deposit only on the hemisphere facing their camera, so silhouette seams
+  are unavoidable. See `2026-05-21-release-roadmap.md` for details.
+- **Problem 2 (livery + scratches compositing)**: ⏳ still pending. The
+  goal and constraints below remain valid. A natural starting point is to
+  capture the livery's per-material baseColor textures and bake them into
+  the dynamic `@DynamicTextureBaseColor` canvas as a base layer; with M/R
+  no longer on the canvas, only one channel needs to be handled.
+
 ## Mission
 
 Fix two related problems with how `scratches_mod` manages BeamNG's

@@ -129,26 +129,19 @@ local resolveDecalProjection
 local setScratchProjectionFence
 
 -- ---- paint canvas seed tunables ----
--- The dynamic-decals skin routes the body's metallic and roughness channels
--- through @DynamicTexture* — if we don't write to them, the body renders with
--- whatever happened to be in the uninitialized texture (usually matte). These
--- two scalars are what addPaintFill stamps into the metallic/roughness
--- channels as the canvas baseline. Defaults model "shiny dielectric paint":
---   PAINT_METALLIC  0.00  — paint is non-metal (clearcoat does the shine)
---   PAINT_ROUGHNESS 0.20  — moderately smooth, gives a glossy clearcoat reflection
--- The K debug panel exposes both as sliders so the user can preview values
--- in-game; changes there call M.reseedPaintCanvas() to re-bake the canvas.
-local PAINT_METALLIC  = 0.00
-local PAINT_ROUGHNESS = 0.20
+-- The dynamic-decals skin reroutes baseColor + metallic + roughness onto the
+-- engine-managed @DynamicTexture* canvas. We KEEP baseColor on the canvas
+-- (scratches need to write it, and the projection-free `fill` layer can re-seed
+-- it cleanly), but we PUT metallic + roughness BACK on the factory maps via
+-- restoreFactoryMR(). That's why this file no longer carries PAINT_METALLIC /
+-- PAINT_ROUGHNESS: the seed never writes those channels. Base gloss is whatever
+-- the car ships with — factory-perfect and seamless.
 
--- Whether the seed also writes baseColor (the vehicle's paint color). Default
--- TRUE, and it needs to be: clearStamps now calls clearBakedTextures(), which
--- zeroes the baseColor channel — so the seed must repaint the body or it
--- renders black after every clear/reset. There's no livery to protect: the
--- mod skips any vehicle that already has a livery part (see ensureSkin), so
--- @DynamicTextureBaseColor only ever holds a plain paint color we can safely
--- re-stamp. Off is debug-only (metallic/roughness seeded, baseColor left
--- wiped). Toggled from the K debug panel.
+-- Whether the seed paints the baseColor fill. Default TRUE — clearBakedTextures
+-- zeroes the baseColor channel, so without the fill the body renders black
+-- after a clear/reset. Off is debug-only (baseColor left wiped). Liveried cars
+-- are skipped entirely by ensureSkin, so @DynamicTextureBaseColor only ever
+-- holds a plain paint color we can safely re-stamp.
 local PAINT_SEED_COLOR = true
 
 -- ---- one-time setup ----
@@ -290,6 +283,67 @@ local function computeDesiredMaterials()
   return desired
 end
 
+-- Take metallic + roughness OFF the dynamic-decals canvas by pointing the
+-- body's skin-variant material at static texture maps. The dynamicTextures
+-- skin reroutes baseColor / metallic / roughness onto @DynamicTexture*; we
+-- keep baseColor (scratches write it and the `fill` layer re-seeds it
+-- cleanly) but redirect metallic and roughness to known constant PNGs. Result:
+-- base M/R is uniform across the whole body (no projection seams), and the
+-- canvas seed never writes those channels.
+--
+-- For each body material (the ones with a .skin.dynamicTextures variant),
+-- setField the skin variant's metallicMap and roughnessMap to the static
+-- paths, then flush() + reload() so the renderer picks up the new fields
+-- (canonical pattern from editor/api/material.lua:64-66). Other materials
+-- (interior, glass, mechanicals) have no skin variant and are skipped
+-- silently — they don't render off the dynamic canvas in the first place.
+--
+-- Static targets: metallic=0 (dielectric paint) via the engine-provided
+-- _zero.png, and roughness=0.2 (typical clearcoat) via _paint_roughness.png
+-- which ships with this mod (a 4x4 solid 51-grey PNG; linear 51/255 ≈ 0.20).
+-- The textures aren't decal brushes so they don't need a .dynDecalTexture.json
+-- sidecar — they're regular material maps, loaded by the renderer like any
+-- other PBR texture.
+--
+-- Trade-off: scratch stamps' setMetallicIntensity / setRoughnessIntensity
+-- still write to an unused dynamic canvas (harmless no-ops). Scratches read
+-- as color marks; no metal-glint. The seam is gone with it.
+local function restoreFactoryMR()
+  if not api or not api.getShapeMaterialNames then return false end
+  if not scenetree or not scenetree.findObject then return false end
+  local ok, names = pcall(api.getShapeMaterialNames)
+  if not ok or type(names) ~= "table" then return false end
+
+  local METALLIC_PATH  = "/art/dynamicDecals/textures/_zero.png"
+  local ROUGHNESS_PATH = "/art/dynamicDecals/textures/_paint_roughness.png"
+
+  local restored = 0
+  for _, matName in pairs(names) do
+    if type(matName) == "string" then
+      local skinMat = scenetree.findObject(matName .. ".skin.dynamicTextures")
+      if skinMat then
+        for stage = 0, 3 do
+          skinMat:setField("metallicMap",  stage, METALLIC_PATH)
+          skinMat:setField("roughnessMap", stage, ROUGHNESS_PATH)
+        end
+
+        -- Canonical BeamNG live-update pattern (editor/api/material.lua:64-66):
+        -- setField, then flush() to mark dirty, then reload() to apply.
+        if skinMat.flush  then pcall(function() skinMat:flush()  end) end
+        if skinMat.reload then pcall(function() skinMat:reload() end) end
+
+        restored = restored + 1
+      end
+      -- Non-body materials (no skin variant) are skipped silently — they
+      -- don't render off the dynamic canvas, so there's nothing to fix.
+    end
+  end
+  log('I', logTag, string.format(
+    "restoreFactoryMR: %d material(s) had M/R repointed (M=_zero, R=_paint_roughness)",
+    restored))
+  return restored > 0
+end
+
 -- Per-tick stabilizer. Idempotent: each call diffs the current bindings
 -- against desiredMatIndices and adds anything missing. Becomes a no-op
 -- once everything we want is present (the matBindingsStable latch). When
@@ -301,8 +355,9 @@ local function ensureDesiredMaterialsBound()
   if not (api and api.getMaterialIndices and api.addMaterialIdx) then return end
   if not (desiredMatIndices and #desiredMatIndices > 0) then
     -- Nothing to enforce; let BeamNG's heuristic stand and do the seed
-    -- one-shot so single-material vehicles still get glossy paint.
+    -- one-shot so single-material vehicles still get the baseColor fill.
     if not seedDone then
+      restoreFactoryMR()
       M.addPaintFill()
       seedDone = true
     end
@@ -327,6 +382,7 @@ local function ensureDesiredMaterialsBound()
       "material bindings stable: desired=%d  current=%d",
       #desiredMatIndices, type(current) == "table" and #current or 0))
     if not seedDone then
+      restoreFactoryMR()
       M.addPaintFill()
       seedDone = true
     end
@@ -398,160 +454,61 @@ local function parseVehicleColor(s)
   return r, g, b
 end
 
--- Build an axis-aligned synthetic camera at `axis * dist` looking back toward
--- the vehicle origin. Same column convention as buildSyntheticCameraLocal:
--- col0=right(+X), col1=forward(+Y), col2=up(+Z), col3=position. The two-axis
--- version differs from the existing helper only in that the target is the
--- origin instead of an arbitrary local point — for the canvas seed we want
--- coverage of the whole body, not a single contact zone.
-local function buildAxisCameraLocal(axis, dist)
-  local camPos = axis * dist
-  local fwd    = -axis            -- camera looks at origin
-  local upHint = vec3(0, 0, 1)
-  if math.abs(fwd:dot(upHint)) > 0.95 then upHint = vec3(0, 1, 0) end
-  local right = upHint:cross(fwd):normalized()
-  local up    = fwd:cross(right):normalized()
-  local m = MatrixF(true)
-  m:setColumn(0, right)
-  m:setColumn(1, fwd)
-  m:setColumn(2, up)
-  m:setColumn(3, camPos)
-  return m
-end
-
--- Seed the dynamic-texture canvas with a full-PBR paint baseline.
+-- Seed the dynamic-decals canvas with a uniform baseColor.
 --
--- The `fill` layer type can only write baseColor (dynamicDecals.lua:301‑306 —
--- it serializes `name/blendMode/color/colorPaletteMapId/type`, nothing else),
--- so a fill alone leaves @DynamicTextureMetallic / @DynamicTextureRoughness
--- at whatever the initial texture contained — usually matte. We get around
--- that by stamping six full-canvas decals — one per cardinal axis — that
--- carry constant `_one.png` textures for color/metallic/roughness scaled by
--- PAINT_METALLIC and PAINT_ROUGHNESS via the projection-level intensity
--- knobs. Six projections gives every external panel at least one cam that
--- sees it head-on; the per-pixel composite picks the most-aligned write.
+-- metallic + roughness were repointed to the car's factory maps by
+-- restoreFactoryMR(), so they aren't on this canvas — that means we don't
+-- need (and CAN'T cleanly produce, since projected decals leave silhouette
+-- seams) any M/R seeding. The only channel this writes is baseColor, and the
+-- projection-free `fill` layer paints every UV texel uniformly (verified —
+-- dynamicDecals.lua:301‑306).
 --
--- Cost: ~6 bakes at vehicle spawn, once. Zero per-frame work. Re-runs only
--- when the user moves a paint slider or calls clearStamps.
+-- Cost: 1 bake at vehicle spawn, once. Zero per-frame work. Re-runs after
+-- clearStamps to repaint baseColor (which clearBakedTextures wipes).
 M.addPaintFill = function()
   if not ready then log('W', logTag, "addPaintFill: not ready"); return end
   if not resolveDecalProjection() then return end
-  setScratchProjectionFence(false)
   local veh = getPlayerVehicle(0)
   if not veh then return end
 
-  -- Resolve the paint color. It's applied below as a projection-free FILL
-  -- layer, which writes every UV texel — so the roof (which the 6-axis decal
-  -- seed leaves gapped) gets painted too. When PAINT_SEED_COLOR is off
-  -- (debug only) no fill is added; the body keeps whatever baseColor survived.
+  if not PAINT_SEED_COLOR then
+    log('I', logTag, "paint seed: PAINT_SEED_COLOR off — fill skipped (debug)")
+    return
+  end
+
+  -- Resolve the paint color and paint every UV texel uniformly. M/R is
+  -- rendered from the factory maps (see restoreFactoryMR), so a fill is all
+  -- the seed needs.
   local r, g, b = 0.5, 0.5, 0.5
-  if PAINT_SEED_COLOR then
-    local pr, pg, pb = parseVehicleColor(getVehicleColor and getVehicleColor() or nil)
-    if pr then
-      r, g, b = pr, pg, pb
-    else
-      log('W', logTag, "addPaintFill: getVehicleColor unavailable; using mid-grey fallback")
-    end
-  end
-
-  -- UseMousePos must be off so the projection cursor lands at screen-center
-  -- (where the camera is aimed) instead of following the mouse pointer.
-  -- Same dance flushPendingStamps does.
-  if api.isUseMousePos and api.isUseMousePos() then
-    api.toggleSetting(api.settingsFlags.UseMousePos.value)
-  end
-
-  local projM = getCameraProjMatrix()
-  local AXES = {
-    vec3( 1,  0,  0), vec3(-1,  0,  0),
-    vec3( 0,  1,  0), vec3( 0, -1,  0),
-    vec3( 0,  0,  1), vec3( 0,  0, -1),
-  }
-  local SEED_DIST  = 4.0  -- meters from origin; outside any car's bounding box
-  local SEED_SCALE = 6.0  -- decal half-size; >= the largest vehicle dimension
-
-  -- (1) Metallic/roughness (and colour) via 6 axis-aligned projected decals,
-  -- one per cardinal direction so every panel gets a near-head-on camera.
-  -- This is the original, known-good seed — it drives the glossy PBR.
-  local bakeList = {}
-  local colorAlpha = PAINT_SEED_COLOR and 1 or 0
-  for i, axis in ipairs(AXES) do
-    local camLocal = buildAxisCameraLocal(axis, SEED_DIST)
-    decalProjection:projectDynamicDecals(camLocal, projM)
-
-    -- Metallic/roughness driven by setMetallicIntensity / setRoughnessIntensity.
-    -- Colour contribution gated by colorAlpha (0 = M/R only).
-    api.setDecalTexturePath("color",     "/art/dynamicDecals/textures/_one.png")
-    api.setDecalTexturePath("alpha",     "/art/dynamicDecals/textures/_one.png")
-    api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_one.png")
-    api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
-    api.setDecalColor(Point4F(r, g, b, colorAlpha))
-    api.setMetallicIntensity(PAINT_METALLIC)
-    api.setRoughnessIntensity(PAINT_ROUGHNESS)
-    api.setDecalScale(vec3(SEED_SCALE, 1, SEED_SCALE))
-    api.setDecalRotation(0)
-    api.setUseSurfaceNormal(true)
-
-    local decalData = decalProjection:getDecalData(camLocal, projM)
-    if decalData then
-      decalData.uid       = string.format("scr-seed-%d-%08x", i, math.random(0, 0xffffffff))
-      decalData.name      = "scratches_base_paint_" .. tostring(i)
-      decalData.enabled   = true
-      decalData.locked    = false
-      decalData.parentUid = nil
-      decalData.children  = {}
-      bakeList[#bakeList + 1] = decalData
-    end
-  end
-  if #bakeList > 0 then
-    decalProjection:bakeLayers(bakeList, veh.JBeam or veh.jbeam)
-  end
-
-  -- (2) Uniform baseColor via a projection-free fill layer, in its OWN bake
-  -- call so it cannot perturb the decal bake above. The 6-axis decals leave
-  -- the roof gapped; a fill writes every UV texel, so the roof gets the
-  -- colour too. A fill writes baseColor only (not M/R): the body keeps the
-  -- decals' gloss, the roof gets colour but stays matte (no M/R coverage
-  -- there — acceptable, and far better than a black roof).
-  if PAINT_SEED_COLOR then
-    decalProjection:bakeLayers({ {
-      name              = "scratches_base_color",
-      type              = (api.layerTypes and api.layerTypes.fill) or 1,
-      blendMode         = (api.blendModesMap and api.blendModesMap.Normal) or 1,
-      color             = Point4F(r, g, b, 1),
-      colorPaletteMapId = 0,
-      enabled           = true,
-      locked            = false,
-      uid               = string.format("scr-fill-%08x", math.random(0, 0xffffffff)),
-      parentUid         = nil,
-      children          = {},
-    } }, veh.JBeam or veh.jbeam)
-  end
-  if PAINT_SEED_COLOR then
-    log('I', logTag, string.format(
-      "paint seed: fill rgb=(%.2f,%.2f,%.2f) + M=%.2f R=%.2f, %d layers baked",
-      r, g, b, PAINT_METALLIC, PAINT_ROUGHNESS, #bakeList))
+  local pr, pg, pb = parseVehicleColor(getVehicleColor and getVehicleColor() or nil)
+  if pr then
+    r, g, b = pr, pg, pb
   else
-    log('I', logTag, string.format(
-      "paint seed: M=%.2f R=%.2f, %d layers baked (color=OFF, debug)",
-      PAINT_METALLIC, PAINT_ROUGHNESS, #bakeList))
+    log('W', logTag, "addPaintFill: getVehicleColor unavailable; using mid-grey fallback")
   end
+
+  decalProjection:bakeLayers({ {
+    name              = "scratches_base_color",
+    type              = (api.layerTypes and api.layerTypes.fill) or 1,
+    blendMode         = (api.blendModesMap and api.blendModesMap.Normal) or 1,
+    color             = Point4F(r, g, b, 1),
+    colorPaletteMapId = 0,
+    enabled           = true,
+    locked            = false,
+    uid               = string.format("scr-fill-%08x", math.random(0, 0xffffffff)),
+    parentUid         = nil,
+    children          = {},
+  } }, veh.JBeam or veh.jbeam)
+
+  log('I', logTag, string.format(
+    "paint seed: baseColor fill rgb=(%.2f,%.2f,%.2f) (M/R from factory maps)",
+    r, g, b))
 end
 
--- Tunable setters used by the K debug panel sliders. Live-update the module
--- locals; the caller (drawUI) decides when to call clearStamps to re-seed
--- (typically on slider release, not while dragging).
-M.setPaintMetallic = function(v)
-  PAINT_METALLIC = math.min(1, math.max(0, tonumber(v) or 0))
-end
-M.setPaintRoughness = function(v)
-  PAINT_ROUGHNESS = math.min(1, math.max(0, tonumber(v) or 0.2))
-end
+-- PAINT_SEED_COLOR is the only paint-seed tunable now (M/R are factory).
 M.setPaintSeedColor = function(b)
   PAINT_SEED_COLOR = b and true or false
 end
-M.getPaintMetallic   = function() return PAINT_METALLIC   end
-M.getPaintRoughness  = function() return PAINT_ROUGHNESS  end
 M.getPaintSeedColor  = function() return PAINT_SEED_COLOR end
 
 -- ---- per-frame ----
@@ -1659,9 +1616,10 @@ M.clearStamps = function()
   end
   log('I', logTag, "cleared all stamps (textures flushed); layers before clear=" ..
     tostring(preClearLayers))
-  -- Re-seed the metallic/roughness baseline. After flush every channel is
-  -- zero — without re-seeding the body would render perfectly matte (or
-  -- chrome, depending on the variant defaults) regardless of paint config.
+  -- Re-seed the baseColor channel. clearBakedTextures zeroed it; the fill
+  -- layer repaints every texel uniformly. M/R is unaffected by the wipe in
+  -- any sense that matters — the renderer reads metallic/roughness from the
+  -- factory maps now (see restoreFactoryMR), not the dynamic canvas.
   M.addPaintFill()
 end
 
@@ -1803,8 +1761,6 @@ local UI_DEFAULTS = {
   impCool    = 0.025,
   aggCap     = 96,
   clusterRad = 0.65,
-  paintMet   = 0.00,
-  paintRou   = 0.20,
   paintColor = true,
 }
 
@@ -1913,8 +1869,6 @@ local function ensureUIPointers()
     impCool    = im.FloatPtr(UI_DEFAULTS.impCool),
     aggCap     = im.IntPtr(AGGREGATE_PER_FRAME_CAP),
     clusterRad = im.FloatPtr(CLUSTER_RADIUS),
-    paintMet   = im.FloatPtr(PAINT_METALLIC),
-    paintRou   = im.FloatPtr(PAINT_ROUGHNESS),
     paintColor = im.BoolPtr(PAINT_SEED_COLOR),
     logWErr    = im.BoolPtr(false),  -- log pane: warnings & errors only
   }
@@ -1936,8 +1890,6 @@ local function syncUIPointersFromSnapshot()
   if lastDetectStats.impCool   then uiPtrs.impCool[0]   = lastDetectStats.impCool end
   uiPtrs.aggCap[0]     = AGGREGATE_PER_FRAME_CAP
   uiPtrs.clusterRad[0] = CLUSTER_RADIUS
-  uiPtrs.paintMet[0]   = PAINT_METALLIC
-  uiPtrs.paintRou[0]   = PAINT_ROUGHNESS
   uiPtrs.paintColor[0] = PAINT_SEED_COLOR
 end
 
@@ -2067,8 +2019,8 @@ local function buildDebugReport()
   w(string.format("- slip=%s perp=%s minForce=%s impForce=%s impCool=%s paintCool=%s",
     tostring(ds.slip), tostring(ds.perp), tostring(ds.minForce),
     tostring(ds.impForce), tostring(ds.impCool), tostring(ds.paintCool)))
-  w(string.format("- aggregateCap=%d clusterRadius=%.2f metallic=%.2f roughness=%.2f",
-    AGGREGATE_PER_FRAME_CAP, CLUSTER_RADIUS, PAINT_METALLIC, PAINT_ROUGHNESS))
+  w(string.format("- aggregateCap=%d clusterRadius=%.2f",
+    AGGREGATE_PER_FRAME_CAP, CLUSTER_RADIUS))
   w("")
   w("### log  (warnings/errors + recent context; [GE]=painter [VEH]=detector)")
   local n = #logRing
@@ -2278,18 +2230,17 @@ local function drawUI()
     "Performance: avg projects/frame ~= avg clusters/frame.")
 
   im.Separator()
-  im.Text("--- Paint canvas (PBR seed) ---  (re-bake on slider release)")
-  -- (1.5) These controls re-bake the canvas, which needs a bound projection.
-  -- Grey them out (with a reason) instead of letting clicks silently no-op
-  -- while the painter is still setting up.
+  im.Text("--- Paint canvas (baseColor seed) ---")
+  -- (1.5) Re-baking the seed needs a bound projection. Grey out instead of
+  -- letting clicks silently no-op while the painter is still setting up.
   if not ready then
     im.TextDisabled("painter not ready - these controls are inactive")
   end
   im.BeginDisabled(not ready)
   -- Paint-color seed. On by default: the clear/reset wipe (clearBakedTextures)
   -- zeroes the baseColor channel, so the seed must restore the vehicle's paint
-  -- color or the body goes black. Liveried cars are skipped entirely, so
-  -- there's no livery at risk. Reseeds immediately on change.
+  -- color or the body goes black. metallic/roughness aren't seeded — they
+  -- render from the factory maps (see restoreFactoryMR).
   if im.Checkbox("Seed paint color", uiPtrs.paintColor) then
     PAINT_SEED_COLOR = uiPtrs.paintColor[0]
     M.clearStamps()
@@ -2298,34 +2249,6 @@ local function drawUI()
     "Writes the vehicle's chosen paint color into the canvas baseColor.\n" ..
     "Keep this ON: the clear/reset wipe zeroes baseColor, and without the\n" ..
     "color seed the body renders black. Off is debug-only.")
-  -- Live-update PAINT_METALLIC while dragging so the slider feels responsive,
-  -- but only call clearStamps (which re-seeds) on release — that's a 6-bake
-  -- operation and we don't want to thrash it every frame of a drag.
-  if im.SliderFloat("Paint metallic", uiPtrs.paintMet, 0.0, 1.0, "%.2f") then
-    PAINT_METALLIC = uiPtrs.paintMet[0]
-  end
-  if im.IsItemDeactivatedAfterEdit and im.IsItemDeactivatedAfterEdit() then
-    M.clearStamps()
-  end
-  uiTooltip(
-    "Metallic value the canvas seed writes to @DynamicTextureMetallic.\n" ..
-    "0 = dielectric paint (default), 1 = bare polished metal.\n" ..
-    "Most car paints are dielectric — keep at 0 unless you want a chrome look.\n" ..
-    "Default: 0.00.\n" ..
-    "Note: re-seeding wipes existing scratches; happens on slider release.")
-
-  if im.SliderFloat("Paint roughness", uiPtrs.paintRou, 0.0, 1.0, "%.2f") then
-    PAINT_ROUGHNESS = uiPtrs.paintRou[0]
-  end
-  if im.IsItemDeactivatedAfterEdit and im.IsItemDeactivatedAfterEdit() then
-    M.clearStamps()
-  end
-  uiTooltip(
-    "Roughness value the canvas seed writes to @DynamicTextureRoughness.\n" ..
-    "0 = mirror (sharp specular), 1 = matte (no specular).\n" ..
-    "Glossy clearcoat paint is around 0.15-0.25; satin around 0.4-0.6.\n" ..
-    "Default: 0.20.\n" ..
-    "Note: re-seeding wipes existing scratches; happens on slider release.")
   im.EndDisabled()  -- paint canvas (ready-gated)
 
   im.Separator()
@@ -2343,18 +2266,14 @@ local function drawUI()
     uiPtrs.impCool[0]    = UI_DEFAULTS.impCool
     uiPtrs.aggCap[0]     = UI_DEFAULTS.aggCap
     uiPtrs.clusterRad[0] = UI_DEFAULTS.clusterRad
-    uiPtrs.paintMet[0]   = UI_DEFAULTS.paintMet
-    uiPtrs.paintRou[0]   = UI_DEFAULTS.paintRou
     uiPtrs.paintColor[0] = UI_DEFAULTS.paintColor
     AGGREGATE_PER_FRAME_CAP = UI_DEFAULTS.aggCap
     CLUSTER_RADIUS          = UI_DEFAULTS.clusterRad
-    PAINT_METALLIC          = UI_DEFAULTS.paintMet
-    PAINT_ROUGHNESS         = UI_DEFAULTS.paintRou
     PAINT_SEED_COLOR        = UI_DEFAULTS.paintColor
     sendVehicleCmd(string.format("scratches_detect.setThresholds(%.3f, nil, nil)", UI_DEFAULTS.slip))
     sendVehicleCmd(string.format("scratches_detect.setPaintCooldown(%.4f)", UI_DEFAULTS.paintCool))
     sendVehicleCmd(string.format("scratches_detect.setImpactParams(%.0f, %.3f)", UI_DEFAULTS.impForce, UI_DEFAULTS.impCool))
-    M.clearStamps()  -- re-seed canvas with the restored M/R values
+    M.clearStamps()  -- re-seed baseColor with the restored defaults
     log('I', logTag, "UI: reset all tunables to defaults")
   end
   uiTooltip("Restore every slider to its canonical default and push the values to VLUA.")

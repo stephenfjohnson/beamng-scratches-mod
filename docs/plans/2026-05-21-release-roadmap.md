@@ -55,19 +55,29 @@ does the same — coexistence isn't a supported mode.
 - [x] **2.4** Verified: liveried car (itasha) keeps its livery and is
   skipped; plain car still gets scratches.
 
-### Dedicated session — livery + paint-canvas rework (deferred)
+### Dedicated session — livery + paint-canvas rework
 
-The user wants this in its own session/context. Two bundled items:
+Originally two bundled items in a deferred dedicated session. The paint-canvas
+half is done; the livery half is still pending.
 
-1. **Livery + scratches compositing.** Liveried cars currently get no
-   scratches (skipped by `ensureSkin`). To support both: before the skin
-   swap, capture the livery's body textures and re-stamp them as a base
-   layer in the dynamic canvas so scratches composite on top.
-2. **Paint-canvas seed rework.** `clearBakedTextures` (Phase 3.2) wipes the
-   whole canvas, so `addPaintFill` must repaint baseColor + metallic/
-   roughness. The current 6-axis decal + separate fill-layer seed has uneven
-   coverage — a two-tone seam on the body and a matte roof. The seed needs
-   rethinking for clean, even, glossy re-paint.
+1. **Livery + scratches compositing.** *(still pending)* Liveried cars
+   currently get no scratches (skipped by `ensureSkin`). To support both:
+   before the skin swap, capture the livery's body textures and re-stamp them
+   as a base layer in the dynamic canvas so scratches composite on top.
+2. **Paint-canvas seed rework.** *(done 2026-05-23)* Root cause: the body's
+   metallic and roughness lived on the dynamic-decals canvas, and any
+   `clearBakedTextures` wipe forced a re-seed via projected decals — which
+   each deposit only on the hemisphere facing their camera, so silhouette
+   seams are unavoidable. **Fix:** take M/R *off* the dynamic canvas entirely.
+   `restoreFactoryMR` re-points each body material's `metallicMap` /
+   `roughnessMap` (on the `.skin.dynamicTextures` variant) at static PNGs
+   shipped with the mod — `_zero.png` for metallic, a tiny 0.2-grey
+   `_paint_roughness.png` for roughness — then `flush()` + `reload()` the
+   material. Base gloss is uniform across the whole body, factory-perfect,
+   and never needs seeding. `addPaintFill` collapsed to one `fill` layer for
+   baseColor only. Trade-off: scratches lose metal-glint (their
+   `setMetallicIntensity` / `setRoughnessIntensity` writes go to an unused
+   canvas — harmless no-ops). Scratches still read as color marks.
 
 See memory `livery-paintseed-dedicated-session`.
 
