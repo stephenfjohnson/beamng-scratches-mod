@@ -137,9 +137,11 @@ Done — `README.md` rewritten as a full install + tech guide.
   what was hit (road, metal, gravel, soil, grass, wood, soft objects, snow)
   and the panel material (metal vs plastic bumper). Depth follows force, and
   layered brushes show primer, e-coat and steel in one decal.
-  - Still open: in-game check of brush colours (sRGB decode) and scrape
-    direction (`SCRAPE_TRAIL_SIGN`); tune `setSlideForceRange` from real
-    slide forces.
+  - Checked in game: brush colours and scrape direction are right. The check
+    also found and fixed half-size decals (a `setDecalScale` misread that
+    predates this work), plastic trim getting the bumper look, and a
+    hood-long projection stripe.
+  - Still open: tune `setSlideForceRange` from real slide forces.
   - Next: paint transfer from other cars (`map.objects[id].objectCollisions`
     plus `veh.color`), and a gloss-loss/metal-glint spike (a wiped M/R canvas
     may read 0, so it may need no seed).

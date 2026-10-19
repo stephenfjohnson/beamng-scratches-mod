@@ -182,6 +182,23 @@ entry).
   - grass/dirt runs leave smears, not scrapes
 - Confirm cost is unchanged against the last run in `bench/runs/index.csv`.
 
+**Result (2026-10-18, sunburst2 on gridmap_v2, Vulkan):**
+
+- Brush colours come through as authored: black plastic reads near-black and
+  the e-coat dark grey. Primer picks up a blue sheen from the static clear coat
+  (a known limit).
+- Scrape direction is correct: debris piles at the rear of each band on a
+  forward slide. `SCRAPE_TRAIL_SIGN` stays 1.
+- Three problems turned up, all fixed (commit `d46d54a`):
+  1. Every mark drew at **half size**. `setDecalScale` takes the full size,
+     and the painter passed half-sizes; this predates the plan.
+  2. A side slide on a rally config touches almost only **plastic flares and
+     skirts**. Those now paint as metal; only bumper-cover parts get the
+     plastic look.
+  3. A **hood-long stripe** came from the ±0.5 m projection depth (also on
+     master). Depth is now ±0.2 m.
+- Painter cost is unchanged against master on sideslide and nosedive.
+
 ### Commits
 One per task (generator + art, preview tool, harness, detector, painter,
 docs).

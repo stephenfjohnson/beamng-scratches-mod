@@ -122,8 +122,10 @@ Surviving contacts split into two event kinds:
   *streams* that describe the scrape path.
 
 Each event also carries what was hit (the ground-model material: `ASPHALT`,
-`GRASS`, `METAL`, ...), the node's own material (`METAL` or `PLASTIC`), and its
-force. For a stream, that's the peak normal force.
+`GRASS`, `METAL`, ...), the panel look, and its force. For a stream, that's the
+peak normal force. The panel look is `PLASTIC` only for plastic nodes on a
+bumper cover. Other plastic trim (fender flares, side skirts, mirrors) sits
+proud of the metal panel the mark lands on, so it paints as `METAL`.
 
 Each render frame, the frame's impacts and every slide stream that ended are
 batched and shipped to the game-engine side in **one** `queueGameEngineLua`
@@ -408,10 +410,11 @@ BeamNG, and confirm a [clean install](#players--packaged-mod) works.
   car all report as `METAL`, so a scrape against a red car currently leaves a
   zinc-grey smear rather than red paint. Paint transfer from the other car is
   planned.
-- **Brush colours and scrape direction are calibrated by eye.** Layered
-  brushes rely on the decal system decoding their RGB as sRGB, as it does for
-  vanilla's colour logos; `probeBrushes()` stamps each at its own colours for a
-  check. If bands look like they start heavy and fade out the wrong way, flip
-  `SCRAPE_TRAIL_SIGN` in `paint.lua`.
+- **Exposed primer and metal still look glossy.** The skin material's static
+  clear coat covers everything, and decals can't write clear coat. Exposed
+  layers keep a showroom sheen and pick up sky reflections, so primer reads
+  slightly blue-grey under a blue sky. Brush colours otherwise come through as
+  authored, checked in game on 0.39.4. `probeBrushes()` stamps each layered
+  brush at its own colours.
 
 See `docs/plans/2026-05-21-release-roadmap.md` for the current roadmap.
