@@ -131,8 +131,18 @@ Done — `README.md` rewritten as a full install + tech guide.
 
 ## Phase 6 — More variation + performance
 
-- [ ] **6.1** Scratch-decal variation (brushes, color/rotation/scale jitter).
-- [ ] **6.2** Impact-decal variation.
+- [x] **6.1 / 6.2** Scratch and impact variation, done as material-aware
+  layered damage (2026-10-18; plan `2026-10-18-material-aware-damage.md`,
+  research `investigations/04-crash-damage-realism.md`). The look now follows
+  what was hit (road, metal, gravel, soil, grass, wood, soft objects, snow)
+  and the panel material (metal vs plastic bumper). Depth follows force, and
+  layered brushes show primer, e-coat and steel in one decal.
+  - Still open: in-game check of brush colours (sRGB decode) and scrape
+    direction (`SCRAPE_TRAIL_SIGN`); tune `setSlideForceRange` from real
+    slide forces.
+  - Next: paint transfer from other cars (`map.objects[id].objectCollisions`
+    plus `veh.color`), and a gloss-loss/metal-glint spike (a wiped M/R canvas
+    may read 0, so it may need no seed).
 - [x] **6.3** Performance pass (2026-10-18 audit against game 0.39.4).
   Earlier (2026-09-08): spawn-AABB cached per vehicle id; log rings trim in
   blocks. The 2026-10-18 pass:
