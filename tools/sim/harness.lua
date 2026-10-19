@@ -130,7 +130,7 @@ function decalProjection:projectDynamicDecals()
 end
 function decalProjection:getDecalData()
   return { cursorPosScreenUv = {x = 0.5, y = 0.5}, decalPos = {x = 0, y = 0, z = 0},
-           tex = decalStyle.color, color = decalStyle.rgba }
+           tex = decalStyle.color, color = decalStyle.rgba, scale = decalStyle.scale }
 end
 function decalProjection:bakeLayers(list)
   for _, l in ipairs(list) do baked[#baked + 1] = l end
@@ -168,11 +168,12 @@ api.isUseMousePos = function() return false end
 api.toggleSetting = function() end
 api.setLockDepth = function() end
 for _, n in ipairs({"setMetallicIntensity", "setRoughnessIntensity",
-                    "setDecalScale", "setDecalRotation", "setUseSurfaceNormal"}) do
+                    "setDecalRotation", "setUseSurfaceNormal"}) do
   api[n] = function() end
 end
 api.setDecalTexturePath = function(kind, path) decalStyle[kind] = path end
 api.setDecalColor = function(c) decalStyle.rgba = c end
+api.setDecalScale = function(v) decalStyle.scale = v end
 api.setDecalLocalPos = function(decal) decal.cursorPosScreenUv = {x = 0.5, y = 0.5} end
 
 local partConfig = { partsTree = { id = "root", children = { { id = "paint_design", chosenPartName = "" } } } }
@@ -264,6 +265,7 @@ v = { data = { nodes = {
   [10] = { nodeMaterial = METAL, partOrigin = "pickup_door_L" },
   [11] = { nodeMaterial = METAL, partOrigin = "pickup_door_L" },
   [12] = { nodeMaterial = PLASTIC, partOrigin = "pickup_bumper_F" },
+  [13] = { nodeMaterial = PLASTIC, partOrigin = "pickup_fenderflare_FL" },
   [20] = { nodeMaterial = METAL, partOrigin = "pickup_engine_v8", },
   [30] = { nodeMaterial = 4, wheelID = 1, partOrigin = "tire" },
 } } }
@@ -480,16 +482,27 @@ for step = 1, 300 do                       -- plastic bumper node slides on asph
   obj.simTime = obj.simTime + dtPhys
   contactOn(12, ASPHALT, 500 + step * 0.01, 0.5, 0.3, 8, 450)
 end
+obj.simTime = obj.simTime + 0.2
+detect.updateGFX(1 / 60)
+for step = 1, 300 do                       -- plastic fender-flare node slides on asphalt
+  obj.simTime = obj.simTime + dtPhys
+  contactOn(13, ASPHALT, 510 + step * 0.01, 0.5, 0.3, 8, 450)
+end
 obj.simTime = obj.simTime + 0.5
 contactOn(10, ASPHALT, 520, 0.5, 0.3, 0, 7000)   -- fresh hard hit on a metal door node
 detect.updateGFX(1 / 60)
 runGE()
 scratches_paint = paint
-local gotStream, gotEvent
+local gotStream, gotEvent, flareStream
 for _, c in ipairs(captured) do
-  for _, s in ipairs(c.streams) do gotStream = gotStream or s end
+  for _, s in ipairs(c.streams) do
+    if s[1][1] < 509 then gotStream = gotStream or s else flareStream = flareStream or s end
+  end
   for _, e in ipairs(c.events) do if e[7] == "i" then gotEvent = gotEvent or e end end
 end
+check(flareStream and flareStream.b == "METAL",
+  "plastic trim (a fender flare) paints as the metal panel behind it ("
+  .. tostring(flareStream and flareStream.b) .. ")")
 check(gotStream and gotStream.s == "ASPHALT" and gotStream.b == "PLASTIC",
   "stream carries surface + panel material (" .. tostring(gotStream and gotStream.s) .. ", "
   .. tostring(gotStream and gotStream.b) .. ")")
@@ -529,8 +542,18 @@ local function slideAt(force, surf, body)
     {spotX, 0, 0.6, 0, 0, 1}, {spotX + 0.4, 0, 0.6, 0, 0, 1} } })
 end
 
+local n0 = #baked
 local t = impactAt(15000, "ASPHALT", "METAL")
 check(has(t, "scr_chip_m3"), "hard hit on a metal panel chips through to steel (tier 3)")
+-- setDecalScale takes the FULL size (the shader's box is +-0.5 * scale): a
+-- 15 kN hit is a 0.21 m half-size before the 0.75..1.25 wobble, so it's
+-- 0.31..0.52 m across (passing the half-size made it 0.15..0.26).
+local chipScale
+for i = n0 + 1, #baked do
+  if baked[i].tex and baked[i].tex:find("scr_chip_m3") then chipScale = baked[i].scale end
+end
+check(chipScale and chipScale.x >= 0.30 and chipScale.x == chipScale.z,
+  "impact decal is sized by its full width (" .. tostring(chipScale and chipScale.x) .. ")")
 t = impactAt(900, "ASPHALT", "METAL")
 check(has(t, "scr_chip_m1") and not has(t, "scr_gouge_") and not has(t, "scr_chip_m[23]"),
   "a light tap only scuffs (tier 1, no gouge)")

@@ -80,6 +80,9 @@ local nodeLastContactTime = {} -- nid -> simTime onNodeCollision last fired for 
 -- every contacting node was pure waste on the hottest path in the mod.
 -- Values: a body material name (paintable) or one of the REJ_* sentinels.
 local nodeClass = {}
+-- Per-node panel look for paintable nodes ("METAL" / "PLASTIC"; see
+-- BUMPER_PART_PATTERNS), cached alongside nodeClass.
+local nodePanel = {}
 local REJ_NO_NODE, REJ_WHEEL, REJ_BODY_MAT, REJ_PART = 1, 2, 3, 4
 
 -- Per-node slide stream. Each entry is a small table of contact-point samples
@@ -96,8 +99,8 @@ local nodeStreams = {}       -- nid -> { startTime, lastTime, surf, body, fmax,
 --   "i" — collision impact (world coords; sev = normalForce in N)
 --   "s" — single-point slide fallback (world coords; sev = normalForce in N)
 -- surf is the ground-model name of what was hit (ASPHALT, GRASS, METAL, ...)
--- and body the node's own material (METAL / PLASTIC): GE picks the mark's
--- look from them. The GE side dispatches by kind; (I) scales synth-camera
+-- and body the panel look ("PLASTIC" for a bumper cover, else "METAL"; see
+-- BUMPER_PART_PATTERNS): GE picks the mark's look from them. The GE side dispatches by kind; (I) scales synth-camera
 -- distance by sev.
 local pendingDetectEvents = {}
 -- Serialized streams flushed this frame, each already a
@@ -220,6 +223,17 @@ local EXCLUDE_PART_PATTERNS = {
   "windshield", "doorglass",
 }
 
+-- Which panel look a contact gets (sent to GE as `body`): "PLASTIC" only for
+-- plastic nodes on a bumper cover. A mark is projected over 20-90 cm around
+-- the contact, and a bumper cover is big enough to take it; smaller plastic
+-- trim (fender flares, side skirts, mirrors, a race car's composite fenders)
+-- sits proud of the metal panels it's bolted to, so the mark mostly lands on
+-- the metal behind it. In game a sunburst sliding on its side touched almost
+-- only plastic flares and skirts, and the marks landed on the doors.
+local BUMPER_PART_PATTERNS = {
+  "bumper", "fascia", "valance", "splitter", "diffuser",
+}
+
 local function buildSets()
   if materials then return true end
   if not particles or not particles.getMaterialsParticlesTable then return false end
@@ -308,7 +322,8 @@ end
 local function finite(x) return x == x and x > -1e9 and x < 1e9 end
 
 -- Resolve (and cache) whether node id1 is a paintable body node. Returns the
--- body material name, or a REJ_* sentinel.
+-- body material name (or a REJ_* sentinel) and, for paintable nodes, the
+-- panel look ("METAL" / "PLASTIC").
 local function classifyNode(id1)
   local node = v.data.nodes and v.data.nodes[id1]
   if not node then return REJ_NO_NODE end
@@ -321,7 +336,13 @@ local function classifyNode(id1)
   for _, pat in ipairs(EXCLUDE_PART_PATTERNS) do
     if partLower:find(pat, 1, true) then return REJ_PART end
   end
-  return bodyName
+  local panel = "METAL"
+  if bodyName == "PLASTIC" then
+    for _, pat in ipairs(BUMPER_PART_PATTERNS) do
+      if partLower:find(pat, 1, true) then panel = "PLASTIC"; break end
+    end
+  end
+  return bodyName, panel
 end
 
 -- ---- the filter ----
@@ -340,7 +361,7 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
 
   local bodyName = nodeClass[id1]
   if bodyName == nil then
-    bodyName = classifyNode(id1)
+    bodyName, nodePanel[id1] = classifyNode(id1)
     nodeClass[id1] = bodyName
   end
   if bodyName == REJ_WHEEL then stats.rejWheel = stats.rejWheel + 1; return end
@@ -450,7 +471,7 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
         -- What was hit and what the panel is made of pick the mark's look on GE.
         pendingDetectEvents[#pendingDetectEvents + 1] = {
           pos.x, pos.y, pos.z, normal.x, normal.y, normal.z, "i", normalForce,
-          surfaceName, bodyName,
+          surfaceName, nodePanel[id1],
         }
       end
       -- Fall through — slide branch can also fire on this tick.
@@ -476,7 +497,7 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
         stream = nil
       end
       if not stream then
-        stream = { startTime = now, lastTime = now, points = {}, fmax = 0, body = bodyName }
+        stream = { startTime = now, lastTime = now, points = {}, fmax = 0, body = nodePanel[id1] }
         nodeStreams[id1] = stream
       end
       stream.lastTime = now

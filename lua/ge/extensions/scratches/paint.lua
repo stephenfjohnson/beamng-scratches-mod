@@ -1133,6 +1133,19 @@ local function pickStampScale(baseScale)
   return baseScale * (0.75 + math.random() * 0.5)  -- 0.75..1.25
 end
 
+-- setDecalScale takes the decal's FULL size: decal.ps.hlsl doubles the
+-- decal-space position and clips at |p| >= 1, so the box spans +-0.5 * scale.
+-- The painter works in half-sizes (centre to edge), so convert here. (Passing
+-- half-sizes straight through drew every mark at half its intended size.)
+-- y is the box's depth along the surface normal. Any surface inside the box
+-- that runs along the projection gets one texel column smeared down it: at
+-- +-0.5 m a nose-dive's bumper mark ran as a stripe up the whole hood. A
+-- mark only needs to wrap a dent or a curve near its contact.
+local DECAL_DEPTH = 0.4   -- m, full depth (+-0.2 m through the surface)
+local function decalSize(halfX, halfZ)
+  return vec3(2 * halfX, DECAL_DEPTH, 2 * halfZ)
+end
+
 -- Roughness jitter (only affects the canvas's M/R channels, which the car
 -- currently renders from its factory maps).
 local function pickRoughness()
@@ -1669,8 +1682,9 @@ local function runStreamJob(job, projM, bakeList)
   for _, sg in ipairs(job.segments) do
     extent = math.max(extent, distLocal(job.centroid, sg.startP), distLocal(job.centroid, sg.endP))
   end
+  -- Bands are drawn STRETCH_OVERLAP longer than their segments; fit that.
   local camLocal = buildSyntheticCameraLocal(job.centroid, job.normal,
-                                             math.max(0.5, math.min(1.6, (extent + 0.05) * 2.2)))
+                     math.max(0.5, math.min(2.0, (extent * STRETCH_OVERLAP + 0.05) * 2.2)))
   setScratchProjectionFence(true)
   local tp = clockhp()
   decalProjection:projectDynamicDecals(camLocal, projM)
@@ -1694,8 +1708,8 @@ local function runStreamJob(job, projM, bakeList)
     api.setMetallicIntensity(1.0)
     api.setRoughnessIntensity(pickRoughness())
     api.setDecalColor(Point4F(r, g, b, a))
-    -- Asymmetric scale: long along travel, thin across. Both are half-sizes.
-    api.setDecalScale(vec3(halfLen, 1, halfWidth))
+    -- Asymmetric scale: long along travel, thin across.
+    api.setDecalScale(decalSize(halfLen, halfWidth))
     api.setDecalRotation(angle)
     api.setUseSurfaceNormal(true)
     local tl = clockhp()
@@ -1808,7 +1822,7 @@ local function runClusterJob(cluster, projM, bakeList)
       api.setRoughnessIntensity(s.roughness)
     end
     api.setDecalColor(Point4F(s.r, s.g, s.b, s.a or 1))
-    api.setDecalScale(vec3(s.scale, 1, s.scale))
+    api.setDecalScale(decalSize(s.scale, s.scale))
     api.setDecalRotation(s.rot)
     api.setUseSurfaceNormal(true)
 
