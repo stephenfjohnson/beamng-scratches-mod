@@ -120,14 +120,20 @@ end }
 local counters = { projects = 0, bakes = 0, bakeLayers = 0, combines = 0, apiUpdates = 0,
                    maxProjectsInFrame = 0, projectsThisFrame = 0, clears = 0 }
 local decalProjection = {}
+-- Style state as the real API keeps it: getDecalData snapshots it into the
+-- layer, so the checks below can see which brush each baked layer used.
+local decalStyle = {}
+local baked = {}  -- every layer ever baked, in order
 function decalProjection:projectDynamicDecals()
   counters.projects = counters.projects + 1
   counters.projectsThisFrame = counters.projectsThisFrame + 1
 end
 function decalProjection:getDecalData()
-  return { cursorPosScreenUv = {x = 0.5, y = 0.5}, decalPos = {x = 0, y = 0, z = 0} }
+  return { cursorPosScreenUv = {x = 0.5, y = 0.5}, decalPos = {x = 0, y = 0, z = 0},
+           tex = decalStyle.color, color = decalStyle.rgba }
 end
 function decalProjection:bakeLayers(list)
+  for _, l in ipairs(list) do baked[#baked + 1] = l end
   counters.bakes = counters.bakes + 1
   counters.bakeLayers = counters.bakeLayers + #list
   counters.bakesThisFrame = (counters.bakesThisFrame or 0) + 1
@@ -161,10 +167,12 @@ api.getTextureSet = function() return {} end
 api.isUseMousePos = function() return false end
 api.toggleSetting = function() end
 api.setLockDepth = function() end
-for _, n in ipairs({"setDecalTexturePath", "setMetallicIntensity", "setRoughnessIntensity",
-                    "setDecalColor", "setDecalScale", "setDecalRotation", "setUseSurfaceNormal"}) do
+for _, n in ipairs({"setMetallicIntensity", "setRoughnessIntensity",
+                    "setDecalScale", "setDecalRotation", "setUseSurfaceNormal"}) do
   api[n] = function() end
 end
+api.setDecalTexturePath = function(kind, path) decalStyle[kind] = path end
+api.setDecalColor = function(c) decalStyle.rgba = c end
 api.setDecalLocalPos = function(decal) decal.cursorPosScreenUv = {x = 0.5, y = 0.5} end
 
 local partConfig = { partsTree = { id = "root", children = { { id = "paint_design", chosenPartName = "" } } } }
@@ -251,10 +259,11 @@ particles = {
     return math.min(3, #m)
   end,
 }
-local METAL, ASPHALT = 2, 10
+local METAL, PLASTIC, ASPHALT = 2, 3, 10
 v = { data = { nodes = {
   [10] = { nodeMaterial = METAL, partOrigin = "pickup_door_L" },
   [11] = { nodeMaterial = METAL, partOrigin = "pickup_door_L" },
+  [12] = { nodeMaterial = PLASTIC, partOrigin = "pickup_bumper_F" },
   [20] = { nodeMaterial = METAL, partOrigin = "pickup_engine_v8", },
   [30] = { nodeMaterial = 4, wheelID = 1, partOrigin = "tire" },
 } } }
@@ -453,6 +462,115 @@ _G.onNodeCollision(10, vec3(300, 0.5, 0.3), vec3(0, 0, 1), vec3(0, 0, 0), 0, vec
                    8, 0, 300, 0.01, FOLIAGE, METAL)
 check((detStats().rejSurfaceMat or 0) == rejBefore + 1,
   "surface filter reads materialId1 (body node on FOLIAGE rejected)")
+
+-- 5c) The payload tells GE what was hit and what the panel is made of: the
+-- surface material and the node's own material ride with every impact and
+-- stream, plus each stream's peak normal force.
+for _ = 1, 60 do frame() end
+local captured = {}
+scratches_paint = setmetatable({ ingest = function(vid, events, streams)
+  captured[#captured + 1] = { events = events or {}, streams = streams or {} }
+  return paint.ingest(vid, events, streams)
+end }, { __index = paint })
+local function contactOn(id, surf, x, y, z, slipVel, normalForce)
+  _G.onNodeCollision(id, vec3(x, y, z), vec3(0, 0, 1), vec3(0, 0, 0), 0, vec3(0, 0, 0),
+                     slipVel, 0, normalForce, 0.01, surf, METAL)
+end
+for step = 1, 300 do                       -- plastic bumper node slides on asphalt
+  obj.simTime = obj.simTime + dtPhys
+  contactOn(12, ASPHALT, 500 + step * 0.01, 0.5, 0.3, 8, 450)
+end
+obj.simTime = obj.simTime + 0.5
+contactOn(10, ASPHALT, 520, 0.5, 0.3, 0, 7000)   -- fresh hard hit on a metal door node
+detect.updateGFX(1 / 60)
+runGE()
+scratches_paint = paint
+local gotStream, gotEvent
+for _, c in ipairs(captured) do
+  for _, s in ipairs(c.streams) do gotStream = gotStream or s end
+  for _, e in ipairs(c.events) do if e[7] == "i" then gotEvent = gotEvent or e end end
+end
+check(gotStream and gotStream.s == "ASPHALT" and gotStream.b == "PLASTIC",
+  "stream carries surface + panel material (" .. tostring(gotStream and gotStream.s) .. ", "
+  .. tostring(gotStream and gotStream.b) .. ")")
+check(gotStream and type(gotStream.f) == "number" and gotStream.f >= 450,
+  "stream carries its peak normal force (" .. tostring(gotStream and gotStream.f) .. ")")
+check(gotStream and #gotStream >= 2 and type(gotStream[1][1]) == "number",
+  "stream points stay in the array part")
+check(gotEvent and gotEvent[9] == "ASPHALT" and gotEvent[10] == "METAL",
+  "impact event carries surface + panel material (" .. tostring(gotEvent and gotEvent[9]) .. ", "
+  .. tostring(gotEvent and gotEvent[10]) .. ")")
+for _ = 1, 60 do frame() end
+
+-- 5d) Routing: what was hit and what the panel is made of pick the brushes.
+-- Every case uses its own spot so the spot memory doesn't skip it.
+local spotX = 600
+local function paintedBy(events, streams)
+  local n0 = #baked
+  paint.ingest(playerVid, events, streams)
+  for _ = 1, 60 do frame() end
+  local texs = {}
+  for i = n0 + 1, #baked do
+    if baked[i].tex then texs[#texs + 1] = baked[i].tex end
+  end
+  return texs
+end
+local function has(texs, pat)
+  for _, t in ipairs(texs) do if t:find(pat) then return true end end
+  return false
+end
+local function impactAt(force, surf, body)
+  spotX = spotX + 3
+  return paintedBy({ {spotX, 0, 0.5, 0, 0, 1, "i", force, surf, body} }, nil)
+end
+local function slideAt(force, surf, body)
+  spotX = spotX + 3
+  return paintedBy(nil, { { s = surf, b = body, f = force,
+    {spotX, 0, 0.6, 0, 0, 1}, {spotX + 0.4, 0, 0.6, 0, 0, 1} } })
+end
+
+local t = impactAt(15000, "ASPHALT", "METAL")
+check(has(t, "scr_chip_m3"), "hard hit on a metal panel chips through to steel (tier 3)")
+t = impactAt(900, "ASPHALT", "METAL")
+check(has(t, "scr_chip_m1") and not has(t, "scr_gouge_") and not has(t, "scr_chip_m[23]"),
+  "a light tap only scuffs (tier 1, no gouge)")
+t = impactAt(15000, "ASPHALT", "PLASTIC")
+check(has(t, "scr_chip_p") and not has(t, "_m%d") and not has(t, "_m[ab]"),
+  "a plastic bumper never shows metal")
+t = impactAt(15000, "GRASS", "METAL")
+check(has(t, "scr_splat_") and not has(t, "scr_chip_"), "a hit on grass leaves a splat, no chips")
+t = impactAt(15000, "METAL", "METAL")
+check(has(t, "scr_chip_m") and has(t, "scr_smear_"), "a hit on metal chips and leaves transfer")
+t = impactAt(15000, "SNOW", "METAL")
+check(#t == 0, "a hit on snow leaves nothing")
+t = slideAt(500, "DIRT", "METAL")
+check(has(t, "scr_smear_") and not has(t, "scr_rash_"), "a dirt slide smears soil, no paint loss")
+t = slideAt(500, "ASPHALT", "METAL")
+check(has(t, "scr_rash_m") and has(t, "scr_haze_"), "an asphalt slide is road rash over haze")
+t = slideAt(500, "GRAVEL", "PLASTIC")
+check(has(t, "scr_pepper_p"), "a gravel slide peppers chips")
+t = slideAt(30, "ASPHALT", "METAL")
+check(has(t, "scr_rash_m1"), "a feather-light slide stays a scuff (tier 1)")
+t = paintedBy({ {spotX + 3, 0, 0.5, 0, 0, 1, "i", 15000} }, nil)
+spotX = spotX + 3
+check(has(t, "scr_chip_m"), "a legacy event without surface/panel paints as road on metal")
+t = paintedBy(nil, { { {spotX + 3, 0, 0.6, 0, 0, 1}, {spotX + 3.4, 0, 0.6, 0, 0, 1} } })
+spotX = spotX + 3
+check(has(t, "scr_rash_m"), "a legacy stream without metadata paints as road rash")
+
+-- Every brush the painter can pick ships, with its sidecar.
+local paths = paint.allBrushPaths and paint.allBrushPaths() or {}
+check(#paths >= 30, "painter lists its brushes (" .. #paths .. ")")
+for _, p in ipairs(paths) do
+  local f = io.open(ROOT .. p, "rb")
+  local s = io.open(ROOT .. p .. ".dynDecalTexture.json", "rb")
+  check(f ~= nil and s ~= nil, "brush ships with sidecar: " .. p)
+  if f then f:close() end
+  if s then s:close() end
+end
+local marks = paint.getStats().marks or {}
+check((marks["road/m"] or 0) > 0 and (marks["grass/m"] or 0) > 0 and (marks["road/p"] or 0) > 0,
+  "marks are counted by surface class and panel")
 
 local st = paint.getStats()
 check(st.perf.frames > 0 and type(st.perf.msMax) == "number", "painter reports its own frame cost")

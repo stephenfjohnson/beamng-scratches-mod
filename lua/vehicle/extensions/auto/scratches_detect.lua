@@ -86,18 +86,23 @@ local REJ_NO_NODE, REJ_WHEEL, REJ_BODY_MAT, REJ_PART = 1, 2, 3, 4
 -- collected while the node is in active slide contact. Flushed when the node
 -- has been idle for STREAM_IDLE_TIMEOUT or the stream hits
 -- STREAM_MAX_DURATION / STREAM_MAX_POINTS.
-local nodeStreams = {}       -- nid -> { startTime, lastTime, points = {{x,y,z,nx,ny,nz}, ...} }
+local nodeStreams = {}       -- nid -> { startTime, lastTime, surf, body, fmax,
+                             --          points = {{x,y,z,nx,ny,nz,f}, ...} }
 
 -- (G) Per-render-frame batch of impact / slide-fallback events.
 -- updateGFX packages these AND every stream flushed this frame into ONE
 -- queueGameEngineLua call (scratches_paint.ingest). Each event entry is
--- {x,y,z,nx,ny,nz,kind,sev} where kind is:
+-- {x,y,z,nx,ny,nz,kind,sev,surf,body} where kind is:
 --   "i" — collision impact (world coords; sev = normalForce in N)
 --   "s" — single-point slide fallback (world coords; sev = normalForce in N)
--- The GE side dispatches by kind; (I) scales synth-camera distance by sev.
+-- surf is the ground-model name of what was hit (ASPHALT, GRASS, METAL, ...)
+-- and body the node's own material (METAL / PLASTIC): GE picks the mark's
+-- look from them. The GE side dispatches by kind; (I) scales synth-camera
+-- distance by sev.
 local pendingDetectEvents = {}
--- Serialized streams flushed this frame, each already a "{{x,y,z,nx,ny,nz},...}"
--- literal. Shipped with pendingDetectEvents — one GE compile per frame instead
+-- Serialized streams flushed this frame, each already a
+-- "{s=surf,b=body,f=peakForce,{x,y,z,nx,ny,nz},...}" literal (see
+-- flushStream). Shipped with pendingDetectEvents — one GE compile per frame instead
 -- of one per stream (a big crash flushes dozens of streams a frame).
 local pendingStreams = {}
 
@@ -276,13 +281,16 @@ local function flushStream(id1)
     stats.streamFallbacks = stats.streamFallbacks + 1
     local p = s.points[1]
     pendingDetectEvents[#pendingDetectEvents + 1] = {
-      p.x, p.y, p.z, p.nx, p.ny, p.nz, "s", p.f or 0,
+      p.x, p.y, p.z, p.nx, p.ny, p.nz, "s", p.f or 0, s.surf, s.body,
     }
     return
   end
 
-  -- Build a Lua table-literal payload like {{x,y,z,nx,ny,nz},{...},...}.
-  -- Normals only steer the camera axis, so 3 decimals is plenty.
+  -- Build a Lua table-literal payload like
+  -- {s="ASPHALT",b="METAL",f=1234,{x,y,z,nx,ny,nz},{...},...}: the points
+  -- stay in the array part, what was hit / the panel material / the peak
+  -- normal force ride in the hash part. Normals only steer the camera axis,
+  -- so 3 decimals is plenty.
   local parts = {}
   for i, p in ipairs(s.points) do
     parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f}",
@@ -292,7 +300,8 @@ local function flushStream(id1)
   stats.streamsFlushed    = stats.streamsFlushed + 1
   stats.streamPointsTotal = stats.streamPointsTotal + n
 
-  pendingStreams[#pendingStreams + 1] = "{" .. table.concat(parts, ",") .. "}"
+  pendingStreams[#pendingStreams + 1] = string.format("{s=%q,b=%q,f=%.0f,",
+    s.surf or "", s.body or "", s.fmax or 0) .. table.concat(parts, ",") .. "}"
 end
 
 -- NaN fails x == x; inf and absurd magnitudes fail the bound.
@@ -438,8 +447,10 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
         -- (I) Pass normalForce so the GE synth camera can adapt distance to
         -- impact severity — heavy hits deform panels enough that a close
         -- camera plunges into the dent instead of grazing the outer edge.
+        -- What was hit and what the panel is made of pick the mark's look on GE.
         pendingDetectEvents[#pendingDetectEvents + 1] = {
           pos.x, pos.y, pos.z, normal.x, normal.y, normal.z, "i", normalForce,
+          surfaceName, bodyName,
         }
       end
       -- Fall through — slide branch can also fire on this tick.
@@ -465,10 +476,14 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
         stream = nil
       end
       if not stream then
-        stream = { startTime = now, lastTime = now, points = {} }
+        stream = { startTime = now, lastTime = now, points = {}, fmax = 0, body = bodyName }
         nodeStreams[id1] = stream
       end
       stream.lastTime = now
+      -- The latest surface wins (a slide that runs off the road onto grass
+      -- ends on grass); the peak force sets how deep the scrape goes.
+      stream.surf = surfaceName
+      if normalForce > stream.fmax then stream.fmax = normalForce end
       local pts  = stream.points
       local prev = pts[#pts]
       local px, py, pz = pos.x, pos.y, pos.z
@@ -517,8 +532,8 @@ local function flushDetectEvents()
   local parts = {}
   for i = 1, n do
     local e = pendingDetectEvents[i]
-    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%q,%.0f}",
-      e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8] or 0)
+    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%q,%.0f,%q,%q}",
+      e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8] or 0, e[9] or "", e[10] or "")
   end
   local streams = table.concat(pendingStreams, ",")
   pendingDetectEvents = {}
