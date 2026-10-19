@@ -13,6 +13,11 @@ local logTag = "scratches"
 -- on the 0.25s stats push. The local `log` below shadows the global logger so
 -- every existing call site in this file is captured for free.
 local LOG_RING_MAX = 160
+-- Lines dropped per overflow. Trimming in blocks keeps the ring O(1) amortized
+-- per push; table.remove(logRing, 1) shifts the whole array on every line once
+-- the ring is full — which is exactly when a crash is generating the most log
+-- traffic, on the physics VM. Depth floats between MAX-TRIM and MAX.
+local LOG_RING_TRIM = 40
 local LOG_PUSH_CAP = 30   -- max lines shipped to GE per push (bounds payload)
 local logRing      = {}   -- {seq, lvl, msg}; oldest at [1], newest at [#]
 local logRingSeq   = 0    -- monotonic id, survives drops
@@ -22,7 +27,12 @@ local _log         = log  -- the real global logger, captured before shadowing
 local function ringPush(lvl, msg)
   logRingSeq = logRingSeq + 1
   logRing[#logRing + 1] = { seq = logRingSeq, lvl = lvl, msg = msg }
-  if #logRing > LOG_RING_MAX then table.remove(logRing, 1) end
+  local n = #logRing
+  if n > LOG_RING_MAX then
+    -- Shift the surviving tail down once, then nil the vacated slots.
+    for i = 1, n - LOG_RING_TRIM do logRing[i] = logRing[i + LOG_RING_TRIM] end
+    for i = n - LOG_RING_TRIM + 1, n do logRing[i] = nil end
+  end
 end
 
 -- Shadow the global `log`. Every log(level, tag, msg) call in this file now

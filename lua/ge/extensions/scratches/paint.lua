@@ -14,15 +14,25 @@ local logTag = "scratches.paint"
 -- a console session. The local `log` below shadows the global logger for the
 -- rest of this file, so every existing log() call site is captured for free.
 local LOG_RING_MAX = 240
+-- Lines dropped per overflow. Trimming in blocks keeps the ring O(1) amortized
+-- per push; table.remove(logRing, 1) shifts the whole array on every line once
+-- the ring is full, which is exactly when a crash is generating the most log
+-- traffic. Ring depth therefore floats between MAX-TRIM and MAX.
+local LOG_RING_TRIM = 60
 local logRing      = {}   -- {seq, t, lvl, src, msg}; oldest at [1], newest at [#]
 local logRingSeq   = 0    -- monotonic id, survives drops — used for display/diff
 local _log         = log  -- the real global logger, captured before shadowing
 
--- Append one line to the ring, dropping the oldest when full.
+-- Append one line to the ring, dropping the oldest block when full.
 local function ringPush(lvl, src, msg)
   logRingSeq = logRingSeq + 1
   logRing[#logRing + 1] = { seq = logRingSeq, t = os.clock(), lvl = lvl, src = src, msg = msg }
-  if #logRing > LOG_RING_MAX then table.remove(logRing, 1) end
+  local n = #logRing
+  if n > LOG_RING_MAX then
+    -- Shift the surviving tail down once, then nil the vacated slots.
+    for i = 1, n - LOG_RING_TRIM do logRing[i] = logRing[i + LOG_RING_TRIM] end
+    for i = n - LOG_RING_TRIM + 1, n do logRing[i] = nil end
+  end
 end
 
 -- Shadow the global `log`. Every log(level, tag, msg) call in this file now
@@ -215,8 +225,6 @@ local function ensureSkin(jbeam)
     pendingSetup = false  -- stop polling; this vehicle is a permanent no-go
     return false
   end
-  local dtPart = jbeam .. "_skin_dynamicTextures"
-
   -- Already swapped this vehicle on an earlier tick — nothing to do. (Also
   -- avoids re-calling setSkin, which respawns the vehicle.)
   if lastSkinJBeam == jbeam then return true end
@@ -233,7 +241,7 @@ local function ensureSkin(jbeam)
   if prevPart == nil then
     return false  -- config not readable yet; transient, retry next tick
   end
-  if prevPart == dtPart then
+  if prevPart == skinPart then
     -- Our skin is already in the slot (persisted from a prior session).
     log('I', logTag, "dynamicTextures skin already active on " .. jbeam)
     lastSkinJBeam = jbeam
@@ -560,6 +568,13 @@ local function onVehicleSwitched(oldId, newId, player)
   desiredMatIndices = nil
   matBindingsStable = false
   seedDone          = false
+  -- Drop the cached decalProjection. It was plucked out of api.bakeLayers as an
+  -- upvalue; trySetup calls api.setup() again for the new vehicle, and if that
+  -- rebuilds the API's projection our cached handle is a dead object every
+  -- subsequent bake would write into. resolveDecalProjection re-plucks it.
+  decalProjection = nil
+  spawnAabbCache.vid = nil
+  spawnAabbCache.box = nil
   -- The API has its own onVehicleSwitched that refreshes the projection shape;
   -- forward it.
   if api and api.onVehicleSwitched then api.onVehicleSwitched() end
@@ -833,11 +848,21 @@ local function axisVec(axis, sign)
   return vec3(0, 0, sign)
 end
 
+-- The spawn-local AABB never changes for a given vehicle, but chooseHullOutward
+-- asks for it once per cluster per frame (plus once per slide stream), so the
+-- uncached version was a pcall + engine call on every stamp batch. Cache it
+-- against the vehicle id; a switch or respawn lands a different id and refills.
+local spawnAabbCache = { vid = nil, box = nil }
+
 local function getSpawnAabb()
   local veh = getPlayerVehicle(0)
   if not veh then return nil end
+  local vid = veh:getId()
+  if spawnAabbCache.vid == vid then return spawnAabbCache.box end
   local ok, box = pcall(function() return veh:getSpawnLocalAABB() end)
   if not ok or not box or not box.minExtents or not box.maxExtents then return nil end
+  spawnAabbCache.vid = vid
+  spawnAabbCache.box = box
   return box
 end
 
@@ -1616,10 +1641,15 @@ M.clearStamps = function()
   end
   log('I', logTag, "cleared all stamps (textures flushed); layers before clear=" ..
     tostring(preClearLayers))
+  -- Re-point metallic/roughness at the static factory maps before re-seeding.
+  -- restoreFactoryMR otherwise runs exactly once, from the binding stabilizer
+  -- at setup — but a respawn (the Ctrl+R path that gets us here) can rebuild
+  -- the .skin.dynamicTextures materials, which puts M/R back on the dynamic
+  -- canvas we just wiped. That is precisely the matte-body symptom Phase 3.3
+  -- chased. Idempotent and cheap at clear frequency, so just re-assert it.
+  restoreFactoryMR()
   -- Re-seed the baseColor channel. clearBakedTextures zeroed it; the fill
-  -- layer repaints every texel uniformly. M/R is unaffected by the wipe in
-  -- any sense that matters — the renderer reads metallic/roughness from the
-  -- factory maps now (see restoreFactoryMR), not the dynamic canvas.
+  -- layer repaints every texel uniformly.
   M.addPaintFill()
 end
 
@@ -2215,7 +2245,7 @@ local function drawUI()
     "Excess events drop (counted in 'aggregateDropped').\n" ..
     "LOWER -> harder cap on bake cost; safer on slower GPUs.\n" ..
     "HIGHER -> no drops during spectacular multi-contact frames.\n" ..
-    "Default: 32.\n" ..
+    "Default: 96.\n" ..
     "Performance: each frame composites this many layers in one pass.")
 
   if im.SliderFloat("Cluster radius (m)", uiPtrs.clusterRad, 0.3, 4.0, "%.2f") then
@@ -2285,7 +2315,7 @@ local function drawUI()
   end
   im.EndDisabled()
   uiTooltip("Wipe every baked decal off the vehicle (keeps the underlying paint color).\n" ..
-            "Disabled until the painter is ready. Keyboard equivalent: Ctrl+L.")
+            "Disabled until the painter is ready. Keyboard equivalent: Ctrl+R.")
 
   im.SameLine()
   if im.Button("Dump Stats") then
@@ -2345,6 +2375,11 @@ end
 local function onExtensionUnloaded()
   ready = false
   api = nil
+  -- The projection was resolved from an upvalue of the api module we are
+  -- dropping; holding it past unload would keep a stale handle alive.
+  decalProjection = nil
+  spawnAabbCache.vid = nil
+  spawnAabbCache.box = nil
   lastSkinJBeam = nil
   log('I', logTag, "unloaded")
 end

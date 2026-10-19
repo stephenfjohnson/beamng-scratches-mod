@@ -125,10 +125,31 @@ Done — `README.md` rewritten as a full install + tech guide.
   across both Lua VMs, plus the auto-load path.
 - [x] **5.3** Supported vehicles, requirements, limitations.
 - [x] **5.4** Controls + debug-panel guide.
-- [x] **5.5** Packaging checklist (zip layout — `lua/` + `art/` at zip root).
+- [x] **5.5** Packaging: `tools/package.py` builds `dist/scratches_mod.zip`
+  with `lua/` + `art/` at the zip root, preflighting `luac -p` and the
+  brush `.dynDecalTexture.json` sidecars. README updated to match.
 
 ## Phase 6 — More variation + performance
 
 - [ ] **6.1** Scratch-decal variation (brushes, color/rotation/scale jitter).
 - [ ] **6.2** Impact-decal variation.
 - [ ] **6.3** Performance pass (profiling, bake-batching review).
+  Partial (2026-09-08): spawn-AABB now cached per vehicle id instead of a
+  pcall'd engine call per cluster per frame, and both log rings trim in
+  blocks instead of `table.remove(ring, 1)` per line. Profiling and the
+  bake-batching review are still open.
+
+## Robustness fixes (2026-09-08)
+
+- [x] `decalProjection` (plucked from an `api.bakeLayers` upvalue) is now
+  cleared on `onVehicleSwitched` and `onExtensionUnloaded`. `trySetup` calls
+  `api.setup()` again for the new vehicle; if that rebuilds the API's
+  projection, the cached handle was dead and every bake went nowhere.
+- [x] `clearStamps` now re-runs `restoreFactoryMR()` before re-seeding.
+  It previously ran only once, from the binding stabilizer at setup — but a
+  respawn (the Ctrl+R path into `clearStamps`) can rebuild the
+  `.skin.dynamicTextures` materials and put M/R back on the canvas that was
+  just wiped, which is the Phase 3.3 matte-body symptom returning.
+- [x] Stale UI/doc strings: 'Clear stamps' tooltip said Ctrl+L (it's Ctrl+R),
+  aggregate-cap tooltip said default 32 (it's 96), README still listed the
+  paint-canvas re-seed as an open bug (fixed 2026-05-23).

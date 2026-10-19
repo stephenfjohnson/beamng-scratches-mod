@@ -194,17 +194,21 @@ on the vehicle side, `scratches_detect.dumpStats()`.
 
 ## Packaging for release
 
-The mod is the `lua/` and `art/` directory trees. To build a distributable
-zip:
+The mod is the `lua/` and `art/` directory trees. Build the distributable zip
+with:
 
-1. Zip `lua/` and `art/` with their paths preserved (so `lua/...` and `art/...`
-   sit at the **zip root**, not inside a subfolder).
-2. Name it `scratches_mod.zip`.
-3. Test it: remove the unpacked dev mount, drop the zip into `mods/`, restart
-   BeamNG, and confirm a [clean install](#players--packaged-mod) works.
+```
+python tools/package.py          # -> dist/scratches_mod.zip
+```
 
-`docs/`, `investigations/`, `tools/`, and `README.md` are repo-only and do not
-belong in the shipped zip.
+It packs `lua/` and `art/` at the **zip root** (a zip with the trees nested one
+folder deeper installs without error and then does nothing), and refuses to
+build if a Lua file fails `luac -p` or a brush PNG is missing its
+`.dynDecalTexture.json` sidecar. `docs/`, `investigations/`, `tools/`,
+`reference/` and `README.md` are repo-only and are never included.
+
+Then test it: remove the unpacked dev mount, drop the zip into `mods/`, restart
+BeamNG, and confirm a [clean install](#players--packaged-mod) works.
 
 ---
 
@@ -213,8 +217,10 @@ belong in the shipped zip.
 - **Liveried cars get no scratches** — they are skipped to preserve the livery.
   Livery + scratches compositing (capturing the livery into the dynamic canvas
   so scratches layer on top) is planned future work.
-- **Paint canvas re-seed** — after a clear/reset the canvas is repainted from
-  scratch; coverage is currently uneven on some panels. Tracked alongside the
-  livery work.
+- **Scratches have no metal glint** — metallic and roughness are served from
+  static factory maps instead of the dynamic canvas (the fix that removed the
+  paint seam), so scratch decals read as colour marks only. Base gloss is
+  uniform and correct across the whole body; per-scratch shine is the
+  trade-off.
 
 See `docs/plans/2026-05-21-release-roadmap.md` for the current roadmap.
