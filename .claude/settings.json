@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/tools/dev.py\" hook",
+            "timeout": 90,
+            "statusMessage": "Deploying mod to BeamNG..."
+          }
+        ]
+      }
+    ]
+  }
+}

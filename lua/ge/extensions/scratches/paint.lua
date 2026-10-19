@@ -1,8 +1,9 @@
 -- scratches_mod / paint.lua  (GELUA)
 -- Game-engine-side painter. Owns the Dynamic Decals projection per player vehicle.
--- Phase 2 scaffold: load editor_api_dynamicDecals, auto-set the dynamicTextures
--- skin on supported vehicles, drive the per-frame onUpdate. Test stamp probe
--- (M.testStamp) is left as a stub for the next sub-step.
+-- Loads editor_api_dynamicDecals, auto-sets the dynamicTextures skin on
+-- supported vehicles, turns scratches_detect batches (M.ingest) into
+-- projection jobs drained under a per-frame budget, and composites the canvas
+-- only when it changed.
 
 local M = {}
 
@@ -14,15 +15,25 @@ local logTag = "scratches.paint"
 -- a console session. The local `log` below shadows the global logger for the
 -- rest of this file, so every existing log() call site is captured for free.
 local LOG_RING_MAX = 240
+-- Lines dropped per overflow. Trimming in blocks keeps the ring O(1) amortized
+-- per push; table.remove(logRing, 1) shifts the whole array on every line once
+-- the ring is full, which is exactly when a crash is generating the most log
+-- traffic. Ring depth therefore floats between MAX-TRIM and MAX.
+local LOG_RING_TRIM = 60
 local logRing      = {}   -- {seq, t, lvl, src, msg}; oldest at [1], newest at [#]
 local logRingSeq   = 0    -- monotonic id, survives drops — used for display/diff
 local _log         = log  -- the real global logger, captured before shadowing
 
--- Append one line to the ring, dropping the oldest when full.
+-- Append one line to the ring, dropping the oldest block when full.
 local function ringPush(lvl, src, msg)
   logRingSeq = logRingSeq + 1
   logRing[#logRing + 1] = { seq = logRingSeq, t = os.clock(), lvl = lvl, src = src, msg = msg }
-  if #logRing > LOG_RING_MAX then table.remove(logRing, 1) end
+  local n = #logRing
+  if n > LOG_RING_MAX then
+    -- Shift the surviving tail down once, then nil the vacated slots.
+    for i = 1, n - LOG_RING_TRIM do logRing[i] = logRing[i + LOG_RING_TRIM] end
+    for i = n - LOG_RING_TRIM + 1, n do logRing[i] = nil end
+  end
 end
 
 -- Shadow the global `log`. Every log(level, tag, msg) call in this file now
@@ -67,8 +78,8 @@ local seedDone          = false
 --   render pass), N setDecalLocalPos (cheap — unproject math).
 -- Stream path is separate (it already batches its sub-strokes per stream).
 local pendingStampInputs   = {}
-local pendingStampsJBeam   = nil   -- jbeam the queued stamps belong to (drop on vehicle switch)
-local AGGREGATE_PER_FRAME_CAP = 96 -- hard cap per frame; further enqueues drop
+local pendingStampsVid     = nil   -- vehicle id the queued stamps belong to (drop on vehicle switch)
+local AGGREGATE_PER_FRAME_CAP = 160 -- stamps held per flush batch; further enqueues drop
 -- Greedy spatial-cluster radius (vehicle-local meters). Stamps within this
 -- distance share a project camera. Bigger = fewer clusters = fewer projects;
 -- too big and the shared cam can land on the wrong panel for off-axis stamps.
@@ -83,15 +94,16 @@ local CLUSTER_RADIUS         = 0.65
 local recentBrushes    = {}
 local RECENT_BRUSH_MAX = 3
 
--- Per-brush scale bias. chip_cluster is busy at default scale; streaks read
--- better slightly larger. Path -> multiplier.
+-- Per-brush scale bias for discrete stamps. Chips are dense, so they read at
+-- a slightly smaller size than the gouges. Path -> multiplier.
 local BRUSH_SCALE_BIAS = {
-  ["/art/dynamicDecals/textures/scratch_chip_cluster.png"] = 0.75,
-  ["/art/dynamicDecals/textures/scratch_streak_01.png"]    = 1.10,
-  ["/art/dynamicDecals/textures/scratch_streak_02.png"]    = 1.10,
-  ["/art/dynamicDecals/textures/scratch_streak_03.png"]    = 1.10,
-  ["/art/dynamicDecals/textures/scratch_streak_05.png"]    = 1.10,
+  ["/art/dynamicDecals/textures/scr_chips_01.png"] = 0.85,
+  ["/art/dynamicDecals/textures/scr_chips_02.png"] = 0.85,
 }
+
+-- Luminance (0..1) of the current car's paint, set when the base fill is
+-- seeded. Damage reads light on dark paint and dark on light paint.
+local paintLum = 0.3
 
 -- ---- paint-side stats (D) ----
 -- Visibility for what the system did per session. Replaces the per-stamp
@@ -107,7 +119,40 @@ local stampStats = {
   clustersTotal       = 0,  -- (F) total clusters across flushed frames
   streamsBaked        = 0,
   streamSubstrokesTotal = 0,
+  jobsDropped         = 0,  -- projection jobs refused because the backlog was full
+  jobsFailed          = 0,  -- projection jobs that threw (logged, then skipped)
+  framesDeferred      = 0,  -- frames that hit the projection budget with work left over
+  foreignDropped      = 0,  -- batches from a vehicle that isn't the player car
+  combinesRun         = 0,  -- composites actually run (light or full)
+  rebinds             = 0,  -- of those, full api.onUpdate_ texture-set re-binds
+  spotsSkipped        = 0,  -- marks skipped: that spot was already painted enough
+  streamsMerged       = 0,  -- slides that shared another slide's projection
+  framesTicked        = 0,  -- ready frames seen (combinesRun / framesTicked = combine rate)
 }
+-- The painter's own CPU cost per ready frame, in ms (os.clockhp). Cheap enough
+-- to leave on: two clock reads per frame, a few more while there is work. The
+-- debug panel's imgui draw is excluded so opening the panel doesn't skew it.
+local clockhp = os.clockhp or os.clock
+local perfStats = {
+  frames = 0, lastMs = 0, msTotal = 0, msMax = 0,
+  framesOver1ms = 0, framesOver4ms = 0,
+  flushMsTotal = 0, flushMsMax = 0,     -- projection + bake (flushPendingStamps)
+  combineMsTotal = 0, combineMsMax = 0, -- syncAndCombine composites
+  -- Flush breakdown: synthetic-camera projection passes, per-layer capture
+  -- (getDecalData + cursor moves), and the bakeLayers call.
+  projectMsTotal = 0, projectMsMax = 0, projectCalls = 0,
+  layerMsTotal = 0, layerCalls = 0,
+  bakeMsTotal = 0, bakeMsMax = 0, bakeCalls = 0, bakeLayersTotal = 0,
+}
+
+-- Add the time since t0 (os.clockhp seconds) to perfStats[totalKey], track
+-- the max in perfStats[maxKey] if given, bump perfStats[countKey] if given.
+local function perfAdd(t0, totalKey, maxKey, countKey)
+  local ms = (clockhp() - t0) * 1000
+  perfStats[totalKey] = perfStats[totalKey] + ms
+  if maxKey and ms > perfStats[maxKey] then perfStats[maxKey] = ms end
+  if countKey then perfStats[countKey] = perfStats[countKey] + 1 end
+end
 local stampVerbose = false  -- when true, the old per-stamp log line returns
 
 -- (K) Live debug + tuning IMGUI panel. drawUI runs from onUpdate when
@@ -127,6 +172,66 @@ local uiClosePtr      = nil  -- BoolPtr the window's [x] button writes to
 local decalProjection      = nil
 local resolveDecalProjection
 local setScratchProjectionFence
+-- Spawn-local AABB cache (see getSpawnAabb). Declared up here, not next to
+-- getSpawnAabb, because onVehicleSwitched / onExtensionUnloaded reset it and
+-- are defined earlier in the file — a later `local` would be invisible to
+-- them and they'd index a nil global.
+local spawnAabbCache       = { vid = nil, box = nil }
+
+-- ---- texture-combine gating ----
+-- api.onUpdate_ is meant to run every frame. Nearly all of its cost is one
+-- call: re-binding the dynamic texture set to the car's materials
+-- (veh:setTextureSet), measured at 24-55 ms per call on a sunburst. Its other
+-- work - projection shape, transforms, and combineTextures (the canvas
+-- composite) - measures ~0 ms. So:
+--   * composite only when we baked or cleared (combineDirty), and
+--   * re-bind only when the binding can actually be stale (rebindDirty): at
+--     setup, and when our car spawns, resets, or is switched to, or after a
+--     clear. Every other composite takes the light path (shape + transforms +
+--     combineTextures), which is what keeps a crash from stuttering.
+-- fullRateCombine restores the API's every-frame full update for diagnosis.
+local combineDirty         = true
+local rebindDirty          = true
+local fullRateCombine      = false
+local sinceCombine         = 0      -- seconds since the last composite
+local framesSinceCombine   = 0
+local apiApp               = nil    -- the API's private `app` (texture set holder)
+
+-- Projection cost is per FRAME, not per pass: the first projectDynamicDecals
+-- in a frame costs ~14 ms (an engine-side sync; physics paused or not), each
+-- further one ~1.2 ms. So work is batched: new marks accumulate and are
+-- flushed every FLUSH_INTERVAL, running up to MAX_PROJECTS_PER_FRAME passes in
+-- that one frame. The first mark after an idle spell flushes immediately.
+local FLUSH_INTERVAL       = 0.20   -- seconds between projection batches (tunable)
+local sinceFlush           = math.huge
+
+-- Recently painted spots, in a coarse vehicle-local grid. A slide keeps the
+-- same body point on the ground and the detector re-sends it every 0.25 s, so
+-- a 4.5 s slide used to repaint each contact spot ~18 times: ~1 ms of bake per
+-- layer each time, with nothing visible changing after the first couple of
+-- passes. Each spot takes a few passes (later ones scrape deeper), then
+-- further marks there are skipped until the canvas is cleared.
+local SPOT_CELL       = 0.08  -- m
+local SPOT_MAX_SLIDE  = 2
+local SPOT_MAX_IMPACT = 2
+local spotHits        = {}
+-- Returns this spot's pass number (1..maxHits), or nil once it's saturated.
+local function spotTake(p, kind, maxHits)
+  local k = kind .. math.floor(p.x / SPOT_CELL) .. ":" .. math.floor(p.y / SPOT_CELL)
+            .. ":" .. math.floor(p.z / SPOT_CELL)
+  local n = (spotHits[k] or 0) + 1
+  if n > maxHits then
+    stampStats.spotsSkipped = stampStats.spotsSkipped + 1
+    return nil
+  end
+  spotHits[k] = n
+  return n
+end
+
+-- Player vehicle id we must not retry setup on (unsupported, or liveried and
+-- intentionally skipped). Without it every traffic spawn re-ran setup and
+-- re-logged the same skip warning.
+local skippedVid           = nil
 
 -- ---- paint canvas seed tunables ----
 -- The dynamic-decals skin reroutes baseColor + metallic + roughness onto the
@@ -193,7 +298,7 @@ end
 -- Returns true if (a) skin was set or (b) skin is already in use.
 -- Returns false if the vehicle's data isn't ready yet (transient — try again next tick).
 -- Returns false AND clears pendingSetup if the vehicle is permanently unsupported.
-local function ensureSkin(jbeam)
+local function ensureSkin(jbeam, vid)
   if not extensions.core_vehicle_partmgmt then
     return false  -- partmgmt not yet loaded; transient
   end
@@ -213,10 +318,9 @@ local function ensureSkin(jbeam)
   if not has then
     log('W', logTag, "vehicle '" .. jbeam .. "' has no '" .. skinPart .. "' part; vehicle is unsupported")
     pendingSetup = false  -- stop polling; this vehicle is a permanent no-go
+    skippedVid   = vid
     return false
   end
-  local dtPart = jbeam .. "_skin_dynamicTextures"
-
   -- Already swapped this vehicle on an earlier tick — nothing to do. (Also
   -- avoids re-calling setSkin, which respawns the vehicle.)
   if lastSkinJBeam == jbeam then return true end
@@ -233,7 +337,7 @@ local function ensureSkin(jbeam)
   if prevPart == nil then
     return false  -- config not readable yet; transient, retry next tick
   end
-  if prevPart == dtPart then
+  if prevPart == skinPart then
     -- Our skin is already in the slot (persisted from a prior session).
     log('I', logTag, "dynamicTextures skin already active on " .. jbeam)
     lastSkinJBeam = jbeam
@@ -244,6 +348,7 @@ local function ensureSkin(jbeam)
       "' in the paint_design slot — SKIPPING to preserve it. No scratches on " ..
       "this car (livery+scratches compositing is a planned future feature).")
     pendingSetup = false  -- intentional, permanent skip for this vehicle
+    skippedVid   = vid
     return false
   end
 
@@ -292,11 +397,17 @@ end
 -- canvas seed never writes those channels.
 --
 -- For each body material (the ones with a .skin.dynamicTextures variant),
--- setField the skin variant's metallicMap and roughnessMap to the static
--- paths, then flush() + reload() so the renderer picks up the new fields
--- (canonical pattern from editor/api/material.lua:64-66). Other materials
--- (interior, glass, mechanicals) have no skin variant and are skipped
--- silently — they don't render off the dynamic canvas in the first place.
+-- repoint every stage whose metallicMap / roughnessMap reads @DynamicTexture*
+-- at the static paths — the same stage scan BeamNG's own "export dynamic skin"
+-- path uses (editor/api/dynamicDecals.lua, the `for stage = 0, 3` block that
+-- swaps only `value:startswith("@DynamicTexture")` stages). Factory stages
+-- (e.g. a stage-0 layer with the car's real _m/_r maps) are left alone, and a
+-- material that's already been repointed has no @DynamicTexture stage left,
+-- so repeat calls (every clearStamps) skip the reload entirely. Changed
+-- materials get flush() + reload() so the renderer picks up the new fields.
+-- Other materials (interior, glass, mechanicals) have no skin variant and are
+-- skipped silently — they don't render off the dynamic canvas in the first
+-- place.
 --
 -- Static targets: metallic=0 (dielectric paint) via the engine-provided
 -- _zero.png, and roughness=0.2 (typical clearcoat) via _paint_roughness.png
@@ -317,30 +428,45 @@ local function restoreFactoryMR()
   local METALLIC_PATH  = "/art/dynamicDecals/textures/_zero.png"
   local ROUGHNESS_PATH = "/art/dynamicDecals/textures/_paint_roughness.png"
 
+  local function isDynamic(value)
+    return type(value) == "string" and value:sub(1, 15) == "@DynamicTexture"
+  end
+
   local restored = 0
   for _, matName in pairs(names) do
     if type(matName) == "string" then
       local skinMat = scenetree.findObject(matName .. ".skin.dynamicTextures")
       if skinMat then
+        local changed = false
         for stage = 0, 3 do
-          skinMat:setField("metallicMap",  stage, METALLIC_PATH)
-          skinMat:setField("roughnessMap", stage, ROUGHNESS_PATH)
+          if isDynamic(skinMat:getField("metallicMap", stage)) then
+            skinMat:setField("metallicMap", stage, METALLIC_PATH)
+            changed = true
+          end
+          if isDynamic(skinMat:getField("roughnessMap", stage)) then
+            skinMat:setField("roughnessMap", stage, ROUGHNESS_PATH)
+            changed = true
+          end
         end
 
-        -- Canonical BeamNG live-update pattern (editor/api/material.lua:64-66):
-        -- setField, then flush() to mark dirty, then reload() to apply.
-        if skinMat.flush  then pcall(function() skinMat:flush()  end) end
-        if skinMat.reload then pcall(function() skinMat:reload() end) end
-
-        restored = restored + 1
+        if changed then
+          -- Live-update pattern: setField, then flush() to mark dirty, then
+          -- reload() to apply. Both, in that order — reload alone re-reads
+          -- the stale state.
+          if skinMat.flush  then pcall(function() skinMat:flush()  end) end
+          if skinMat.reload then pcall(function() skinMat:reload() end) end
+          restored = restored + 1
+        end
       end
       -- Non-body materials (no skin variant) are skipped silently — they
       -- don't render off the dynamic canvas, so there's nothing to fix.
     end
   end
-  log('I', logTag, string.format(
-    "restoreFactoryMR: %d material(s) had M/R repointed (M=_zero, R=_paint_roughness)",
-    restored))
+  if restored > 0 then
+    log('I', logTag, string.format(
+      "restoreFactoryMR: %d material(s) had M/R repointed (M=_zero, R=_paint_roughness)",
+      restored))
+  end
   return restored > 0
 end
 
@@ -397,8 +523,10 @@ local function trySetup()
   if not veh then return false end
   local jbeam = veh.JBeam or veh.jbeam
   if not jbeam then return false end
+  local vid = veh:getId()
+  if vid == skippedVid then pendingSetup = false; return false end
 
-  if not ensureSkin(jbeam) then
+  if not ensureSkin(jbeam, vid) then
     -- ensureSkin distinguishes transient from permanent failures internally and
     -- clears pendingSetup itself if the vehicle is unsupported. Just bail.
     return false
@@ -425,6 +553,7 @@ local function trySetup()
   -- wrong — that was the brush channel-layout bug masking the truth.)
   api.setProjectDynamicDecalsState(false)
   ready = true
+  rebindDirty = true
   pendingSetup = false
   log('I', logTag, "decals API initialized for " .. jbeam .. " (layers=" .. tostring(api.getLayerCount and api.getLayerCount() or "?") .. ")")
 
@@ -483,6 +612,7 @@ M.addPaintFill = function()
   local pr, pg, pb = parseVehicleColor(getVehicleColor and getVehicleColor() or nil)
   if pr then
     r, g, b = pr, pg, pb
+    paintLum = math.max(0, math.min(1, 0.2126 * r + 0.7152 * g + 0.0722 * b))
   else
     log('W', logTag, "addPaintFill: getVehicleColor unavailable; using mid-grey fallback")
   end
@@ -495,10 +625,11 @@ M.addPaintFill = function()
     colorPaletteMapId = 0,
     enabled           = true,
     locked            = false,
-    uid               = string.format("scr-fill-%08x", math.random(0, 0xffffffff)),
+    uid               = string.format("scr-fill-%08x", math.random(0, 0x7fffffff)),
     parentUid         = nil,
     children          = {},
   } }, veh.JBeam or veh.jbeam)
+  combineDirty = true
 
   log('I', logTag, string.format(
     "paint seed: baseColor fill rgb=(%.2f,%.2f,%.2f) (M/R from factory maps)",
@@ -516,22 +647,118 @@ M.getPaintSeedColor  = function() return PAINT_SEED_COLOR end
 -- defined further down (alongside stampAtLocal for flushPendingStamps;
 -- alongside the K probes for drawUI).
 local flushPendingStampsRef
+local bakePendingRef
+local hasPendingWorkRef
 local drawUIRef
+
+-- Run the API's per-frame update: re-bind the vehicle's texture set, refresh
+-- the projection shape/transforms, and composite the canvas into the
+-- vehicle's textures. Gated by onUpdate — see combineDirty.
+local function syncAndCombine()
+  if api and api.onUpdate_ then api.onUpdate_() end
+  combineDirty       = false
+  rebindDirty        = false
+  sinceCombine       = 0
+  framesSinceCombine = 0
+  stampStats.combinesRun = stampStats.combinesRun + 1
+  stampStats.rebinds     = stampStats.rebinds + 1
+end
+
+-- The API keeps its texture-set holder as a module-local; pluck it from the
+-- onUpdate_ closure the same way decalProjection is resolved.
+local function resolveApiApp()
+  if apiApp then return apiApp end
+  if not (api and api.onUpdate_) then return nil end
+  local i = 1
+  while true do
+    local name, val = debug.getupvalue(api.onUpdate_, i)
+    if not name then break end
+    if name == "app" then apiApp = val; return val end
+    i = i + 1
+  end
+  return nil
+end
+
+-- What api.onUpdate_ does minus the texture-set re-bind: refresh the
+-- projection shape (it deforms in a crash) and the car's transforms.
+local function syncShape(veh)
+  decalProjection:setShape(veh:getDecalProjectionShape())
+  local m = veh:getRefNodeMatrix()
+  decalProjection:setWorldTransform(m)
+  decalProjection:setTransform(m:copy():setPosition(vec3(0, 0, 0)):inverse())
+end
+
+-- Composite the canvas into the car's textures, re-binding only if needed.
+local function composite()
+  local veh = getPlayerVehicle(0)
+  local app = resolveApiApp()
+  if rebindDirty or fullRateCombine or not (veh and app and app.textureSet
+      and decalProjection and veh.getDecalProjectionShape) then
+    syncAndCombine()
+    return
+  end
+  syncShape(veh)
+  decalProjection:combineTextures(app.textureSet)
+  combineDirty       = false
+  sinceCombine       = 0
+  framesSinceCombine = 0
+  stampStats.combinesRun = stampStats.combinesRun + 1
+end
 
 local function onUpdate(dtReal, dtSim, dtRaw)
   if ready then
+    local t0 = clockhp()
+    stampStats.framesTicked = stampStats.framesTicked + 1
+    sinceCombine       = sinceCombine + (dtReal or 0)
+    framesSinceCombine = framesSinceCombine + 1
     -- Stabilize material bindings before stamps. BeamNG's coroutine job lands
     -- a frame or two after setup; this re-applies our desired set until it
     -- sticks, then fires the deferred canvas seed. Cheap once stable (one
     -- early-return on the latch).
     ensureDesiredMaterialsBound()
-    -- Drain the per-frame discrete-stamp queue BEFORE api.onUpdate_ so the
-    -- combineTextures step inside api.onUpdate_ picks up the freshly baked
-    -- layers and the new stamps render this frame instead of next frame.
-    -- Stream path manages its own bakes (already batched per stream).
-    if flushPendingStampsRef then flushPendingStampsRef() end
-    if api and api.onUpdate_ then api.onUpdate_() end
-    -- (K) Draw the IMGUI debug panel after api.onUpdate_ so its frame state
+    -- Drain queued work BEFORE the combine so the composite picks up the
+    -- freshly baked layers and new marks render this frame. If the API hasn't
+    -- synced the vehicle's shape/transforms since before last frame (idle
+    -- skip), sync first so the projections don't use a stale pose.
+    sinceFlush = sinceFlush + (dtReal or 0)
+    local projected = false
+    if hasPendingWorkRef and hasPendingWorkRef() and sinceFlush >= FLUSH_INTERVAL then
+      sinceFlush = 0
+      projected = true
+      -- Project against the car's current (possibly deforming) shape.
+      local veh = getPlayerVehicle(0)
+      if rebindDirty or fullRateCombine then
+        syncAndCombine()
+      elseif veh and decalProjection and veh.getDecalProjectionShape then
+        syncShape(veh)
+      end
+      if flushPendingStampsRef then
+        local tf = clockhp()
+        flushPendingStampsRef()
+        local ms = (clockhp() - tf) * 1000
+        perfStats.flushMsTotal = perfStats.flushMsTotal + ms
+        if ms > perfStats.flushMsMax then perfStats.flushMsMax = ms end
+      end
+    end
+    -- Bake on the frames between projection batches, a chunk at a time.
+    if not projected and bakePendingRef then bakePendingRef() end
+    -- Composite only when something changed, while setup is still settling,
+    -- or on the heartbeat that keeps the texture-set binding fresh.
+    if combineDirty or rebindDirty or fullRateCombine or not seedDone then
+      local tc = clockhp()
+      composite()
+      local ms = (clockhp() - tc) * 1000
+      perfStats.combineMsTotal = perfStats.combineMsTotal + ms
+      if ms > perfStats.combineMsMax then perfStats.combineMsMax = ms end
+    end
+    local ms = (clockhp() - t0) * 1000
+    perfStats.frames = perfStats.frames + 1
+    perfStats.lastMs = ms
+    perfStats.msTotal = perfStats.msTotal + ms
+    if ms > perfStats.msMax then perfStats.msMax = ms end
+    if ms > 1 then perfStats.framesOver1ms = perfStats.framesOver1ms + 1 end
+    if ms > 4 then perfStats.framesOver4ms = perfStats.framesOver4ms + 1 end
+    -- (K) Draw the IMGUI debug panel after the combine so its frame state
     -- is consistent. drawUI is a no-op when uiVisible is false.
     if drawUIRef then drawUIRef() end
     return
@@ -552,20 +779,46 @@ local function onVehicleSwitched(oldId, newId, player)
   lastSkinJBeam = nil
   pendingSetup = true
   setupAttemptTimer = SETUP_RETRY  -- attempt immediately
-  -- Drop any queued stamps belonging to the previous vehicle.
+  -- Drop any queued stamps/jobs belonging to the previous vehicle.
   pendingStampInputs = {}
-  pendingStampsJBeam = nil
+  pendingStampsVid   = nil
+  if hasPendingWorkRef then M._dropQueuedJobs() end
+  combineDirty       = true
+  rebindDirty        = true
+  apiApp             = nil
+  table.clear(spotHits)
+  skippedVid         = nil
   -- Drop the previous vehicle's material-binding state so the new vehicle
   -- runs the discover/stabilize cycle from scratch.
   desiredMatIndices = nil
   matBindingsStable = false
   seedDone          = false
+  -- Drop the cached decalProjection. It was plucked out of api.bakeLayers as an
+  -- upvalue; trySetup calls api.setup() again for the new vehicle, and if that
+  -- rebuilds the API's projection our cached handle is a dead object every
+  -- subsequent bake would write into. resolveDecalProjection re-plucks it.
+  decalProjection = nil
+  spawnAabbCache.vid = nil
+  spawnAabbCache.box = nil
   -- The API has its own onVehicleSwitched that refreshes the projection shape;
   -- forward it.
   if api and api.onVehicleSwitched then api.onVehicleSwitched() end
 end
 
 local function onVehicleSpawned(vid)
+  -- A respawn of a car we skipped (e.g. its livery was just removed) gets a
+  -- fresh look; traffic spawns don't clear the memo.
+  if vid == skippedVid then skippedVid = nil end
+  -- Our own car respawned under us: re-bind its texture set promptly rather
+  -- than waiting for the heartbeat.
+  local veh = getPlayerVehicle(0)
+  -- Same id, possibly a different part config (body kit, bumper delete):
+  -- refetch the spawn AABB the hull-face picker steers by.
+  if veh and veh:getId() == vid then
+    spawnAabbCache.vid = nil
+    spawnAabbCache.box = nil
+    if ready then combineDirty = true; rebindDirty = true end
+  end
   if not ready then
     pendingSetup = true
     setupAttemptTimer = SETUP_RETRY  -- attempt immediately
@@ -650,6 +903,7 @@ M.testStamp = function(scale, colorR, colorG, colorB)
       tostring(decal.uid),
       api.getLayerCount and api.getLayerCount() or -1))
     M._lastDecal = decal
+    combineDirty = true
   else
     log('W', logTag, "addDecal returned nil (camera may not be aimed at a body panel)")
   end
@@ -710,6 +964,7 @@ M.testStampPx = function(screenW, screenH, scale, colorR, colorG, colorB)
     log('I', logTag, "stamp added: uid=" .. tostring(decal.uid) ..
                      " layers=" .. tostring(api.getLayerCount and api.getLayerCount()))
     M._lastDecal = decal
+    combineDirty = true
   else
     log('W', logTag, "addDecal returned nil")
   end
@@ -717,40 +972,34 @@ M.testStampPx = function(screenW, screenH, scale, colorR, colorG, colorB)
 end
 
 -- ---- scratch brushes ----
--- Generated by tools/generate_brushes.py. Greyscale shapes that get tinted by
--- setDecalColor at stamp time. Split into two purpose-specific sets so the
--- visual language stays clean:
---   IMPACT_BRUSHES — splatter / chip / claw shapes used for discrete
---     point-stamps (collision impacts and 1-point slide fallbacks). These
---     read as "something hit and bit the panel".
---   STRETCH_BRUSHES — directional streak shapes used by stampStream to draw
---     long stretched scrape decals along the slide path. These have fine
---     parallel lines that tile cleanly when scaled to high aspect ratios;
---     splatter shapes would smear into mush.
-local IMPACT_BRUSHES = {
-  "/art/dynamicDecals/textures/scratch_chip_cluster.png",
-  "/art/dynamicDecals/textures/scratch_tbone.png",
-  "/art/dynamicDecals/textures/scratch_raptor_claw_01.png",
-  "/art/dynamicDecals/textures/scratch_raptor_claw_02.png",
-}
-local STRETCH_BRUSHES = {
-  "/art/dynamicDecals/textures/scratch_streak_01.png",
-  "/art/dynamicDecals/textures/scratch_streak_02.png",
-  "/art/dynamicDecals/textures/scratch_streak_03.png",
-  "/art/dynamicDecals/textures/scratch_streak_05.png",
-}
+-- Generated by tools/generate_brushes.py: white RGB, shape in alpha, tinted
+-- per stamp by setDecalColor. All are drawn along +x.
+--   SCRAPE - slide bands of parallel lines; stretched along the slide path.
+--   HAZE   - soft scuffed clear coat, laid under scrapes and impacts.
+--   CHIPS  - impact paint loss (sharp flakes).
+--   GOUGE  - impact dig-in crater with short deep scores.
+local TEX = "/art/dynamicDecals/textures/"
+local SCRAPE_BRUSHES = { TEX .. "scr_scrape_01.png", TEX .. "scr_scrape_02.png", TEX .. "scr_scrape_03.png" }
+local HAZE_BRUSHES   = { TEX .. "scr_haze_01.png", TEX .. "scr_haze_02.png" }
+local CHIP_BRUSHES   = { TEX .. "scr_chips_01.png", TEX .. "scr_chips_02.png" }
+local GOUGE_BRUSHES  = { TEX .. "scr_gouge_01.png", TEX .. "scr_gouge_02.png" }
 
 -- Long straight slides used to become one large projected rectangle. On roof
 -- slides that rectangle could span past the roof edge and mark the rear/side,
 -- while visually reading as sparse because it was still a single layer. Chunk
 -- by path length so long slides become many short, local scratches.
-local STRETCH_MAX_SEGMENT_LEN = 0.22
+local STRETCH_MAX_SEGMENT_LEN = 0.35
 local STRETCH_MAX_SEGMENTS_PER_STREAM = 40
+-- Each stretched segment is drawn this much longer than its path chunk, so
+-- neighbours overlap and a slide reads as one continuous band (the brushes
+-- fade out at their ends to hide the joins).
+local STRETCH_OVERLAP = 1.3
+-- Nearby slides share one projection job (see enqueueStreamLocal).
+local STREAM_MERGE_RADIUS    = 0.35  -- m between band centres
+local STREAM_MERGE_MAX_BANDS = 6
 
 -- Recency-aware random picker. Avoids the last RECENT_BRUSH_MAX picks if
--- possible. One re-roll max so small brush sets don't loop. The recentBrushes
--- ring is shared across both sets — keeps the picker simple and avoids
--- "two adjacent decals share a texture" even across slide+impact transitions.
+-- possible. One re-roll max so small brush sets don't loop.
 local function pickFromSet(set)
   local b = set[math.random(#set)]
   for _, r in ipairs(recentBrushes) do
@@ -764,29 +1013,43 @@ local function pickFromSet(set)
   return b
 end
 
-local function pickBrush()        return pickFromSet(IMPACT_BRUSHES)  end
-local function pickStretchBrush() return pickFromSet(STRETCH_BRUSHES) end
+local function pickBrush() return pickFromSet(SCRAPE_BRUSHES) end
 
--- Per-stamp tonal jitter. Brightness in [0.45, 0.85] with a 35% chance of a
--- faint warm push (exposed iron reads warmer than neutral grey). Returns r,g,b.
-local function pickStampColor()
-  local v = 0.45 + math.random() * 0.40
-  if math.random() < 0.35 then
-    return math.min(1, v + 0.04), v, math.max(0, v - 0.02)
+-- Damage tone, layered like real paint: clear coat scuffs to a translucent
+-- haze, deeper damage exposes primer, the deepest bare metal. On light paint
+-- the same damage reads darker than the paint, so the palette blends toward a
+-- darker set as the car's paint luminance rises. Returns r, g, b, a.
+--   layer: "haze" | "primer" | "metal"
+local function damageTone(layer)
+  local t = math.max(0, math.min(1, (paintLum - 0.35) / 0.3))  -- 0 dark paint .. 1 light paint
+  local function mix(dark, light) return dark + (light - dark) * t end
+  local j = (math.random() - 0.5) * 0.08
+  if layer == "haze" then
+    local v = mix(0.86, paintLum * 0.72) + j * 0.5
+    return v, v, math.min(1, v + 0.015), 0.18 + math.random() * 0.10
+  elseif layer == "metal" then
+    local v = mix(0.86, 0.62) + j
+    return v - 0.01, v, math.min(1, v + 0.03), 1
   end
-  return v, v, v
+  local v = mix(0.66, 0.45) + j                   -- primer: neutral, faintly warm
+  return math.min(1, v + 0.012), v, math.max(0, v - 0.02), 0.95
 end
 
--- Wider scale wobble + per-brush bias. baseScale is the caller-supplied scale
+-- Primer or bare metal, more often metal the harder the hit (severity 0..1).
+local function lineTone(severity)
+  return damageTone(math.random() < 0.15 + 0.5 * (severity or 0) and "metal" or "primer")
+end
+
+-- Scale wobble + per-brush bias. baseScale is the caller-supplied scale
 -- (or stampAtLocal's default 0.10). Returns final scale.
 local function pickStampScale(baseScale, brushPath)
-  local wobble = 0.5 + math.random() * 1.2  -- 0.5..1.7
+  local wobble = 0.75 + math.random() * 0.5  -- 0.75..1.25
   local bias   = BRUSH_SCALE_BIAS[brushPath] or 1.0
   return baseScale * wobble * bias
 end
 
--- Roughness jitter: keeps metallic=1 (polished steel) but mixes shinier and
--- duller scratches. Returns the per-stamp roughness intensity.
+-- Roughness jitter (only affects the canvas's M/R channels, which the car
+-- currently renders from its factory maps).
 local function pickRoughness()
   return 0.10 + math.random() * 0.25
 end
@@ -833,11 +1096,20 @@ local function axisVec(axis, sign)
   return vec3(0, 0, sign)
 end
 
+-- The spawn-local AABB never changes for a given vehicle, but chooseHullOutward
+-- asks for it once per cluster per frame (plus once per slide stream), so the
+-- uncached version was a pcall + engine call on every stamp batch. Cache it
+-- (spawnAabbCache, declared at the top) against the vehicle id; a switch
+-- resets it and a different id refills it.
 local function getSpawnAabb()
   local veh = getPlayerVehicle(0)
   if not veh then return nil end
+  local vid = veh:getId()
+  if spawnAabbCache.vid == vid then return spawnAabbCache.box end
   local ok, box = pcall(function() return veh:getSpawnLocalAABB() end)
   if not ok or not box or not box.minExtents or not box.maxExtents then return nil end
+  spawnAabbCache.vid = vid
+  spawnAabbCache.box = box
   return box
 end
 
@@ -936,22 +1208,66 @@ local function buildSyntheticCameraLocal(localPos, localNormal, dist)
   return m
 end
 
--- Vehicle-local entry point. Stamps a decal at `localPos` (vehicle-local
--- vec3) with surface aim along `localNormal` (vehicle-local vec3).
--- The world wrapper M.stampAt converts world -> local then calls this.
---
--- (F) This function does NO api calls and NO project — it just records a
--- raw input descriptor on pendingStampInputs and returns. flushPendingStamps
--- (per onUpdate) does the project/getDecalData/bake in a single shared-camera
--- batch. Costs that used to scale with N (project = N depth-pass renders
--- /frame) now scale with the cluster count instead — usually 1.
-M.stampAtLocal = function(localPos, localNormal, opts)
-  if not ready then log('W', logTag, "stampAtLocal: not ready"); return end
-  if not resolveDecalProjection() then return end
-  opts = opts or {}
+-- ---- projection job queue ----
+-- Every visible mark is produced by a "job": ONE synthetic-camera projection
+-- pass plus one or more layers captured under that camera. Discrete stamps
+-- become one job per spatial cluster (clustered once per frame); every slide
+-- stream is one job. onUpdate drains the queue under a per-frame projection
+-- budget and every layer produced in a frame goes into ONE bakeLayers call,
+-- so a big crash is spread across a few frames instead of landing as a single
+-- long hitch. Positions are vehicle-local, so a job deferred a frame or two
+-- still lands on the right panel.
+local jobQueue               = {}
+-- Captured decal layers waiting to be baked. Baking costs ~0.85 ms per layer
+-- and has no per-frame toll of its own, so it runs on the frames between
+-- projection batches, BAKE_LAYERS_PER_FRAME at a time, instead of piling onto
+-- the projection frame. Layers are car-local, so a short delay is harmless.
+local bakeQueue              = {}
+local BAKE_LAYERS_PER_FRAME  = 6
+local jobQueueVid            = nil  -- vehicle the queued jobs belong to
+local MAX_PROJECTS_PER_FRAME = 6    -- projection passes per flush: ~14 ms toll + ~1.4 ms each (tunable)
+local MAX_LAYERS_PER_FLUSH   = 24   -- layers captured per flush; baked later (tunable)
+local MAX_QUEUED_JOBS        = 64   -- backlog bound; further jobs drop
 
-  local veh = getPlayerVehicle(0)
-  if not veh then return end
+-- Layer uids only need to be unique; a per-load salt plus a counter is cheaper
+-- than formatting a fresh 32-bit random per layer and can't collide.
+local layerUidSalt = math.random(0, 0xffffff)
+local layerUidSeq  = 0
+local function nextLayerUid(prefix)
+  layerUidSeq = layerUidSeq + 1
+  return string.format("%s-%06x-%x", prefix or "scr", layerUidSalt, layerUidSeq)
+end
+
+local function enqueueJob(job, vid)
+  if jobQueueVid ~= vid then
+    table.clear(jobQueue)
+    jobQueueVid = vid
+  end
+  if #jobQueue >= MAX_QUEUED_JOBS then
+    stampStats.jobsDropped = stampStats.jobsDropped + 1
+    return false
+  end
+  jobQueue[#jobQueue + 1] = job
+  return true
+end
+
+local function hasPendingWork()
+  return #pendingStampInputs > 0 or #jobQueue > 0
+end
+hasPendingWorkRef = hasPendingWork
+
+-- Drop every queued projection job (vehicle switch, clear).
+M._dropQueuedJobs = function()
+  table.clear(jobQueue)
+  table.clear(bakeQueue)
+  jobQueueVid = nil
+end
+
+-- Record one discrete stamp for vehicle `vid` (vehicle-local inputs). No api
+-- calls, no projection: flushPendingStamps clusters the frame's stamps into
+-- jobs. Callers have already checked readiness.
+local function enqueueStamp(localPos, localNormal, opts, vid)
+  opts = opts or {}
 
   -- Apply small positional jitter so repeated events at the same node don't
   -- perfectly stack into a single point. Body nodes have fixed body-relative
@@ -967,31 +1283,32 @@ M.stampAtLocal = function(localPos, localNormal, opts)
   end
 
   -- Pick per-stamp style. opts overrides (used by probeBrushes / impact
-  -- branch) win over the jitter helpers. No api state is set here — flush
+  -- branch) win over the jitter helpers. No api state is set here — the job
   -- replays the style on each stamp's getDecalData call.
   local baseScale = opts.scale or 0.10
   local brush     = opts.colorTex or pickBrush()
   local scale     = opts.noJitter and baseScale or pickStampScale(baseScale, brush)
-  local rot       = opts.rot or math.random() * 360.0
-  local r, g, b
+  -- setDecalRotation takes radians (editor/api/dynamicDecals.lua setDecalRotation).
+  local rot       = opts.rot or math.random() * 2 * math.pi
+  local r, g, b, a
   if opts.r or opts.g or opts.b then
-    r, g, b = opts.r or 0.7, opts.g or 0.7, opts.b or 0.7
+    r, g, b, a = opts.r or 0.7, opts.g or 0.7, opts.b or 0.7, opts.a or 1
   else
-    r, g, b = pickStampColor()
+    r, g, b, a = lineTone(opts.severity)
+    a = opts.a or a
   end
   local roughness = opts.skipMetal and 0.5 or pickRoughness()
 
   stampStats.stampsAttempted = stampStats.stampsAttempted + 1
 
-  local jbeam = veh.JBeam or veh.jbeam
-  if pendingStampsJBeam and pendingStampsJBeam ~= jbeam then
+  if pendingStampsVid ~= vid then
     pendingStampInputs = {}
+    pendingStampsVid = vid
   end
-  pendingStampsJBeam = jbeam
 
   if #pendingStampInputs >= AGGREGATE_PER_FRAME_CAP then
     stampStats.aggregateDropped = stampStats.aggregateDropped + 1
-    return nil
+    return
   end
 
   pendingStampInputs[#pendingStampInputs + 1] = {
@@ -999,7 +1316,7 @@ M.stampAtLocal = function(localPos, localNormal, opts)
     localNormal = localNormal,
     brush       = brush,
     alpha       = opts.alphaTex or "/art/dynamicDecals/textures/_one.png",
-    r = r, g = g, b = b,
+    r = r, g = g, b = b, a = a,
     scale       = scale,
     rot         = rot,
     roughness   = roughness,
@@ -1007,8 +1324,20 @@ M.stampAtLocal = function(localPos, localNormal, opts)
     dist        = opts.dist,
   }
   stampStats.stampsEnqueued = stampStats.stampsEnqueued + 1
-  return nil  -- no synchronous decalData; flushed on next onUpdate
 end
+
+-- Vehicle-local entry point. Stamps a decal at `localPos` (vehicle-local
+-- vec3) with surface aim along `localNormal` (vehicle-local vec3).
+-- The world wrapper M.stampAt converts world -> local then calls this.
+-- Queued, not immediate: the stamp is projected and baked by onUpdate.
+M.stampAtLocal = function(localPos, localNormal, opts)
+  if not ready then log('W', logTag, "stampAtLocal: not ready"); return end
+  if not resolveDecalProjection() then return end
+  local veh = getPlayerVehicle(0)
+  if not veh then return end
+  enqueueStamp(localPos, localNormal, opts, veh:getId())
+end
+
 
 -- Greedy spatial clustering of pending inputs. O(N*K) where K is cluster
 -- count; with N <= 24 and most rolls producing K=1, this is trivial.
@@ -1040,187 +1369,6 @@ local function buildClusters(inputs)
     end
   end
   return clusters
-end
-
--- Per-frame flush. Cluster pending inputs, project once per cluster, snapshot
--- per-stamp styled getDecalData under the shared cam, override cursor via
--- setDecalLocalPos, accumulate, single bake. The project count goes from N
--- (one per stamp) to K (one per cluster) — typically K=1 for slides.
-local function flushPendingStamps()
-  if #pendingStampInputs == 0 then return end
-  if not resolveDecalProjection() then pendingStampInputs = {}; return end
-  local jbeam = pendingStampsJBeam
-  if not jbeam then pendingStampInputs = {}; return end
-
-  -- UseMousePos must be OFF so projectDynamicDecals writes the cursor to the
-  -- synth camera's screen-center instead of following the actual mouse.
-  if api.isUseMousePos and api.isUseMousePos() then
-    api.toggleSetting(api.settingsFlags.UseMousePos.value)
-  end
-
-  local projM    = getCameraProjMatrix()
-  local clusters = buildClusters(pendingStampInputs)
-  local bakeList = {}
-  local skipped  = 0
-
-  for _, cluster in ipairs(clusters) do
-    local centroid = vec3(cluster.cx, cluster.cy, cluster.cz)
-    -- (I) Use the max requested dist among cluster members. Heavy-impact
-    -- stamps need a further-back camera so the projection ray grazes the
-    -- deformed panel from the side instead of plunging into the dent's
-    -- cavity. Lighter stamps in the same cluster are fine with a slightly
-    -- further camera — just lower projection resolution.
-    local clusterDist = nil
-    for _, s in ipairs(cluster.members) do
-      if s.dist and (not clusterDist or s.dist > clusterDist) then
-        clusterDist = s.dist
-      end
-    end
-    local camLocal = buildSyntheticCameraLocal(centroid, averageNormals(cluster.members), clusterDist)
-    -- ONE project pass for the whole cluster.
-    setScratchProjectionFence(true)
-    decalProjection:projectDynamicDecals(camLocal, projM)
-    stampStats.projectsIssued = stampStats.projectsIssued + 1
-
-    for _, s in ipairs(cluster.members) do
-      -- Per-stamp style — getDecalData below snapshots api state into the layer.
-      api.setDecalTexturePath("color", s.brush)
-      api.setDecalTexturePath("alpha", s.alpha)
-      if s.skipMetal then
-        api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_zero.png")
-        api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
-        api.setMetallicIntensity(0)
-        api.setRoughnessIntensity(0.5)
-      else
-        api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_one.png")
-        api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
-        api.setMetallicIntensity(1.0)
-        api.setRoughnessIntensity(s.roughness)
-      end
-      api.setDecalColor(Point4F(s.r, s.g, s.b, 1))
-      api.setDecalScale(vec3(s.scale, 1, s.scale))
-      api.setDecalRotation(s.rot)
-      api.setUseSurfaceNormal(true)
-
-      local decalData = decalProjection:getDecalData(camLocal, projM)
-      if decalData then
-        -- Move the layer's cursor from the cluster centroid (where project
-        -- placed it) to the actual stamp position. This recomputes
-        -- cursorPosScreenUv and decalPos for s.localPos under the shared cam.
-        api.setDecalLocalPos(decalData, s.localPos)
-
-        -- Reject stamps whose projection lands outside the camera frustum
-        -- (cursor outside [0,1]) — those would paint nothing or paint at the
-        -- frustum edge incorrectly. Replaces the old (decalPos≈0, cursor≈0.5)
-        -- check that no longer applies once setDecalLocalPos overrides cursor.
-        local cuv = decalData.cursorPosScreenUv
-        local outOfFrustum = not cuv
-          or cuv.x < 0 or cuv.x > 1
-          or cuv.y < 0 or cuv.y > 1
-        if outOfFrustum then
-          skipped = skipped + 1
-        else
-          decalData.uid       = string.format("scr-%08x", math.random(0, 0xffffffff))
-          decalData.name      = "scratch"
-          decalData.enabled   = true
-          decalData.locked    = false
-          decalData.parentUid = nil
-          decalData.children  = {}
-          bakeList[#bakeList + 1] = decalData
-          M._lastDecal = decalData
-
-          if stampVerbose then
-            log('I', logTag, string.format(
-              "stampAtLocal: input pos=(%.2f,%.2f,%.2f) | decalPos=(%.2f,%.2f,%.2f) cursor=(%.3f,%.3f) uid=%s",
-              s.localPos.x, s.localPos.y, s.localPos.z,
-              decalData.decalPos.x, decalData.decalPos.y, decalData.decalPos.z,
-              cuv.x, cuv.y, decalData.uid))
-          end
-        end
-      end
-    end
-    setScratchProjectionFence(false)
-  end
-
-  if skipped > 0 then
-    stampStats.stampsSkippedMissed = stampStats.stampsSkippedMissed + skipped
-  end
-  if #bakeList > 0 then
-    decalProjection:bakeLayers(bakeList, jbeam)
-    stampStats.bakesIssued    = stampStats.bakesIssued + 1
-    stampStats.framesFlushed  = stampStats.framesFlushed + 1
-    stampStats.clustersTotal  = stampStats.clustersTotal + #clusters
-  end
-  pendingStampInputs = {}
-end
-flushPendingStampsRef = flushPendingStamps
-
--- World-space entry point. Detect.lua emits world coordinates; we convert to
--- vehicle-local here. The conversion mirrors app:getCameraM() in the api.
---
--- Third arg is either:
---   - a string 'kind' that GELUA expands into a stamp-style opts table
---     ('impact' currently — larger scale, dedicated brush). Lets the VLUA
---     bridge stay simple (no Lua-table serialization) while keeping the
---     visual style decision on the GE side.
---   - an opts table (legacy / direct callers) — passed through unchanged.
---   - nil — default slide-stamp style.
--- (G) Batched entry point. Detect.lua accumulates events on the VLUA side
--- per render frame and sends ONE queueGameEngineLua call per frame instead
--- of one per impact. `events` is a list of {x,y,z,nx,ny,nz,kind,sev}.
---   "i" — collision impact, world coords, sev = normalForce N
---   "s" — slide fallback, world coords, sev = normalForce N
--- sev drives synth-camera distance and stamp scale (I).
-M.stampBatch = function(events)
-  if not ready or not events then return end
-  for i = 1, #events do
-    local e = events[i]
-    local kind = e[7]
-    local sev  = e[8]
-    M.stampAt(vec3(e[1], e[2], e[3]), vec3(e[4], e[5], e[6]),
-              kind == "i" and "impact" or nil, sev)
-  end
-end
-
-M.stampAt = function(worldPos, worldNormal, kindOrOpts, force)
-  local veh = getPlayerVehicle(0)
-  if not veh then log('W', logTag, "stampAt: no player vehicle"); return end
-
-  local refM    = veh:getRefNodeMatrix()
-  local invM    = refM:fullInverse()
-  local rotOnly = invM:copy(); rotOnly:setColumn(3, vec3(0, 0, 0))
-
-  local localPos    = invM:mulP3F(worldPos)
-  local localNormal = rotOnly:mulP3F(worldNormal)
-
-  local opts
-  if type(kindOrOpts) == "string" then
-    if kindOrOpts == "impact" then
-      -- Impact stamps stay distinct from slide stamps via the larger scale;
-      -- brush picked from IMPACT_BRUSHES (chip/claw/tbone). (I) Scale and
-      -- camera distance both grow with the impact's normalForce so heavy
-      -- crunches leave a bigger, more-grazing-angle mark instead of dying
-      -- in the deformed cavity.
-      local f = force or 0
-      local heavy = math.min(1, math.max(0, (f - 800) / 20000))  -- 0..1 over 0.8-20.8 kN
-      opts = {
-        scale    = 0.28 + heavy * 0.35,                        -- 0.28..0.63m
-        dist     = 0.7  + heavy * 1.6,                         -- 0.7..2.3m
-        colorTex = pickBrush(),
-      }
-    end
-  elseif type(kindOrOpts) == "table" then
-    opts = kindOrOpts
-  end
-
-  -- For 1-point slide fallbacks, also widen the synth cam distance with
-  -- force. We don't have a kindOrOpts string for these — pickup directly.
-  if not opts and force and force > 800 then
-    local heavy = math.min(1, math.max(0, (force - 800) / 20000))
-    opts = { dist = 0.7 + heavy * 1.6, scale = 0.14 + heavy * 0.10 }
-  end
-
-  return M.stampAtLocal(localPos, localNormal, opts)
 end
 
 -- (H) Curvature-based segmentation. Walk the path, accumulate turning angles
@@ -1328,50 +1476,10 @@ local function chunkStretchSegments(localPos, rawSegments)
   return chunks
 end
 
--- Continuous-slide entry point. detect.lua collects (worldPos, worldNormal)
--- samples for each contacting body node and flushes them here as a batch
--- when the slide ends (or at MAX_DURATION).
---
--- (H/N) Each stream becomes short stretched decals along the slide direction
--- instead of N interpolated brushStroke decals. The path is first split by
--- curvature, then any long straight section is chopped by length so one roof
--- slide cannot stamp a giant rectangle across roof/rear/side at once.
--- Brushes come from STRETCH_BRUSHES (streak_*) only — the impact splatter
--- shapes don't tile cleanly when stretched at high aspect ratios.
---
--- Geometry: same single-camera trick as before. Centroid of all segment
--- centers gets a synthetic hull-face camera. One projectDynamicDecals.
--- Per segment: set per-segment style → getDecalData (snapshots into a fresh
--- layer) → setDecalLocalPos to position cursor at segment center. One bake.
-M.stampStream = function(points)
-  if not ready then log('W', logTag, "stampStream: not ready"); return end
-  if not resolveDecalProjection() then return end
-  if not points or #points < 2 then
-    log('W', logTag, string.format("stampStream: need >=2 points, got %d",
-      points and #points or 0))
-    return
-  end
-
-  local veh = getPlayerVehicle(0)
-  if not veh then return end
-  local refM = veh:getRefNodeMatrix()
-  local invM = refM:fullInverse()
-  local rotOnly = invM:copy(); rotOnly:setColumn(3, vec3(0, 0, 0))
-
-  -- World -> vehicle-local
-  local n = #points
-  local localPos = {}
-  local localNormals = {}
-  for i = 1, n do
-    local p = points[i]
-    localPos[i] = invM:mulP3F(vec3(p[1], p[2], p[3]))
-    if p[4] and p[5] and p[6] then
-      localNormals[i] = rotOnly:mulP3F(vec3(p[4], p[5], p[6]))
-    end
-  end
-
-  -- Curvature analysis + length chunking. Curvature catches bends; length
-  -- chunking keeps straight roof slides local and visibly denser.
+-- Turn a stream's vehicle-local path into a queued job. The path is first
+-- split by curvature, then any long straight section is chopped by length so
+-- one roof slide cannot stamp a giant rectangle across roof/rear/side at once.
+local function enqueueStreamLocal(localPos, localNormals, vid, severity)
   local rawSegments = chunkStretchSegments(localPos, buildStretchSegments(localPos))
 
   -- Materialize each segment's geometry (start/end/center/length/width).
@@ -1390,11 +1498,9 @@ M.stampStream = function(points)
         endP   = eP,
         center = vec3((sP.x + eP.x) * 0.5, (sP.y + eP.y) * 0.5, (sP.z + eP.z) * 0.5),
         length = len,
-        width  = 0.10 + math.random() * 0.12,  -- 0.10m..0.22m
       }
     end
   end
-
   if #segments == 0 then return end
 
   -- Centroid of segment centers for the shared camera
@@ -1402,89 +1508,490 @@ M.stampStream = function(points)
   for _, s in ipairs(segments) do
     cx = cx + s.center.x; cy = cy + s.center.y; cz = cz + s.center.z
   end
-  local centroidLocal = vec3(cx / #segments, cy / #segments, cz / #segments)
   local normalSamples = {}
   for _, ln in ipairs(localNormals) do
     normalSamples[#normalSamples + 1] = {localNormal = ln}
   end
-  local camLocal = buildSyntheticCameraLocal(centroidLocal, averageNormals(normalSamples), nil)
-  local projM    = getCameraProjMatrix()
-
-  if api.isUseMousePos and api.isUseMousePos() then
-    api.toggleSetting(api.settingsFlags.UseMousePos.value)
+  local centroid = vec3(cx / #segments, cy / #segments, cz / #segments)
+  local normal   = averageNormals(normalSamples)
+  local band     = { segments = segments, severity = severity }
+  -- Share a queued job's projection if it's close by on a panel facing the
+  -- same way (each projecting frame costs a ~14 ms toll; see FLUSH_INTERVAL).
+  if jobQueueVid == vid then
+    for i = #jobQueue, 1, -1 do
+      local j = jobQueue[i]
+      if j.stream and #j.bands < STREAM_MERGE_MAX_BANDS
+         and distLocal(j.centroid, centroid) <= STREAM_MERGE_RADIUS
+         and j.normal:dot(normal) >= 0.8 then
+        local k = #j.bands
+        j.bands[k + 1] = band
+        for _, sg in ipairs(segments) do j.segments[#j.segments + 1] = sg end
+        j.centroid = (j.centroid * k + centroid) * (1 / (k + 1))
+        stampStats.streamsMerged = stampStats.streamsMerged + 1
+        return
+      end
+    end
   end
+  enqueueJob({
+    stream   = true,
+    bands    = { band },
+    segments = segments,     -- all bands' segments, for layer budgeting
+    centroid = centroid,
+    normal   = normal,
+  }, vid)
+end
 
-  -- One project for the whole stream.
+-- Run one stream job: one projection for the whole stream, then per segment
+-- set the style -> getDecalData (snapshots into a fresh layer) ->
+-- setDecalLocalPos to the segment center. Layers append to bakeList.
+local function runStreamJob(job, projM, bakeList)
+  -- Back the camera off far enough to see every band (at 0.5 m it covers only
+  -- ~+-0.3 m, which clipped the ends of a single long band). Even at 1.6 m the
+  -- projection is far finer than the paint canvas stores.
+  local extent = 0
+  for _, sg in ipairs(job.segments) do
+    extent = math.max(extent, distLocal(job.centroid, sg.startP), distLocal(job.centroid, sg.endP))
+  end
+  local camLocal = buildSyntheticCameraLocal(job.centroid, job.normal,
+                                             math.max(0.5, math.min(1.6, (extent + 0.05) * 2.2)))
   setScratchProjectionFence(true)
+  local tp = clockhp()
   decalProjection:projectDynamicDecals(camLocal, projM)
+  perfAdd(tp, "projectMsTotal", "projectMsMax", "projectCalls")
 
   -- Helper layer used only to compute screen-UV for start/end points (cheap;
   -- we mutate cursor and read it back without baking). Does NOT enter the
   -- bake list — we get a fresh styled layer per segment below.
   local probe = decalProjection:getDecalData(camLocal, projM)
-  if not probe then
+  if not (probe and probe.cursorPosScreenUv) then
     setScratchProjectionFence(false)
-    log('W', logTag, "stampStream: getDecalData returned nil")
+    log('W', logTag, "stream job: getDecalData returned nil")
     return
   end
 
-  local bakeList = {}
-  for si, seg in ipairs(segments) do
-    -- Project segment's start and end to screen UV via the probe so we can
-    -- compute the angle that aligns the decal's long axis with travel.
-    api.setDecalLocalPos(probe, seg.startP)
-    local sUx, sUy = probe.cursorPosScreenUv.x, probe.cursorPosScreenUv.y
-    api.setDecalLocalPos(probe, seg.endP)
-    local eUx, eUy = probe.cursorPosScreenUv.x, probe.cursorPosScreenUv.y
-    local uvDx, uvDy = eUx - sUx, eUy - sUy
-    local segAngle = (math.abs(uvDx) + math.abs(uvDy)) > 1e-5
-      and math.atan2(uvDy, uvDx)
-      or  (math.random() * 2 * math.pi)
-
-    -- Per-segment style (captured into the layer by getDecalData below).
-    local segR, segG, segB = pickStampColor()
-    api.setDecalTexturePath("color", pickStretchBrush())
+  local function addLayer(tex, r, g, b, a, center, halfLen, halfWidth, angle, name)
+    api.setDecalTexturePath("color", tex)
     api.setDecalTexturePath("alpha", "/art/dynamicDecals/textures/_one.png")
     api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_one.png")
     api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
     api.setMetallicIntensity(1.0)
     api.setRoughnessIntensity(pickRoughness())
-    api.setDecalColor(Point4F(segR, segG, segB, 1))
+    api.setDecalColor(Point4F(r, g, b, a))
     -- Asymmetric scale: long along travel, thin across. Both are half-sizes.
-    api.setDecalScale(vec3(seg.length * 0.5, 1, seg.width * 0.5))
-    api.setDecalRotation(segAngle)
+    api.setDecalScale(vec3(halfLen, 1, halfWidth))
+    api.setDecalRotation(angle)
     api.setUseSurfaceNormal(true)
+    local tl = clockhp()
+    local layer = decalProjection:getDecalData(camLocal, projM)
+    if layer then api.setDecalLocalPos(layer, center) end
+    perfAdd(tl, "layerMsTotal", nil, "layerCalls")
+    if not layer then return end
+    -- Frustum sanity (out-of-frustum stamps wouldn't paint correctly).
+    local cuv = layer.cursorPosScreenUv
+    if cuv and cuv.x >= 0 and cuv.x <= 1 and cuv.y >= 0 and cuv.y <= 1 then
+      layer.uid       = nextLayerUid()
+      layer.name      = name
+      layer.enabled   = true
+      layer.locked    = false
+      layer.parentUid = nil
+      layer.children  = {}
+      bakeList[#bakeList + 1] = layer
+    end
+  end
 
-    local segLayer = decalProjection:getDecalData(camLocal, projM)
-    if segLayer then
-      api.setDecalLocalPos(segLayer, seg.center)
-      -- Frustum sanity (out-of-frustum stamps wouldn't paint correctly).
-      local cuv = segLayer.cursorPosScreenUv
-      if cuv and cuv.x >= 0 and cuv.x <= 1 and cuv.y >= 0 and cuv.y <= 1 then
-        segLayer.uid       = string.format("scr-%08x", math.random(0, 0xffffffff))
-        segLayer.name      = string.format("scrape-segment-%d", si)
-        segLayer.enabled   = true
-        segLayer.locked    = false
-        segLayer.parentUid = nil
-        segLayer.children  = {}
-        bakeList[#bakeList + 1] = segLayer
-      end
+  -- Screen-space angle of a car-local segment under this job's camera.
+  local function angleOf(p0, p1)
+    api.setDecalLocalPos(probe, p0)
+    local aUx, aUy = probe.cursorPosScreenUv.x, probe.cursorPosScreenUv.y
+    api.setDecalLocalPos(probe, p1)
+    local bUx, bUy = probe.cursorPosScreenUv.x, probe.cursorPosScreenUv.y
+    return (math.abs(bUx - aUx) + math.abs(bUy - aUy)) > 1e-5
+      and math.atan2(bUy - aUy, bUx - aUx) or (math.random() * 2 * math.pi)
+  end
+
+  local before = #bakeList
+  for bi, band in ipairs(job.bands) do
+    -- One look per scrape: a single brush, width and tone for the whole band
+    -- (with slight per-segment variation), so it reads as one continuous
+    -- band rather than a string of unrelated marks.
+    local brush     = pickFromSet(SCRAPE_BRUSHES)
+    local hazeBrush = pickFromSet(HAZE_BRUSHES)
+    local width     = 0.10 + math.random() * 0.10          -- 10..20 cm band
+    local lr, lg, lb, la = lineTone(band.severity or 0.3)
+    local hr, hg, hb, ha = damageTone("haze")
+    local segs = band.segments
+    local s1, sn = segs[1], segs[#segs]
+    local total, cx, cy, cz = 0, 0, 0, 0
+    for _, sg in ipairs(segs) do
+      total = total + sg.length
+      cx, cy, cz = cx + sg.center.x, cy + sg.center.y, cz + sg.center.z
+    end
+    -- One haze underlay for the whole band, under its scrape segments.
+    addLayer(hazeBrush, hr, hg, hb, ha, vec3(cx / #segs, cy / #segs, cz / #segs),
+             total * 0.5 * STRETCH_OVERLAP, width * 0.95, angleOf(s1.startP, sn.endP),
+             "scrape-haze-" .. bi)
+    for si, seg in ipairs(segs) do
+      local w = width * (0.9 + math.random() * 0.2)
+      local v = (math.random() - 0.5) * 0.04
+      addLayer(brush, lr + v, lg + v, lb + v, la, seg.center, seg.length * 0.5 * STRETCH_OVERLAP,
+               w * 0.5, angleOf(seg.startP, seg.endP), "scrape-" .. bi .. "-" .. si)
     end
   end
   setScratchProjectionFence(false)
 
-  if #bakeList == 0 then return end
-
-  decalProjection:bakeLayers(bakeList, veh.JBeam or veh.jbeam)
-  M._lastDecal = bakeList[#bakeList]
-  stampStats.streamsBaked          = stampStats.streamsBaked + 1
-  stampStats.streamSubstrokesTotal = stampStats.streamSubstrokesTotal + #bakeList
-  if stampVerbose then
-    log('I', logTag, string.format(
-      "stampStream: n=%d -> %d stretched segments (totalTurn~analyzed)",
-      n, #bakeList))
+  local added = #bakeList - before
+  if added > 0 then
+    stampStats.streamsBaked          = stampStats.streamsBaked + 1
+    stampStats.streamSubstrokesTotal = stampStats.streamSubstrokesTotal + added
+    if stampVerbose then
+      log('I', logTag, string.format("stream job: %d stretched segments", added))
+    end
   end
 end
+
+-- Run one discrete-stamp cluster job: ONE projection for the cluster, then a
+-- per-stamp styled getDecalData under the shared cam with the cursor moved to
+-- the stamp's own position. Layers append to bakeList.
+local function runClusterJob(cluster, projM, bakeList)
+  local centroid = vec3(cluster.cx, cluster.cy, cluster.cz)
+  -- (I) Use the max requested dist among cluster members. Heavy-impact
+  -- stamps need a further-back camera so the projection ray grazes the
+  -- deformed panel from the side instead of plunging into the dent's
+  -- cavity. Lighter stamps in the same cluster are fine with a slightly
+  -- further camera — just lower projection resolution.
+  local clusterDist = nil
+  for _, s in ipairs(cluster.members) do
+    if s.dist and (not clusterDist or s.dist > clusterDist) then
+      clusterDist = s.dist
+    end
+  end
+  local camLocal = buildSyntheticCameraLocal(centroid, averageNormals(cluster.members), clusterDist)
+  setScratchProjectionFence(true)
+  local tp = clockhp()
+  decalProjection:projectDynamicDecals(camLocal, projM)
+  perfAdd(tp, "projectMsTotal", "projectMsMax", "projectCalls")
+
+  local skipped = 0
+  for _, s in ipairs(cluster.members) do
+    -- Per-stamp style — getDecalData below snapshots api state into the layer.
+    api.setDecalTexturePath("color", s.brush)
+    api.setDecalTexturePath("alpha", s.alpha)
+    if s.skipMetal then
+      api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_zero.png")
+      api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
+      api.setMetallicIntensity(0)
+      api.setRoughnessIntensity(0.5)
+    else
+      api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_one.png")
+      api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
+      api.setMetallicIntensity(1.0)
+      api.setRoughnessIntensity(s.roughness)
+    end
+    api.setDecalColor(Point4F(s.r, s.g, s.b, s.a or 1))
+    api.setDecalScale(vec3(s.scale, 1, s.scale))
+    api.setDecalRotation(s.rot)
+    api.setUseSurfaceNormal(true)
+
+    local tl = clockhp()
+    local decalData = decalProjection:getDecalData(camLocal, projM)
+    if decalData then
+      -- Move the layer's cursor from the cluster centroid (where project
+      -- placed it) to the actual stamp position. This recomputes
+      -- cursorPosScreenUv and decalPos for s.localPos under the shared cam.
+      api.setDecalLocalPos(decalData, s.localPos)
+    end
+    perfAdd(tl, "layerMsTotal", nil, "layerCalls")
+    if decalData then
+
+      -- Reject stamps whose projection lands outside the camera frustum
+      -- (cursor outside [0,1]) — those would paint nothing or paint at the
+      -- frustum edge incorrectly.
+      local cuv = decalData.cursorPosScreenUv
+      if not cuv or cuv.x < 0 or cuv.x > 1 or cuv.y < 0 or cuv.y > 1 then
+        skipped = skipped + 1
+      else
+        decalData.uid       = nextLayerUid()
+        decalData.name      = "scratch"
+        decalData.enabled   = true
+        decalData.locked    = false
+        decalData.parentUid = nil
+        decalData.children  = {}
+        bakeList[#bakeList + 1] = decalData
+
+        if stampVerbose then
+          log('I', logTag, string.format(
+            "stamp: input pos=(%.2f,%.2f,%.2f) | decalPos=(%.2f,%.2f,%.2f) cursor=(%.3f,%.3f) uid=%s",
+            s.localPos.x, s.localPos.y, s.localPos.z,
+            decalData.decalPos.x, decalData.decalPos.y, decalData.decalPos.z,
+            cuv.x, cuv.y, decalData.uid))
+        end
+      end
+    end
+  end
+  setScratchProjectionFence(false)
+  if skipped > 0 then
+    stampStats.stampsSkippedMissed = stampStats.stampsSkippedMissed + skipped
+  end
+end
+
+-- Per-frame drain. Cluster this frame's discrete stamps into jobs, run up to
+-- MAX_PROJECTS_PER_FRAME jobs from the head of the queue (the rest wait for
+-- the next frame), and bake everything they produced in ONE bakeLayers call.
+local function flushPendingStamps()
+  if not resolveDecalProjection() then
+    pendingStampInputs = {}
+    table.clear(jobQueue)
+    return
+  end
+  local veh = getPlayerVehicle(0)
+  if not veh then
+    pendingStampInputs = {}
+    table.clear(jobQueue)
+    return
+  end
+  local vid = veh:getId()
+
+  if #pendingStampInputs > 0 then
+    if pendingStampsVid == vid then
+      local clusters = buildClusters(pendingStampInputs)
+      for i = 1, #clusters do enqueueJob(clusters[i], vid) end
+    end
+    pendingStampInputs = {}
+  end
+  if jobQueueVid ~= vid then
+    table.clear(jobQueue)
+    jobQueueVid = vid
+    return
+  end
+  local n = #jobQueue
+  if n == 0 then return end
+
+  -- UseMousePos must be OFF so projectDynamicDecals writes the cursor to the
+  -- synth camera's screen-center instead of following the actual mouse.
+  if api.isUseMousePos and api.isUseMousePos() then
+    api.toggleSetting(api.settingsFlags.UseMousePos.value)
+  end
+
+  local projM    = getCameraProjMatrix()
+  local bakeList = {}
+  -- Take jobs from the head until the pass budget or the layer budget is
+  -- reached (bake costs ~1 ms per layer); always at least one job.
+  local run, layers = 0, 0
+  local maxRun = math.min(n, MAX_PROJECTS_PER_FRAME)
+  while run < maxRun do
+    local j = jobQueue[run + 1]
+    local jl = j.stream and (#j.segments + #j.bands) or #j.members
+    if run > 0 and layers + jl > MAX_LAYERS_PER_FLUSH then break end
+    run, layers = run + 1, layers + jl
+  end
+  local clusters = 0
+  -- Take this frame's jobs off the queue BEFORE running them: a job that
+  -- throws must cost exactly one job, not wedge the head of the queue and
+  -- re-throw every frame (which would also abort the composite and the panel).
+  local batch = {}
+  for i = 1, run do batch[i] = jobQueue[i] end
+  -- Shift the unrun tail to the front (FIFO; oldest work goes first).
+  for i = run + 1, n do jobQueue[i - run] = jobQueue[i] end
+  for i = n - run + 1, n do jobQueue[i] = nil end
+
+  for i = 1, run do
+    local job = batch[i]
+    local before = #bakeList
+    local ok, err = pcall(job.stream and runStreamJob or runClusterJob, job, projM, bakeList)
+    if not ok then
+      -- Discard whatever the failed job half-produced.
+      for k = #bakeList, before + 1, -1 do bakeList[k] = nil end
+      setScratchProjectionFence(false)
+      stampStats.jobsFailed = stampStats.jobsFailed + 1
+      log('E', logTag, "projection job failed: " .. tostring(err))
+    elseif not job.stream then
+      clusters = clusters + 1
+    end
+  end
+
+  stampStats.projectsIssued = stampStats.projectsIssued + run
+  stampStats.clustersTotal  = stampStats.clustersTotal + clusters
+  if run < n then stampStats.framesDeferred = stampStats.framesDeferred + 1 end
+  for i = 1, #bakeList do bakeQueue[#bakeQueue + 1] = bakeList[i] end
+end
+flushPendingStampsRef = flushPendingStamps
+
+-- Bake up to BAKE_LAYERS_PER_FRAME queued layers. Returns true if it baked.
+local function bakePending()
+  local n = #bakeQueue
+  if n == 0 then return false end
+  local veh = getPlayerVehicle(0)
+  if not veh or veh:getId() ~= jobQueueVid or not resolveDecalProjection() then
+    table.clear(bakeQueue)
+    return false
+  end
+  local k = math.min(n, BAKE_LAYERS_PER_FRAME)
+  local chunk = {}
+  for i = 1, k do chunk[i] = bakeQueue[i] end
+  for i = k + 1, n do bakeQueue[i - k] = bakeQueue[i] end
+  for i = n - k + 1, n do bakeQueue[i] = nil end
+  local tb = clockhp()
+  decalProjection:bakeLayers(chunk, veh.JBeam or veh.jbeam)
+  perfAdd(tb, "bakeMsTotal", "bakeMsMax", "bakeCalls")
+  perfStats.bakeLayersTotal = perfStats.bakeLayersTotal + k
+  M._lastDecal = chunk[k]
+  combineDirty = true
+  stampStats.bakesIssued   = stampStats.bakesIssued + 1
+  stampStats.framesFlushed = stampStats.framesFlushed + 1
+  return true
+end
+bakePendingRef = bakePending
+
+-- Severity 0..1 from contact force: 0.8 kN (a knock) .. 20.8 kN (a crunch).
+local function severityOf(force)
+  return math.min(1, math.max(0, ((force or 0) - 800) / 20000))
+end
+
+-- Stamp style for one detector event (also stampAt's 'impact' style). Impacts
+-- get chipped paint; (I) scale and camera distance both grow with force so a
+-- heavy crunch leaves a bigger mark from a more grazing camera instead of
+-- dying in the dent's cavity. A 1-point slide fallback is a small square
+-- scrape patch.
+local function styleForEvent(kind, force)
+  local heavy = severityOf(force)
+  if kind == "impact" then
+    return { scale = 0.10 + heavy * 0.15, dist = 0.7 + heavy * 1.6,   -- 20..50 cm across
+             colorTex = pickFromSet(CHIP_BRUSHES), severity = heavy }
+  end
+  if (force or 0) > 800 then
+    return { dist = 0.7 + heavy * 1.6, scale = 0.06 + heavy * 0.06, severity = heavy }
+  end
+  return { scale = 0.05 + math.random() * 0.03 }
+end
+
+-- An impact lays down chipped paint and, on harder hits, a gouge on top
+-- where an edge dug in. (A haze halo here read as a soft white puff.)
+local function enqueueImpact(localPos, localNormal, force, vid)
+  if not spotTake(localPos, "i", SPOT_MAX_IMPACT) then return end
+  local main = styleForEvent("impact", force)
+  local heavy = main.severity
+  enqueueStamp(localPos, localNormal, main, vid)
+  if math.random() < 0.25 + 0.6 * heavy then
+    enqueueStamp(localPos, localNormal, { colorTex = pickFromSet(GOUGE_BRUSHES),
+      scale = 0.08 + heavy * 0.12, dist = main.dist, severity = math.min(1, heavy + 0.3) }, vid)
+  end
+end
+
+-- A slide stream is one body point dragged along the ground. Its world
+-- samples trace how far the CAR moved, not where the body was scraped - the
+-- contact stays at the same body point. (Converting every sample with the
+-- current pose used to paint a trail as long as the slide, up to ~3.5 m,
+-- smeared back across and off the body.) So the scrape is drawn AT the
+-- latest contact, along the slide axis (first->last displacement, which is
+-- exact because the ground doesn't move) flattened onto the panel, as long as
+-- a contact patch. Neighbouring contact nodes' bands join into the rash.
+-- A longer drag scrapes deeper: severity rises with slide distance.
+local SLIDE_BAND_MIN, SLIDE_BAND_MAX = 0.30, 0.70   -- band length, m (long enough to join neighbours)
+local function enqueueSlide(points, invM, rotOnly, vid)
+  local first, last = points[1], points[#points]
+  local anchor = invM:mulP3F(vec3(last[1], last[2], last[3]))
+  local pass = spotTake(anchor, "s", SPOT_MAX_SLIDE)
+  if not pass then return end
+  local nx, ny, nz = 0, 0, 0
+  for i = 1, #points do
+    local p = points[i]
+    if p[4] and p[5] and p[6] then nx, ny, nz = nx + p[4], ny + p[5], nz + p[6] end
+  end
+  local normal = rotOnly:mulP3F(vec3(nx, ny, nz))
+  local nlen = normal:length()
+  local worldMove = vec3(last[1] - first[1], last[2] - first[2], last[3] - first[3])
+  local dist = worldMove:length()
+  local dir = rotOnly:mulP3F(worldMove)
+  if nlen > 1e-6 then
+    normal = normal * (1 / nlen)
+    dir = dir - normal * dir:dot(normal)            -- onto the panel's plane
+  end
+  local dlen = dir:length()
+  if dlen < 1e-4 or nlen < 1e-6 then
+    -- No usable direction (pressed, not dragged): a small square patch.
+    enqueueStamp(anchor, nlen > 1e-6 and normal or vec3(0, 0, 1), styleForEvent(nil, 0), vid)
+    return
+  end
+  dir = dir * (1 / dlen)
+  local half = 0.5 * math.min(SLIDE_BAND_MAX, SLIDE_BAND_MIN + 0.12 * dist)
+  enqueueStreamLocal({ anchor - dir * half, anchor + dir * half }, { normal }, vid,
+                     math.min(1, dist / 3 + (pass - 1) * 0.35))   -- a repeat pass digs deeper
+end
+
+-- (G) Single per-frame entry point from scratches_detect. The vehicle sends
+-- its id, the frame's discrete events and every slide stream that ended this
+-- frame in ONE call. World -> vehicle-local conversion happens here, once per
+-- batch (one matrix inverse per frame instead of one per event).
+--   events  : list of {x,y,z,nx,ny,nz,kind,sev}
+--             kind "i" = collision impact, "s" = 1-point slide fallback;
+--             sev = normalForce in N.
+--   streams : list of point lists, each {{x,y,z,nx,ny,nz}, ...} (>= 2 points)
+-- A batch from any vehicle other than the current player car is dropped —
+-- it would be converted with the wrong car's matrix.
+M.ingest = function(vid, events, streams)
+  if not ready then return end
+  local veh = getPlayerVehicle(0)
+  if not veh or veh:getId() ~= vid then
+    stampStats.foreignDropped = stampStats.foreignDropped + 1
+    return
+  end
+  if not resolveDecalProjection() then return end
+
+  local invM    = veh:getRefNodeMatrix():fullInverse()
+  local rotOnly = invM:copy(); rotOnly:setColumn(3, vec3(0, 0, 0))
+
+  if events then
+    for i = 1, #events do
+      local e = events[i]
+      local lp = invM:mulP3F(vec3(e[1], e[2], e[3]))
+      local ln = rotOnly:mulP3F(vec3(e[4], e[5], e[6]))
+      if e[7] == "i" then
+        enqueueImpact(lp, ln, e[8], vid)
+      else
+        enqueueStamp(lp, ln, styleForEvent(nil, e[8]), vid)
+      end
+    end
+  end
+
+  if streams then
+    for si = 1, #streams do
+      local points = streams[si]
+      if points and #points >= 2 then enqueueSlide(points, invM, rotOnly, vid) end
+    end
+  end
+end
+
+-- Console / legacy entry points, routed through ingest so they share the
+-- player-vehicle check and the per-frame pipeline.
+M.stampBatch = function(events)
+  local veh = getPlayerVehicle(0)
+  if veh then M.ingest(veh:getId(), events, nil) end
+end
+
+M.stampStream = function(points)
+  if not points or #points < 2 then
+    log('W', logTag, string.format("stampStream: need >=2 points, got %d",
+      points and #points or 0))
+    return
+  end
+  local veh = getPlayerVehicle(0)
+  if veh then M.ingest(veh:getId(), nil, { points }) end
+end
+
+-- World-space stamp. Third arg is either a string kind ('impact' -> impact
+-- style), an opts table passed through unchanged, or nil (slide style).
+M.stampAt = function(worldPos, worldNormal, kindOrOpts, force)
+  if not ready then log('W', logTag, "stampAt: not ready"); return end
+  if not resolveDecalProjection() then return end
+  local veh = getPlayerVehicle(0)
+  if not veh then log('W', logTag, "stampAt: no player vehicle"); return end
+
+  local invM    = veh:getRefNodeMatrix():fullInverse()
+  local rotOnly = invM:copy(); rotOnly:setColumn(3, vec3(0, 0, 0))
+  local opts = type(kindOrOpts) == "table" and kindOrOpts or styleForEvent(kindOrOpts, force)
+  enqueueStamp(invM:mulP3F(worldPos), rotOnly:mulP3F(worldNormal), opts, veh:getId())
+end
+
 
 -- Test driver: stamps at a vehicle-local position we know lands on the body.
 -- Defaults are taken from the testStamp dump (decalPos≈(1.16,0.14,0.36),
@@ -1508,15 +2015,15 @@ end
 M.probeBrushes = function()
   if not ready then log('W', logTag, "probeBrushes: not ready"); return end
   local brushes = {
-    {tex = "/art/dynamicDecals/textures/shape_circle.png",            rgb = {1.0, 0.0, 0.0}, name = "vanilla shape_circle (RED)"},
-    {tex = "/art/dynamicDecals/textures/scratch_streak_01.png",       rgb = {0.0, 1.0, 0.0}, name = "streak_01 (GREEN)"},
-    {tex = "/art/dynamicDecals/textures/scratch_streak_02.png",       rgb = {0.0, 1.0, 1.0}, name = "streak_02 (CYAN)"},
-    {tex = "/art/dynamicDecals/textures/scratch_streak_03.png",       rgb = {1.0, 1.0, 0.0}, name = "streak_03 (YELLOW)"},
-    {tex = "/art/dynamicDecals/textures/scratch_streak_05.png",       rgb = {1.0, 0.0, 1.0}, name = "streak_05 clean (MAGENTA)"},
-    {tex = "/art/dynamicDecals/textures/scratch_chip_cluster.png",    rgb = {0.5, 1.0, 0.5}, name = "chip_cluster (LIGHT GREEN)"},
-    {tex = "/art/dynamicDecals/textures/scratch_tbone.png",           rgb = {0.5, 0.5, 1.0}, name = "tbone (LIGHT BLUE)"},
-    {tex = "/art/dynamicDecals/textures/scratch_raptor_claw_01.png",  rgb = {1.0, 0.5, 0.0}, name = "raptor_claw_01 (ORANGE)"},
-    {tex = "/art/dynamicDecals/textures/scratch_raptor_claw_02.png",  rgb = {1.0, 0.0, 0.5}, name = "raptor_claw_02 (PINK)"},
+    {tex = "/art/dynamicDecals/textures/shape_circle.png",  rgb = {1.0, 0.0, 0.0}, name = "vanilla shape_circle (RED)"},
+    {tex = "/art/dynamicDecals/textures/scr_scrape_01.png", rgb = {0.0, 1.0, 0.0}, name = "scrape_01 (GREEN)"},
+    {tex = "/art/dynamicDecals/textures/scr_scrape_02.png", rgb = {0.0, 1.0, 1.0}, name = "scrape_02 (CYAN)"},
+    {tex = "/art/dynamicDecals/textures/scr_scrape_03.png", rgb = {1.0, 1.0, 0.0}, name = "scrape_03 (YELLOW)"},
+    {tex = "/art/dynamicDecals/textures/scr_haze_01.png",   rgb = {1.0, 0.0, 1.0}, name = "haze_01 (MAGENTA)"},
+    {tex = "/art/dynamicDecals/textures/scr_chips_01.png",  rgb = {0.5, 1.0, 0.5}, name = "chips_01 (LIGHT GREEN)"},
+    {tex = "/art/dynamicDecals/textures/scr_chips_02.png",  rgb = {0.5, 0.5, 1.0}, name = "chips_02 (LIGHT BLUE)"},
+    {tex = "/art/dynamicDecals/textures/scr_gouge_01.png",  rgb = {1.0, 0.5, 0.0}, name = "gouge_01 (ORANGE)"},
+    {tex = "/art/dynamicDecals/textures/scr_gouge_02.png",  rgb = {1.0, 0.0, 0.5}, name = "gouge_02 (PINK)"},
   }
   -- 9 brushes at 0.05 m spacing → ±0.20 m Y spread, stays on body for small
   -- vehicles too. X=1.0 / Z=0.4 is a right-door-ish point known to hit pigeon
@@ -1587,7 +2094,8 @@ M.clearStamps = function()
   -- flushes them into the freshly-cleared layer stack and the wipe is
   -- partially undone.
   pendingStampInputs = {}
-  pendingStampsJBeam = nil
+  pendingStampsVid   = nil
+  M._dropQueuedJobs()
   -- (a) Reset Lua-side layerStack tracking so the api's layer count and our
   --     visible state agree. pcall-guarded because the history call can
   --     short-circuit on dedup, which would otherwise propagate as nil.
@@ -1614,12 +2122,20 @@ M.clearStamps = function()
       if ts then decalProjection:combineTextures(ts) end
     end
   end
+  combineDirty = true
+  rebindDirty  = true
+  table.clear(spotHits)
   log('I', logTag, "cleared all stamps (textures flushed); layers before clear=" ..
     tostring(preClearLayers))
+  -- Re-point metallic/roughness at the static factory maps before re-seeding.
+  -- restoreFactoryMR otherwise runs exactly once, from the binding stabilizer
+  -- at setup — but a respawn (the Ctrl+R path that gets us here) can rebuild
+  -- the .skin.dynamicTextures materials, which puts M/R back on the dynamic
+  -- canvas we just wiped. That is precisely the matte-body symptom Phase 3.3
+  -- chased. Idempotent and cheap at clear frequency, so just re-assert it.
+  restoreFactoryMR()
   -- Re-seed the baseColor channel. clearBakedTextures zeroed it; the fill
-  -- layer repaints every texel uniformly. M/R is unaffected by the wipe in
-  -- any sense that matters — the renderer reads metallic/roughness from the
-  -- factory maps now (see restoreFactoryMR), not the dynamic canvas.
+  -- layer repaints every texel uniformly.
   M.addPaintFill()
 end
 
@@ -1686,7 +2202,7 @@ end
 -- Per-frame bake-queue cap. Raise on a fast machine, lower if frames hitch
 -- during spectacular rolls.
 M.setAggregateCap = function(n)
-  AGGREGATE_PER_FRAME_CAP = math.max(1, math.floor(tonumber(n) or 96))
+  AGGREGATE_PER_FRAME_CAP = math.max(1, math.floor(tonumber(n) or 160))
   log('I', logTag, "AGGREGATE_PER_FRAME_CAP = " .. tostring(AGGREGATE_PER_FRAME_CAP))
 end
 
@@ -1711,7 +2227,25 @@ M.dumpPaintStats = function()
     stampStats.streamsBaked > 0 and (stampStats.streamSubstrokesTotal / stampStats.streamsBaked) or 0))
   log('I', logTag, string.format("stretchChunkLen        = %.2fm  (cap=%d segments/stream)",
     STRETCH_MAX_SEGMENT_LEN, STRETCH_MAX_SEGMENTS_PER_STREAM))
-  log('I', logTag, string.format("queueLen now           = %d", #pendingStampInputs))
+  log('I', logTag, string.format("queueLen now           = %d stamps, %d jobs (budget %d/frame)",
+    #pendingStampInputs, #jobQueue, MAX_PROJECTS_PER_FRAME))
+  log('I', logTag, string.format("jobsDropped            = %d  (backlog cap %d)",
+    stampStats.jobsDropped, MAX_QUEUED_JOBS))
+  log('I', logTag, string.format("jobsFailed             = %d  (threw; see log)",
+    stampStats.jobsFailed))
+  log('I', logTag, string.format("framesDeferred         = %d  (hit budget with work left)",
+    stampStats.framesDeferred))
+  log('I', logTag, string.format("foreignDropped         = %d  (batches from a non-player car)",
+    stampStats.foreignDropped))
+  log('I', logTag, string.format("combines               = %d / %d frames  (fullRate=%s)",
+    stampStats.combinesRun, stampStats.framesTicked, tostring(fullRateCombine)))
+  if perfStats.frames > 0 then
+    log('I', logTag, string.format("painter cost           = avg %.3f ms/frame, max %.2f ms, >1ms %d, >4ms %d (%d frames)",
+      perfStats.msTotal / perfStats.frames, perfStats.msMax,
+      perfStats.framesOver1ms, perfStats.framesOver4ms, perfStats.frames))
+    log('I', logTag, string.format("  flush (project+bake) = %.1f ms total, max %.2f ms; composite = %.1f ms total, max %.2f ms",
+      perfStats.flushMsTotal, perfStats.flushMsMax, perfStats.combineMsTotal, perfStats.combineMsMax))
+  end
   if stampStats.stampsAttempted > 0 then
     log('I', logTag, string.format("missed-projection rate = %.1f%%",
       100 * stampStats.stampsSkippedMissed / stampStats.stampsAttempted))
@@ -1737,7 +2271,69 @@ M.resetPaintStats = function()
   stampStats.clustersTotal = 0
   stampStats.streamsBaked = 0
   stampStats.streamSubstrokesTotal = 0
+  stampStats.jobsDropped = 0
+  stampStats.jobsFailed = 0
+  stampStats.framesDeferred = 0
+  stampStats.foreignDropped = 0
+  stampStats.combinesRun = 0
+  stampStats.rebinds = 0
+  stampStats.spotsSkipped = 0
+  stampStats.streamsMerged = 0
+  stampStats.framesTicked = 0
+  for k in pairs(perfStats) do perfStats[k] = 0 end
   log('I', logTag, "paint stats reset")
+end
+
+-- Machine-readable snapshot of every counter, for tools/bench.py and anything
+-- else that wants numbers rather than log lines. Copies, so callers can keep it.
+M.getStats = function()
+  local stamp, perf = {}, {}
+  for k, v in pairs(stampStats) do stamp[k] = v end
+  for k, v in pairs(perfStats) do perf[k] = v end
+  return {
+    ready  = ready,
+    stamp  = stamp,
+    perf   = perf,
+    detect = lastDetectStats,
+    queue  = { stamps = #pendingStampInputs, jobs = #jobQueue, bake = #bakeQueue },
+    config = { aggregateCap = AGGREGATE_PER_FRAME_CAP, clusterRadius = CLUSTER_RADIUS,
+               projBudget = MAX_PROJECTS_PER_FRAME, flushInterval = FLUSH_INTERVAL,
+               layerBudget = MAX_LAYERS_PER_FLUSH,
+               fullRateCombine = fullRateCombine },
+  }
+end
+
+-- The painter's cost on the most recent ready frame (ms); bench samples it.
+M.getLastFrameMs = function() return perfStats.lastMs end
+
+-- Projection passes allowed per frame. Lower = flatter frame times during a
+-- big crash (marks trickle in over a few frames); higher = marks land sooner.
+M.setProjectionBudget = function(n)
+  MAX_PROJECTS_PER_FRAME = math.max(1, math.floor(tonumber(n) or 6))
+  log('I', logTag, "MAX_PROJECTS_PER_FRAME = " .. tostring(MAX_PROJECTS_PER_FRAME))
+end
+
+-- Seconds between projection batches. Longer = fewer frames pay the ~14 ms
+-- projection toll (smoother crashes); shorter = marks appear sooner.
+-- Decal layers captured per flush (they're baked over the following frames,
+-- BAKE_LAYERS_PER_FRAME at a time). Leftover work waits for the next batch.
+M.setLayerBudget = function(n)
+  MAX_LAYERS_PER_FLUSH = math.max(1, math.floor(tonumber(n) or 24))
+  log('I', logTag, "MAX_LAYERS_PER_FLUSH = " .. tostring(MAX_LAYERS_PER_FLUSH))
+end
+
+M.setFlushInterval = function(sec)
+  FLUSH_INTERVAL = math.max(0, tonumber(sec) or 0.20)
+  log('I', logTag, string.format("FLUSH_INTERVAL = %.3fs", FLUSH_INTERVAL))
+end
+
+-- Diagnostic escape hatch: true restores the API's every-frame full update
+-- (re-bind + composite). Default false: composite only when something
+-- changed, re-bind only when the binding can be stale.
+M.setFullRateCombine = function(b)
+  fullRateCombine = b and true or false
+  combineDirty = true
+  log('I', logTag, "fullRateCombine = " .. tostring(fullRateCombine))
 end
 
 -- Tune the clustering radius. Smaller = more clusters = more projects, but
@@ -1759,8 +2355,9 @@ local UI_DEFAULTS = {
   paintCool  = 0.003,
   impForce   = 800,
   impCool    = 0.025,
-  aggCap     = 96,
+  aggCap     = 160,
   clusterRad = 0.65,
+  projBudget = 6,
   paintColor = true,
 }
 
@@ -1781,32 +2378,32 @@ local UI_PRESETS = {
   { name = "Light",
     slip = 3.0,  paintCool = 0.05,
     impForce = 7000, impCool = 0.6,
-    aggCap = 16,  clusterRad = 1.3,
+    aggCap = 48,  clusterRad = 1.3,  projBudget = 3,
     desc = "Subtle. Only fast slides + solid hits leave marks.\n" ..
            "Easy on hardware. Realistic 'careful driver' look." },
   { name = "Default",
     slip = 0.6,  paintCool = 0.003,
     impForce = 800, impCool = 0.025,
-    aggCap = 96,  clusterRad = 0.65,
+    aggCap = 160, clusterRad = 0.65, projBudget = 6,
     desc = "Aggressive 10x damage. Long slides build dense scratches;\n" ..
            "light smashes leave visible chip/claw marks." },
   { name = "Heavy",
     slip = 0.45,  paintCool = 0.0025,
     impForce = 650, impCool = 0.020,
-    aggCap = 112,  clusterRad = 0.55,
+    aggCap = 192, clusterRad = 0.55, projBudget = 8,
     desc = "Very aggressive. More contact noise turns into visible wear;\n" ..
            "use when the scene should look heavily abused." },
   { name = "Max",
     slip = 0.35,  paintCool = 0.002,
     impForce = 500, impCool = 0.015,
-    aggCap = 128,  clusterRad = 0.45,
+    aggCap = 224, clusterRad = 0.45, projBudget = 10,
     desc = "Every drag, bump, and dent leaves a mark.\n" ..
            "Banged-up look after one good roll.\n" ..
            "Notable CPU+GPU cost; should still hold steady framerate." },
   { name = "Extreme",
     slip = 0.25,  paintCool = 0.0015,
     impForce = 350,  impCool = 0.010,
-    aggCap = 160,  clusterRad = 0.35,
+    aggCap = 256, clusterRad = 0.35, projBudget = 16,
     desc = "Built to stress hardware. ~200 samples/sec/node, 50ms impact\n" ..
            "cooldown, tightest cluster radius = most depth-pass renders.\n" ..
            "Expect frame hitches on slower GPUs during heavy crashes." },
@@ -1869,6 +2466,8 @@ local function ensureUIPointers()
     impCool    = im.FloatPtr(UI_DEFAULTS.impCool),
     aggCap     = im.IntPtr(AGGREGATE_PER_FRAME_CAP),
     clusterRad = im.FloatPtr(CLUSTER_RADIUS),
+    projBudget = im.IntPtr(MAX_PROJECTS_PER_FRAME),
+    fullRate   = im.BoolPtr(fullRateCombine),
     paintColor = im.BoolPtr(PAINT_SEED_COLOR),
     logWErr    = im.BoolPtr(false),  -- log pane: warnings & errors only
   }
@@ -1890,6 +2489,8 @@ local function syncUIPointersFromSnapshot()
   if lastDetectStats.impCool   then uiPtrs.impCool[0]   = lastDetectStats.impCool end
   uiPtrs.aggCap[0]     = AGGREGATE_PER_FRAME_CAP
   uiPtrs.clusterRad[0] = CLUSTER_RADIUS
+  uiPtrs.projBudget[0] = MAX_PROJECTS_PER_FRAME
+  uiPtrs.fullRate[0]   = fullRateCombine
   uiPtrs.paintColor[0] = PAINT_SEED_COLOR
 end
 
@@ -1911,17 +2512,19 @@ local function applyPreset(preset)
   uiPtrs.impCool[0]    = preset.impCool
   uiPtrs.aggCap[0]     = preset.aggCap
   uiPtrs.clusterRad[0] = preset.clusterRad
+  uiPtrs.projBudget[0] = preset.projBudget
   AGGREGATE_PER_FRAME_CAP = preset.aggCap
   CLUSTER_RADIUS          = preset.clusterRad
+  MAX_PROJECTS_PER_FRAME  = preset.projBudget
   sendVehicleCmd(string.format("scratches_detect.setThresholds(%.3f, nil, nil)",
     preset.slip))
   sendVehicleCmd(string.format("scratches_detect.setPaintCooldown(%.4f)",
     preset.paintCool))
   sendVehicleCmd(string.format("scratches_detect.setImpactParams(%.0f, %.3f)",
     preset.impForce, preset.impCool))
-  log('I', logTag, string.format("preset applied: %s (slip=%.2f cool=%.4f force=%.0f impCool=%.2f cap=%d radius=%.2f)",
+  log('I', logTag, string.format("preset applied: %s (slip=%.2f cool=%.4f force=%.0f impCool=%.2f cap=%d radius=%.2f budget=%d)",
     preset.name, preset.slip, preset.paintCool, preset.impForce, preset.impCool,
-    preset.aggCap, preset.clusterRad))
+    preset.aggCap, preset.clusterRad, preset.projBudget))
 end
 
 -- Live debug + tuning panel. Two columns of read-only counters at the top,
@@ -2019,8 +2622,16 @@ local function buildDebugReport()
   w(string.format("- slip=%s perp=%s minForce=%s impForce=%s impCool=%s paintCool=%s",
     tostring(ds.slip), tostring(ds.perp), tostring(ds.minForce),
     tostring(ds.impForce), tostring(ds.impCool), tostring(ds.paintCool)))
-  w(string.format("- aggregateCap=%d clusterRadius=%.2f",
-    AGGREGATE_PER_FRAME_CAP, CLUSTER_RADIUS))
+  w(string.format("- aggregateCap=%d clusterRadius=%.2f projBudget=%d fullRateCombine=%s",
+    AGGREGATE_PER_FRAME_CAP, CLUSTER_RADIUS, MAX_PROJECTS_PER_FRAME, tostring(fullRateCombine)))
+  w(string.format("- pipeline: backlog=%d deferredFrames=%d jobsDropped=%d jobsFailed=%d foreignDropped=%d composites=%d/%d frames",
+    #jobQueue, stampStats.framesDeferred, stampStats.jobsDropped, stampStats.jobsFailed, stampStats.foreignDropped,
+    stampStats.combinesRun, stampStats.framesTicked))
+  if perfStats.frames > 0 then
+    w(string.format("- cost: painter avg %.3f ms/frame, max %.2f ms, frames >4ms %d (flush max %.2f ms, composite max %.2f ms)",
+      perfStats.msTotal / perfStats.frames, perfStats.msMax, perfStats.framesOver4ms,
+      perfStats.flushMsMax, perfStats.combineMsMax))
+  end
   w("")
   w("### log  (warnings/errors + recent context; [GE]=painter [VEH]=detector)")
   local n = #logRing
@@ -2149,10 +2760,23 @@ local function drawUI()
     stampStats.framesFlushed > 0 and stampStats.projectsIssued / stampStats.framesFlushed or 0,
     stampStats.framesFlushed > 0 and stampStats.clustersTotal / stampStats.framesFlushed or 0))
   uiTooltip(
-    "Average depth-pass renders per frame (each is a real GPU cost).\n" ..
-    "Pre-clustering this would equal the stamp count per frame.\n" ..
-    "After clustering: usually near 1.0; a higher number means stamps are\n" ..
-    "spreading across the body and forcing multiple cameras.")
+    "Average depth-pass renders per baking frame (each is a real GPU cost).\n" ..
+    "Every impact cluster and every slide stream is one projection.\n" ..
+    "Capped by 'Projections per frame'; the rest wait for the next frame.")
+
+  im.Text(string.format("Job backlog:          %d  (deferred frames %d, dropped %d)",
+    #jobQueue, stampStats.framesDeferred, stampStats.jobsDropped))
+  uiTooltip(
+    "Projection jobs waiting for a later frame. A crash bigger than the\n" ..
+    "per-frame budget spreads over a few frames instead of hitching one.\n" ..
+    "'dropped' counts jobs refused because the backlog was full.")
+
+  im.Text(string.format("Canvas composites:    %.1f%% of frames",
+    stampStats.framesTicked > 0 and 100 * stampStats.combinesRun / stampStats.framesTicked or 0))
+  uiTooltip(
+    "How often the full 4096x2048 canvas was re-composited onto the car.\n" ..
+    "Only frames that baked or cleared, plus a 0.5 s heartbeat, need it —\n" ..
+    "near 0% while driving clean, 100% with 'Full-rate composite' on.")
 
   im.Text(string.format("Max normalForce:      %.0f N",
     lastDetectStats.maxNormalForce or 0))
@@ -2215,8 +2839,25 @@ local function drawUI()
     "Excess events drop (counted in 'aggregateDropped').\n" ..
     "LOWER -> harder cap on bake cost; safer on slower GPUs.\n" ..
     "HIGHER -> no drops during spectacular multi-contact frames.\n" ..
-    "Default: 32.\n" ..
+    "Default: 96.\n" ..
     "Performance: each frame composites this many layers in one pass.")
+
+  if im.SliderInt("Projections per frame", uiPtrs.projBudget, 1, 24) then
+    MAX_PROJECTS_PER_FRAME = math.max(1, uiPtrs.projBudget[0])
+  end
+  uiTooltip(
+    "Depth-pass projections allowed in one frame (impact clusters + slide streams).\n" ..
+    "LOWER -> flatter frame times in big crashes; marks trickle in over a few frames.\n" ..
+    "HIGHER -> marks land sooner; heavier single-frame spikes.\n" ..
+    "Default: 6.")
+
+  if im.Checkbox("Full-rate composite (debug)", uiPtrs.fullRate) then
+    M.setFullRateCombine(uiPtrs.fullRate[0])
+  end
+  uiTooltip(
+    "Re-composite the canvas every frame, like the stock API does.\n" ..
+    "Leave OFF: compositing only after a bake is the main idle-cost saving.\n" ..
+    "Turn ON only to rule the skip out when diagnosing missing marks.")
 
   if im.SliderFloat("Cluster radius (m)", uiPtrs.clusterRad, 0.3, 4.0, "%.2f") then
     CLUSTER_RADIUS = uiPtrs.clusterRad[0]
@@ -2266,9 +2907,11 @@ local function drawUI()
     uiPtrs.impCool[0]    = UI_DEFAULTS.impCool
     uiPtrs.aggCap[0]     = UI_DEFAULTS.aggCap
     uiPtrs.clusterRad[0] = UI_DEFAULTS.clusterRad
+    uiPtrs.projBudget[0] = UI_DEFAULTS.projBudget
     uiPtrs.paintColor[0] = UI_DEFAULTS.paintColor
     AGGREGATE_PER_FRAME_CAP = UI_DEFAULTS.aggCap
     CLUSTER_RADIUS          = UI_DEFAULTS.clusterRad
+    MAX_PROJECTS_PER_FRAME  = UI_DEFAULTS.projBudget
     PAINT_SEED_COLOR        = UI_DEFAULTS.paintColor
     sendVehicleCmd(string.format("scratches_detect.setThresholds(%.3f, nil, nil)", UI_DEFAULTS.slip))
     sendVehicleCmd(string.format("scratches_detect.setPaintCooldown(%.4f)", UI_DEFAULTS.paintCool))
@@ -2285,7 +2928,7 @@ local function drawUI()
   end
   im.EndDisabled()
   uiTooltip("Wipe every baked decal off the vehicle (keeps the underlying paint color).\n" ..
-            "Disabled until the painter is ready. Keyboard equivalent: Ctrl+L.")
+            "Disabled until the painter is ready. Keyboard equivalent: Ctrl+R.")
 
   im.SameLine()
   if im.Button("Dump Stats") then
@@ -2336,7 +2979,7 @@ end
 
 -- ---- lifecycle ----
 local function onExtensionLoaded()
-  log('I', logTag, "loaded. probes: scratches_paint.{dumpState,kickSetup,testStamp,testStampAt,testStampAtWorld,probeBrushes,stampAt,stampAtLocal,stampStream,stampBatch,clearStamps,addPaintFill,dumpDecalConfig,drawTextures,setStampVerbose,setAggregateCap,setClusterRadius,dumpPaintStats,resetPaintStats,toggleUI,buildDebugReport}")
+  log('I', logTag, "loaded. probes: scratches_paint.{dumpState,kickSetup,testStamp,testStampAt,testStampAtWorld,probeBrushes,stampAt,stampAtLocal,stampStream,stampBatch,clearStamps,addPaintFill,dumpDecalConfig,drawTextures,setStampVerbose,setAggregateCap,setClusterRadius,setProjectionBudget,setFullRateCombine,dumpPaintStats,resetPaintStats,toggleUI,buildDebugReport}")
   pendingSetup = true
   setupAttemptTimer = SETUP_RETRY  -- try immediately
   trySetup()
@@ -2345,6 +2988,15 @@ end
 local function onExtensionUnloaded()
   ready = false
   api = nil
+  -- The projection was resolved from an upvalue of the api module we are
+  -- dropping; holding it past unload would keep a stale handle alive.
+  decalProjection = nil
+  apiApp = nil
+  table.clear(spotHits)
+  spawnAabbCache.vid = nil
+  spawnAabbCache.box = nil
+  pendingStampInputs = {}
+  M._dropQueuedJobs()
   lastSkinJBeam = nil
   log('I', logTag, "unloaded")
 end
@@ -2354,5 +3006,10 @@ M.onExtensionUnloaded = onExtensionUnloaded
 M.onUpdate            = onUpdate
 M.onVehicleSwitched   = onVehicleSwitched
 M.onVehicleSpawned    = onVehicleSpawned
+-- A reset can rebuild the car's materials; re-bind on the next composite.
+M.onVehicleResetted   = function(vid)
+  local veh = getPlayerVehicle(0)
+  if ready and veh and veh:getId() == vid then rebindDirty = true end
+end
 
 return M

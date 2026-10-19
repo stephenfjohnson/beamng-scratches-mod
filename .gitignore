@@ -22,7 +22,8 @@ desktop.ini
 # Editor junk
 .vscode/
 .idea/
-.claude/
+.claude/*
+!.claude/settings.json
 *.swp
 *.swo
 *~
@@ -30,3 +31,9 @@ desktop.ini
 # Lua build artifacts (LuaJIT bytecode caches if any tool emits them)
 *.luac
 *.out
+
+# Python bytecode
+__pycache__/
+
+# Bench runs (tools/bench.py output)
+bench/

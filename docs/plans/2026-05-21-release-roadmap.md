@@ -125,10 +125,66 @@ Done — `README.md` rewritten as a full install + tech guide.
   across both Lua VMs, plus the auto-load path.
 - [x] **5.3** Supported vehicles, requirements, limitations.
 - [x] **5.4** Controls + debug-panel guide.
-- [x] **5.5** Packaging checklist (zip layout — `lua/` + `art/` at zip root).
+- [x] **5.5** Packaging: `tools/package.py` builds `dist/scratches_mod.zip`
+  with `lua/` + `art/` at the zip root, preflighting `luac -p` and the
+  brush `.dynDecalTexture.json` sidecars. README updated to match.
 
 ## Phase 6 — More variation + performance
 
 - [ ] **6.1** Scratch-decal variation (brushes, color/rotation/scale jitter).
 - [ ] **6.2** Impact-decal variation.
-- [ ] **6.3** Performance pass (profiling, bake-batching review).
+- [x] **6.3** Performance pass (2026-10-18 audit against game 0.39.4).
+  Earlier (2026-09-08): spawn-AABB cached per vehicle id; log rings trim in
+  blocks. The 2026-10-18 pass:
+  - **Player-only detection.** The detector auto-loads into every vehicle;
+    traffic cars now return on the first line of `onNodeCollision` instead of
+    running the filter and shipping their hits to GE (where they were stamped
+    onto the *player's* car with the player's matrix). A traffic car's reset no
+    longer wipes the player's scratches.
+  - **Per-node verdict cache** on the physics hot path (was a lowercase + 18
+    substring scans per contact per tick).
+  - **Candidate logging off by default** (was ~40 log lines/s per sliding node).
+  - **Stream thinning** — samples closer than 1.5 cm to the last are dropped.
+  - **One GE call per frame** — streams ride with impacts in
+    `scratches_paint.ingest(vid, events, streams)`; was one compiled
+    `queueGameEngineLua` per stream.
+  - **Unified job queue** — every impact cluster / stream is a projection job;
+    at most N per frame (default 6), one `bakeLayers` per frame; backlog capped.
+  - **Composite gating** — `api.onUpdate_` (texture re-bind + full-canvas
+    `combineTextures`) runs only on frames that baked/cleared, during setup, and
+    on a 0.5 s heartbeat. `setFullRateCombine(true)` restores the old behaviour.
+  - **Idempotent `restoreFactoryMR`** — only `@DynamicTexture` stages are
+    repointed (factory stage-0 maps are kept), so repeat calls skip the reload.
+  - Still open: in-game profiling numbers (BeamNG profiler, `dynamicDecals/*`
+    events) to tune the projection budget and heartbeat.
+
+## Audit fixes (2026-10-18)
+
+- [x] Crash: `spawnAabbCache` (2026-09-08 WIP) was declared after the
+  functions that reset it, so `onVehicleSwitched` indexed a nil global on
+  every vehicle switch. `tools/package.py` now rejects unexpected globals.
+- [x] Surface materials `ASPHALT_PREPPED`, `CONCRETE`, `SAND_DENSE` don't exist
+  in `particles.json` and silently aliased PLASTIC; names now resolve exactly
+  and `SANDY_ROAD` was added.
+- [x] Batches from a vehicle that isn't the current player car are dropped
+  (stale batch after a switch landed on the new car).
+- [x] Setup no longer re-runs (and re-warns) for a skipped/liveried car on
+  every traffic spawn.
+- [x] Decal rotation passed in radians (`setDecalRotation` takes radians).
+- [x] `tools/sim/harness.lua`: mocked-engine checks for both VMs, run by
+  `tools/package.py`.
+
+## Robustness fixes (2026-09-08)
+
+- [x] `decalProjection` (plucked from an `api.bakeLayers` upvalue) is now
+  cleared on `onVehicleSwitched` and `onExtensionUnloaded`. `trySetup` calls
+  `api.setup()` again for the new vehicle; if that rebuilds the API's
+  projection, the cached handle was dead and every bake went nowhere.
+- [x] `clearStamps` now re-runs `restoreFactoryMR()` before re-seeding.
+  It previously ran only once, from the binding stabilizer at setup — but a
+  respawn (the Ctrl+R path into `clearStamps`) can rebuild the
+  `.skin.dynamicTextures` materials and put M/R back on the canvas that was
+  just wiped, which is the Phase 3.3 matte-body symptom returning.
+- [x] Stale UI/doc strings: 'Clear stamps' tooltip said Ctrl+L (it's Ctrl+R),
+  aggregate-cap tooltip said default 32 (it's 96), README still listed the
+  paint-canvas re-seed as an open bug (fixed 2026-05-23).

@@ -1,354 +1,255 @@
 """
-Generate scratch-brush PNGs for the dynamic-decal painter.
+Generate the scratch-brush PNGs for the dynamic-decal painter.
 
-Output: art/dynamicDecals/textures/scratch_streak_{01..04}.png
-Format: 512x512 RGBA. Greyscale value drives both color (white) and alpha,
-        so a black background is fully transparent and white pixels are fully
-        opaque. The mod's `setDecalColor` tints the white at runtime.
+Output: art/dynamicDecals/textures/scr_*.png (+ .dynDecalTexture.json sidecars)
+Format: 512x512 RGBA, RGB = white, shape in alpha. The painter tints each
+        stamp with setDecalColor (primer grey, bare metal, clear-coat haze).
 
-Each brush is procedurally generated with a fixed seed, so re-running the
-script produces identical files. To iterate on a single brush, change its
-seed or the parameters in its function — not the global SEED.
+Brush families, all drawn along +x (the painter rotates them):
+  scr_scrape_*  slide bands: parallel lines of uneven weight with gaps,
+                tapered ragged ends and a few deep gouges. Stretched along
+                the slide path, so they must fade out at the x ends where
+                consecutive segments overlap.
+  scr_haze_*    soft streaky abrasion - scuffed clear coat. Laid under the
+                scrape lines at low opacity.
+  scr_chips_*   impact paint loss: sharp-edged flakes, dense at the centre.
+  scr_gouge_*   impact dig-in: a chipped crater with short deep scores
+                trailing away from it.
+
+Scale matters more than detail: a scrape decal is ~10-22 cm across but 512 px
+in the brush, and the car's paint canvas resolves ~1.5 mm per texel, so a line
+narrower than ~8 px here disappears in game. Lines are drawn at 2x and
+downsampled for clean anti-aliased edges.
+
+Every brush has a fixed seed, so re-running produces identical files.
 
 Run: python tools/generate_brushes.py
 """
 
+import glob
 import json
 import math
 import os
 import random
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
-
+from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT_DIR = os.path.join(HERE, "..", "art", "dynamicDecals", "textures")
+OUT_DIR = os.path.normpath(os.path.join(HERE, "..", "art", "dynamicDecals", "textures"))
 SIZE = 512
+SS = 2                    # supersampling factor
+N = SIZE * SS             # working canvas size
+
+# Brushes from earlier generations. Deleted on each run so a renamed brush
+# can't linger in the shipped zip.
+RETIRED = ["scratch_streak_01", "scratch_streak_02", "scratch_streak_03", "scratch_streak_05",
+           "scratch_raptor_claw_01", "scratch_raptor_claw_02", "scratch_chip_cluster",
+           "scratch_tbone"]
 
 
-def _new_canvas() -> np.ndarray:
-    return np.zeros((SIZE, SIZE), dtype=np.float32)
-
+# ---------------------------------------------------------------- helpers --
 
 def _save(canvas: np.ndarray, name: str) -> None:
-    # Vanilla brushes (e.g. shape_circle.png) store RGB = pure white everywhere
-    # and put the shape in the alpha channel. Matching that format is required
-    # — when we instead put the shape in RGB, the api's shader multiplies our
-    # darker RGB into the tint color, dimming decals to near-invisibility on
-    # dark vehicles. Keep alpha = greyscale (so anti-aliased edges feather
-    # correctly), force RGB = 255.
-    a = np.clip(canvas * 255.0, 0, 255).astype(np.uint8)
+    """canvas: N x N float alpha in [0, 1]. Downsample, store as white + alpha
+    (vanilla brush format - shape in RGB would darken the tint), write sidecar."""
+    img = Image.fromarray(np.clip(canvas * 255.0, 0, 255).astype(np.uint8), mode="L")
+    a = np.asarray(img.resize((SIZE, SIZE), Image.LANCZOS))
     white = np.full_like(a, 255)
-    rgba = np.stack([white, white, white, a], axis=-1)
-    img = Image.fromarray(rgba, mode="RGBA")
-    out_path = os.path.normpath(os.path.join(OUT_DIR, name))
-    img.save(out_path)
-    print(f"wrote {out_path}")
-    # BeamNG's dynamic-decals system requires a sidecar JSON next to each PNG
-    # to register it as a decal-eligible texture. Without this, setDecalTexturePath
-    # accepts the path but the brush never loads visibly.
-    sidecar_path = out_path + ".dynDecalTexture.json"
-    sidecar = {
-        "version": 2,
-        "vehicle": "",
-        "isSdfCompatible": False,
-        "tags": ["shape", "scratch"],
-        "type": 0,
-    }
-    with open(sidecar_path, "w") as f:
-        json.dump(sidecar, f)
-    print(f"wrote {sidecar_path}")
+    out = os.path.join(OUT_DIR, name + ".png")
+    Image.fromarray(np.stack([white, white, white, a], axis=-1), mode="RGBA").save(out)
+    # Without this sidecar the dynamic-decals system registers nothing and the
+    # brush stamps invisibly.
+    with open(out + ".dynDecalTexture.json", "w") as f:
+        json.dump({"version": 2, "vehicle": "", "isSdfCompatible": False,
+                   "tags": ["shape", "scratch"], "type": 0}, f)
+    print(f"wrote {out}")
 
 
-def _stamp_streak(canvas: np.ndarray,
-                  x0: float, y0: float, x1: float, y1: float,
-                  width: float,
-                  taper: bool = True,
-                  intensity: float = 1.0,
-                  blur: float = 0.8) -> None:
-    """Paint a soft tapered streak from (x0, y0) to (x1, y1) onto canvas
-    using max-blend (so overlapping strokes don't blow out)."""
-    img = Image.new("L", (SIZE, SIZE), 0)
-    draw = ImageDraw.Draw(img)
-    n = max(16, int(math.hypot(x1 - x0, y1 - y0) / 2))
-    for i in range(n):
-        t = i / max(1, n - 1)
-        x = x0 + (x1 - x0) * t
-        y = y0 + (y1 - y0) * t
-        if taper:
-            mod = 1.0 - abs(t - 0.5) * 2.0
-            mod = max(0.05, mod)
-        else:
-            mod = 1.0
-        w = max(0.5, width * mod)
-        draw.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2],
-                     fill=int(255 * intensity * mod))
-    if blur > 0:
-        img = img.filter(ImageFilter.GaussianBlur(radius=blur))
-    arr = np.asarray(img, dtype=np.float32) / 255.0
-    np.maximum(canvas, arr, out=canvas)
+def _noise1d(rng: np.random.Generator, n: int, smooth: int) -> np.ndarray:
+    """Smooth 1D noise in roughly [-1, 1]."""
+    raw = rng.standard_normal(n + smooth * 4)
+    k = np.hanning(max(3, smooth * 2 + 1))
+    v = np.convolve(raw, k / k.sum(), mode="same")[smooth * 2: smooth * 2 + n]
+    return v / (np.abs(v).max() + 1e-9)
 
 
-def _hairs_around(canvas: np.ndarray, rng: random.Random,
-                  cx: float, cy: float, axis_len: float,
-                  count: int, perp_jitter: float,
-                  along_jitter: float, intensity_range: tuple,
-                  width_range: tuple) -> None:
-    """Add fine secondary streaks parallel-ish to a horizontal axis through (cx,cy)."""
-    for _ in range(count):
-        offset_y = rng.uniform(-perp_jitter, perp_jitter)
-        x_start = cx - axis_len / 2 + rng.uniform(-along_jitter, along_jitter)
-        x_end = cx + axis_len / 2 + rng.uniform(-along_jitter, along_jitter)
-        y_start = cy + offset_y
-        y_end = cy + offset_y + rng.uniform(-2, 2)
-        intensity = rng.uniform(*intensity_range)
-        width = rng.uniform(*width_range)
-        _stamp_streak(canvas, x_start, y_start, x_end, y_end,
-                      width=width, taper=True, intensity=intensity)
+def _smoothstep(e0: float, e1: float, x: np.ndarray) -> np.ndarray:
+    t = np.clip((x - e0) / (e1 - e0), 0.0, 1.0)
+    return t * t * (3 - 2 * t)
 
 
-def streak_01() -> None:
-    """Single key-scratch — one dominant gouge with parallel hairs."""
-    rng = random.Random(1)
-    c = _new_canvas()
-    # Main gouge: thicker than v1 (14 → 16) for more visible presence.
-    _stamp_streak(c, 50, 256, 462, 256, width=16.0, taper=True, intensity=1.0, blur=1.2)
-    # Secondary parallel hairs. v1 used 8 hairs in a ±30 px band → ~5% pixel
-    # coverage. Bumped to 18 hairs in a ±55 px band so streak_01 reads as a
-    # cluster of scratches rather than a lonely single gouge.
-    for _ in range(18):
-        offset = rng.uniform(-55, 55)
-        x_start = 60 + rng.uniform(-30, 30)
-        x_end = 452 + rng.uniform(-30, 30)
-        _stamp_streak(c, x_start, 256 + offset, x_end, 256 + offset,
-                      width=rng.uniform(2, 5), taper=True,
-                      intensity=rng.uniform(0.5, 0.85), blur=1.0)
-    _save(c, "scratch_streak_01.png")
+def _x_fade(fade: float = 0.10) -> np.ndarray:
+    """Per-column envelope fading the brush out at both x ends, so consecutive
+    stretched segments blend where they overlap instead of showing seams."""
+    x = np.linspace(0, 1, N)
+    return _smoothstep(0, fade, x) * _smoothstep(0, fade, 1 - x)
 
 
-def streak_02() -> None:
-    """Parallel scrape — multiple deep parallel streaks (curb drag)."""
-    rng = random.Random(2)
-    c = _new_canvas()
-    n_lines = 9
-    tilt = rng.uniform(-0.04, 0.04)
-    for i in range(n_lines):
-        offset_y = (i - n_lines / 2.0) * 28 + rng.uniform(-6, 6)
-        x_start = 40 + rng.uniform(-15, 25)
-        x_end = 472 + rng.uniform(-25, 15)
-        y_start = 256 + offset_y + tilt * (256 - x_start)
-        y_end = 256 + offset_y + tilt * (256 - x_end)
-        width = rng.uniform(5, 11)
-        intensity = rng.uniform(0.7, 1.0)
-        _stamp_streak(c, x_start, y_start, x_end, y_end,
-                      width=width, taper=True, intensity=intensity, blur=1.0)
-    # Extra fill-in hairs to bump density.
-    for _ in range(20):
-        offset = rng.uniform(-130, 130)
-        x_start = 60 + rng.uniform(-25, 25)
-        x_end = 452 + rng.uniform(-25, 25)
-        _stamp_streak(c, x_start, 256 + offset, x_end, 256 + offset,
-                      width=rng.uniform(1.5, 3), taper=True,
-                      intensity=rng.uniform(0.4, 0.7), blur=0.8)
-    _save(c, "scratch_streak_02.png")
+def _line(canvas: np.ndarray, rng: np.random.Generator, y0: float, x0: float, x1: float,
+          width: float, strength: float, gap: float = 0.25, wave: float = 1.5,
+          rough: float = 0.3, slope: float = 0.0) -> None:
+    """One scratch along +x (all units in final 512-px brush pixels).
+    width: mean full width; gap: fraction of the length that breaks up;
+    rough: width variation; wave: low-frequency wander amplitude."""
+    xa, xb = int(x0 * SS), int(x1 * SS)
+    n = xb - xa
+    if n < 4:
+        return
+    t = np.linspace(0, 1, n)
+    yc = (y0 + slope * (t - 0.5) + wave * _noise1d(rng, n, 60)) * SS
+    hw = 0.5 * width * SS * (1 + rough * _noise1d(rng, n, 12))
+    # Taper both ends, the start a little more sharply (where the edge bit in).
+    taper = _smoothstep(0, 0.06 + 0.06 * rng.random(), t) * _smoothstep(0, 0.12 + 0.1 * rng.random(), 1 - t)
+    amp = strength * np.ones(n)
+    if gap > 0:
+        # Worn stretches: the line thins and fades where the noise peaks,
+        # rather than breaking into dashes.
+        g = _noise1d(rng, n, 40)
+        wear = np.clip(1 - 2 * (g - (1 - 2 * gap)), 0.3, 1.0)
+        amp *= wear
+        hw *= 0.5 + 0.5 * wear
+    hw = np.maximum(hw * taper, 0)
+    lo = int(max(0, np.floor((yc - hw).min()) - 2))
+    hi = int(min(N, np.ceil((yc + hw).max()) + 3))
+    if hi <= lo:
+        return
+    rows = np.arange(lo, hi)[:, None]
+    cov = np.clip(hw[None, :] - np.abs(rows - yc[None, :]) + 0.5, 0, 1) * amp[None, :]
+    region = canvas[lo:hi, xa:xb]
+    np.maximum(region, cov, out=region)
 
 
-def streak_03() -> None:
-    """Scuff cluster — chaotic scratches densely overlaid at varied angles."""
-    rng = random.Random(3)
-    c = _new_canvas()
-    cx, cy = 256, 256
-    for _ in range(40):
-        angle = rng.uniform(0, 2 * math.pi)
-        length = rng.uniform(80, 280)
-        ox = cx + rng.uniform(-110, 110)
-        oy = cy + rng.uniform(-110, 110)
-        x_end = ox + math.cos(angle) * length
-        y_end = oy + math.sin(angle) * length
-        width = rng.uniform(2.5, 7)
-        intensity = rng.uniform(0.6, 1.0)
-        _stamp_streak(c, ox, oy, x_end, y_end,
-                      width=width, taper=True, intensity=intensity, blur=0.9)
-    _save(c, "scratch_streak_03.png")
+def _flake(draw: ImageDraw.ImageDraw, rng: random.Random, cx: float, cy: float,
+           size: float, fill: int = 255) -> None:
+    """Sharp-edged irregular paint flake (polygon), size in final px."""
+    k = rng.randint(5, 9)
+    pts = []
+    for i in range(k):
+        ang = 2 * math.pi * (i + rng.uniform(-0.3, 0.3)) / k
+        r = size * SS * rng.uniform(0.45, 1.0)
+        pts.append((cx * SS + r * math.cos(ang), cy * SS + r * 0.8 * math.sin(ang)))
+    draw.polygon(pts, fill=fill)
 
 
-def streak_05_clean() -> None:
-    """Clean single key-scratch — one dominant streak with very few hairs.
-
-    streak_01 has 18 parallel hairs and reads as a "cluster of scratches".
-    This is the cleaner alternative: one assertive line plus 3-5 quiet
-    hairs nearby, for the look of a single sharp object dragged briefly."""
-    rng = random.Random(8)
-    c = _new_canvas()
-    # One dominant streak slightly off-center with a small angle.
-    y_main = 256 + rng.uniform(-15, 15)
-    y_main_end = y_main + rng.uniform(-12, 12)
-    _stamp_streak(c, 50, y_main, 462, y_main_end,
-                  width=11.0, taper=True, intensity=1.0, blur=1.1)
-    # A few subtle parallel hairs.
-    for _ in range(5):
-        offset = rng.uniform(-22, 22)
-        x_start = 70 + rng.uniform(-25, 25)
-        x_end = 452 + rng.uniform(-25, 25)
-        _stamp_streak(c, x_start, y_main + offset, x_end, y_main_end + offset,
-                      width=rng.uniform(1.5, 3), taper=True,
-                      intensity=rng.uniform(0.4, 0.6), blur=0.9)
-    _save(c, "scratch_streak_05.png")
+def _flake_canvas(fn) -> np.ndarray:
+    img = Image.new("L", (N, N), 0)
+    fn(ImageDraw.Draw(img))
+    return np.asarray(img, dtype=np.float32) / 255.0
 
 
-def raptor_claw_01() -> None:
-    """Three parallel scratches with shared overall direction (3-claw).
+# ------------------------------------------------------------- scrapes --
 
-    Reads as a curb-drag or 3-finger scrape: 3 dominant parallel lines,
-    tightly spaced (~35 px), with hairs filling the spaces between them."""
-    rng = random.Random(9)
-    c = _new_canvas()
-    tilt = rng.uniform(-0.05, 0.05)
-    spacing = 38
-    cy = 256
-    # 3 main claws.
-    for i in range(-1, 2):
-        offset_y = i * spacing + rng.uniform(-3, 3)
-        x_start = 45 + rng.uniform(-10, 10)
-        x_end = 467 + rng.uniform(-10, 10)
-        y_start = cy + offset_y + tilt * (x_start - 256)
-        y_end   = cy + offset_y + tilt * (x_end   - 256)
-        width = rng.uniform(7, 10)
-        intensity = rng.uniform(0.85, 1.0)
-        _stamp_streak(c, x_start, y_start, x_end, y_end,
-                      width=width, taper=True, intensity=intensity, blur=1.1)
-    # Filler hairs in the gaps between the main claws.
-    for _ in range(12):
-        y_base = cy + rng.uniform(-spacing * 1.2, spacing * 1.2)
-        x_start = 70 + rng.uniform(-25, 25)
-        x_end = 442 + rng.uniform(-25, 25)
-        _stamp_streak(c, x_start, y_base, x_end, y_base + rng.uniform(-2, 2),
-                      width=rng.uniform(1.5, 3), taper=True,
-                      intensity=rng.uniform(0.4, 0.65), blur=0.9)
-    _save(c, "scratch_raptor_claw_01.png")
-
-
-def raptor_claw_02() -> None:
-    """Four parallel scratches with greater variation (4-claw).
-
-    Wider spread than claw_01, individual claws have varying intensity and
-    width — reads as a heavier 4-finger drag with one or two claws biting
-    deeper than the others."""
-    rng = random.Random(10)
-    c = _new_canvas()
-    tilt = rng.uniform(-0.04, 0.04)
-    spacing = 32
-    cy = 256
-    # 4 main claws with per-claw randomization.
-    offsets = [(i - 1.5) * spacing + rng.uniform(-4, 4) for i in range(4)]
-    for offset_y in offsets:
-        x_start = 45 + rng.uniform(-15, 15)
-        x_end = 467 + rng.uniform(-15, 15)
-        y_start = cy + offset_y + tilt * (x_start - 256)
-        y_end   = cy + offset_y + tilt * (x_end   - 256)
-        width = rng.uniform(5, 11)
-        intensity = rng.uniform(0.7, 1.0)
-        _stamp_streak(c, x_start, y_start, x_end, y_end,
-                      width=width, taper=True, intensity=intensity, blur=1.1)
-    # Background hairs.
-    for _ in range(16):
-        y_base = cy + rng.uniform(-spacing * 1.6, spacing * 1.6)
-        x_start = 70 + rng.uniform(-25, 25)
-        x_end = 442 + rng.uniform(-25, 25)
-        _stamp_streak(c, x_start, y_base, x_end, y_base + rng.uniform(-2, 2),
-                      width=rng.uniform(1.5, 3), taper=True,
-                      intensity=rng.uniform(0.4, 0.65), blur=0.85)
-    _save(c, "scratch_raptor_claw_02.png")
+def scrape(name: str, seed: int, lines: int, spread: float, gouges: int) -> None:
+    """Slide band. spread = std-dev of line positions as a fraction of height."""
+    rng = np.random.default_rng(seed)
+    c = np.zeros((N, N), np.float32)
+    for _ in range(lines):
+        y = float(np.clip(rng.normal(0.5, spread), 0.12, 0.88)) * SIZE
+        length = rng.uniform(0.45, 1.0)
+        x0 = rng.uniform(0.0, 1.0 - length) * SIZE
+        heavy = rng.random()
+        width = 9 + heavy ** 2 * 10                     # 9..19 px
+        _line(c, rng, y, x0, x0 + length * SIZE, width,
+              strength=0.45 + 0.5 * heavy, gap=0.10 + 0.25 * rng.random(),
+              wave=rng.uniform(0.5, 2.5), rough=0.35, slope=rng.uniform(-6, 6))
+    for _ in range(lines // 2):  # finer hairlines between the main strokes
+        y = float(np.clip(rng.normal(0.5, spread * 1.1), 0.1, 0.9)) * SIZE
+        length = rng.uniform(0.3, 0.9)
+        x0 = rng.uniform(0.0, 1.0 - length) * SIZE
+        _line(c, rng, y, x0, x0 + length * SIZE, rng.uniform(5, 8),
+              strength=rng.uniform(0.4, 0.7), gap=0.3, wave=rng.uniform(0.5, 2), rough=0.25,
+              slope=rng.uniform(-5, 5))
+    for _ in range(gouges):
+        y = float(np.clip(rng.normal(0.5, spread * 0.7), 0.2, 0.8)) * SIZE
+        length = rng.uniform(0.3, 0.75)
+        x0 = rng.uniform(0.0, 1.0 - length) * SIZE
+        _line(c, rng, y, x0, x0 + length * SIZE, rng.uniform(16, 26),
+              strength=1.0, gap=0.05, wave=1.0, rough=0.55, slope=rng.uniform(-4, 4))
+    c *= _x_fade(0.10)[None, :]
+    _save(c, name)
 
 
-def _stamp_dot(canvas: np.ndarray, cx: float, cy: float,
-               radius: float, intensity: float, blur: float = 0.5) -> None:
-    """Paint a soft dot (max-blended) at (cx, cy)."""
-    img = Image.new("L", (SIZE, SIZE), 0)
-    ImageDraw.Draw(img).ellipse(
-        [cx - radius, cy - radius, cx + radius, cy + radius],
-        fill=int(255 * intensity))
-    if blur > 0:
-        img = img.filter(ImageFilter.GaussianBlur(radius=blur))
-    arr = np.asarray(img, dtype=np.float32) / 255.0
-    np.maximum(canvas, arr, out=canvas)
+def haze(name: str, seed: int) -> None:
+    """Scuffed clear coat: streaky soft abrasion with faint micro-lines."""
+    rng = np.random.default_rng(seed)
+    y = np.linspace(-1, 1, N)[:, None]
+    x = np.linspace(0, 1, N)[None, :]
+    # Ragged elliptical band: edges wander along x.
+    edge = 0.55 + 0.18 * _noise1d(rng, N, 80)[None, :]
+    band = _smoothstep(0, 0.35, edge - np.abs(y - 0.08 * _noise1d(rng, N, 120)[None, :]))
+    # Streaks: noise that varies fast across y and slowly along x.
+    coarse = rng.random((96, 10)).astype(np.float32)
+    streak = np.asarray(Image.fromarray((coarse * 255).astype(np.uint8)).resize((N, N), Image.BICUBIC),
+                        np.float32)[:, :] / 255.0
+    c = band * (0.25 + 0.75 * streak ** 1.5) * 0.8
+    for _ in range(110):
+        yy = float(np.clip(rng.normal(0.5, 0.17), 0.1, 0.9)) * SIZE
+        length = rng.uniform(0.15, 0.8)
+        x0 = rng.uniform(0, 1 - length) * SIZE
+        _line(c, rng, yy, x0, x0 + length * SIZE, rng.uniform(2, 4),
+              strength=rng.uniform(0.15, 0.4), gap=0.35, wave=1.0, rough=0.3)
+    c *= (_x_fade(0.18)[None, :] * (0.85 + 0.15 * x))
+    _save(np.clip(c, 0, 1), name)
 
 
-def chip_cluster() -> None:
-    """Paint-chip cluster — many small flecks concentrated near center.
+# ------------------------------------------------------------- impacts --
 
-    For minor-impact follow-on damage where paint flakes off in a cluster
-    rather than as a continuous scratch."""
-    rng = random.Random(6)
-    c = _new_canvas()
-    cx, cy = 256, 256
+def chips(name: str, seed: int, count: int, radius: float) -> None:
+    """Impact paint loss: one irregular sharp-edged patch where the paint
+    flaked off, with smaller flakes around it. Sized for the paint canvas -
+    detail finer than ~16 px here blurs into a soft puff in game."""
+    rng = random.Random(seed)
 
-    # Dense central cluster — gaussian-distributed dots.
-    for _ in range(180):
-        x = cx + rng.gauss(0, 55)
-        y = cy + rng.gauss(0, 55)
-        size = rng.uniform(1.5, 5.0)
-        intensity = rng.uniform(0.65, 1.0)
-        _stamp_dot(c, x, y, radius=size, intensity=intensity, blur=0.5)
+    def draw(d):
+        for _ in range(9):  # overlapping large flakes form the jagged core
+            _flake(d, rng, SIZE / 2 + rng.gauss(0, radius * SIZE * 0.35),
+                   SIZE / 2 + rng.gauss(0, radius * SIZE * 0.3), rng.uniform(18, 42))
+        for _ in range(count):
+            r = abs(rng.gauss(0, radius)) * SIZE + radius * SIZE * 0.5
+            a = rng.uniform(0, 2 * math.pi)
+            _flake(d, rng, SIZE / 2 + r * math.cos(a), SIZE / 2 + r * 0.8 * math.sin(a),
+                   6 + 12 * rng.random() ** 2)
 
-    # Sparse outliers so the edge isn't a hard cutoff.
-    for _ in range(45):
-        x = cx + rng.uniform(-200, 200)
-        y = cy + rng.uniform(-200, 200)
-        size = rng.uniform(1.0, 2.8)
-        intensity = rng.uniform(0.4, 0.7)
-        _stamp_dot(c, x, y, radius=size, intensity=intensity, blur=0.4)
-
-    _save(c, "scratch_chip_cluster.png")
+    _save(_flake_canvas(draw), name)
 
 
-def tbone() -> None:
-    """Right-angle scuff — main scratch with a perpendicular branch.
+def gouge(name: str, seed: int, scores: int) -> None:
+    """Dig-in crater at the left with short deep scores trailing to the right."""
+    rng = random.Random(seed)
+    nrng = np.random.default_rng(seed)
+    cx, cy = SIZE * 0.28, SIZE * 0.5
 
-    Reads as a corner/edge impact: one long primary line and a shorter
-    branch joining at one end."""
-    rng = random.Random(7)
-    c = _new_canvas()
+    def draw(d):
+        for _ in range(26):
+            _flake(d, rng, cx + rng.gauss(0, 14), cy + rng.gauss(0, 18), 4 + 16 * rng.random() ** 2)
+        for _ in range(40):  # chips flicked off along the scores
+            _flake(d, rng, cx + rng.uniform(10, 260), cy + rng.gauss(0, 34), 2 + 7 * rng.random() ** 2)
 
-    # Main horizontal scratch.
-    _stamp_streak(c, 60, 256, 460, 256,
-                  width=12.0, taper=True, intensity=1.0, blur=1.0)
-    # Perpendicular branch joining near the right end of the main scratch.
-    _stamp_streak(c, 380, 90, 380, 422,
-                  width=10.5, taper=True, intensity=0.95, blur=1.0)
-
-    # Secondary hairs around both axes.
-    for _ in range(14):
-        if rng.random() < 0.5:
-            y = 256 + rng.uniform(-22, 22)
-            x_start = 70 + rng.uniform(-20, 20)
-            x_end = 460 + rng.uniform(-20, 20)
-            _stamp_streak(c, x_start, y, x_end, y,
-                          width=rng.uniform(1.5, 3.0), taper=True,
-                          intensity=rng.uniform(0.45, 0.75), blur=0.9)
-        else:
-            x = 380 + rng.uniform(-22, 22)
-            y_start = 100 + rng.uniform(-20, 20)
-            y_end = 412 + rng.uniform(-20, 20)
-            _stamp_streak(c, x, y_start, x, y_end,
-                          width=rng.uniform(1.5, 3.0), taper=True,
-                          intensity=rng.uniform(0.45, 0.75), blur=0.9)
-
-    _save(c, "scratch_tbone.png")
+    c = _flake_canvas(draw)
+    for i in range(scores):
+        y = cy + (i - (scores - 1) / 2) * rng.uniform(16, 26) + rng.gauss(0, 4)
+        _line(c, nrng, y, cx - 10, cx + rng.uniform(0.35, 0.62) * SIZE, rng.uniform(10, 22),
+              strength=1.0, gap=0.08, wave=2, rough=0.5, slope=rng.uniform(-10, 10))
+    c *= _x_fade(0.06)[None, :]
+    _save(c, name)
 
 
 def main() -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
-    streak_01()
-    streak_02()
-    streak_03()
-    streak_05_clean()
-    chip_cluster()
-    tbone()
-    raptor_claw_01()
-    raptor_claw_02()
-    print("done.")
+    for old in RETIRED:
+        for p in glob.glob(os.path.join(OUT_DIR, old + ".png*")):
+            os.remove(p)
+            print(f"removed {p}")
+    scrape("scr_scrape_01", 101, lines=16, spread=0.16, gouges=1)
+    scrape("scr_scrape_02", 202, lines=22, spread=0.20, gouges=2)
+    scrape("scr_scrape_03", 303, lines=11, spread=0.11, gouges=0)
+    haze("scr_haze_01", 404)
+    haze("scr_haze_02", 505)
+    chips("scr_chips_01", 606, count=22, radius=0.10)
+    chips("scr_chips_02", 707, count=14, radius=0.07)
+    gouge("scr_gouge_01", 808, scores=3)
+    gouge("scr_gouge_02", 909, scores=2)
 
 
 if __name__ == "__main__":

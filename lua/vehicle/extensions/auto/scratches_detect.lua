@@ -1,7 +1,7 @@
 -- scratches_mod / detect.lua
 -- Per-vehicle (VLUA) scrape & impact detector. Wraps the global onNodeCollision
--- callback, filters for body-vs-hard-surface contacts, and logs candidate
--- events to the console. Phase 1: log only, no painter calls.
+-- callback, filters for body-vs-hard-surface contacts on the player's car, and
+-- ships each frame's impacts + finished slide streams to scratches_paint.ingest.
 
 local M = {}
 
@@ -13,6 +13,11 @@ local logTag = "scratches"
 -- on the 0.25s stats push. The local `log` below shadows the global logger so
 -- every existing call site in this file is captured for free.
 local LOG_RING_MAX = 160
+-- Lines dropped per overflow. Trimming in blocks keeps the ring O(1) amortized
+-- per push; table.remove(logRing, 1) shifts the whole array on every line once
+-- the ring is full — which is exactly when a crash is generating the most log
+-- traffic, on the physics VM. Depth floats between MAX-TRIM and MAX.
+local LOG_RING_TRIM = 40
 local LOG_PUSH_CAP = 30   -- max lines shipped to GE per push (bounds payload)
 local logRing      = {}   -- {seq, lvl, msg}; oldest at [1], newest at [#]
 local logRingSeq   = 0    -- monotonic id, survives drops
@@ -22,7 +27,12 @@ local _log         = log  -- the real global logger, captured before shadowing
 local function ringPush(lvl, msg)
   logRingSeq = logRingSeq + 1
   logRing[#logRing + 1] = { seq = logRingSeq, lvl = lvl, msg = msg }
-  if #logRing > LOG_RING_MAX then table.remove(logRing, 1) end
+  local n = #logRing
+  if n > LOG_RING_MAX then
+    -- Shift the surviving tail down once, then nil the vacated slots.
+    for i = 1, n - LOG_RING_TRIM do logRing[i] = logRing[i + LOG_RING_TRIM] end
+    for i = n - LOG_RING_TRIM + 1, n do logRing[i] = nil end
+  end
 end
 
 -- Shadow the global `log`. Every log(level, tag, msg) call in this file now
@@ -43,7 +53,10 @@ local bodyMatSet    = nil  -- node materials we treat as paintable body
 local surfaceMatSet = nil  -- ground materials worth marking against
 
 local enabled       = true
-local logCandidates = true
+-- Off by default: a sustained slide trips the every-50th-event line ~40x/sec
+-- per sliding node, and every one of those is a string.format + a write to
+-- beamng.log on the physics VM. Turn on from the console when diagnosing.
+local logCandidates = false
 local verbose       = false  -- if true, log every candidate. else, throttle.
 local logEveryNth   = 50     -- per-node, when not verbose
 
@@ -60,20 +73,33 @@ local nodeLastContactTime = {} -- nid -> simTime onNodeCollision last fired for 
                                --   node (drives impact-onset detection — see
                                --   IMPACT_REARM_GAP)
 
+-- Per-node filter verdict, computed on a node's first contact and reused for
+-- every later one. Wheel-ness, node material and part origin never change for
+-- a loaded vehicle (a part swap reloads this whole VM), so re-running the
+-- material lookup + lowercase + 18-pattern part scan on every physics tick of
+-- every contacting node was pure waste on the hottest path in the mod.
+-- Values: a body material name (paintable) or one of the REJ_* sentinels.
+local nodeClass = {}
+local REJ_NO_NODE, REJ_WHEEL, REJ_BODY_MAT, REJ_PART = 1, 2, 3, 4
+
 -- Per-node slide stream. Each entry is a small table of contact-point samples
--- collected while the node is in active slide contact. Flushed as a single
--- brushStroke layer when the node has been idle for STREAM_IDLE_TIMEOUT or
--- the stream hits STREAM_MAX_DURATION / STREAM_MAX_POINTS.
+-- collected while the node is in active slide contact. Flushed when the node
+-- has been idle for STREAM_IDLE_TIMEOUT or the stream hits
+-- STREAM_MAX_DURATION / STREAM_MAX_POINTS.
 local nodeStreams = {}       -- nid -> { startTime, lastTime, points = {{x,y,z,nx,ny,nz}, ...} }
 
 -- (G) Per-render-frame batch of impact / slide-fallback events.
--- updateGFX packages all of these into one queueGameEngineLua call as
--- scratches_paint.stampBatch({...}). Each entry is {x,y,z,nx,ny,nz,kind,sev}
--- where kind is:
+-- updateGFX packages these AND every stream flushed this frame into ONE
+-- queueGameEngineLua call (scratches_paint.ingest). Each event entry is
+-- {x,y,z,nx,ny,nz,kind,sev} where kind is:
 --   "i" — collision impact (world coords; sev = normalForce in N)
 --   "s" — single-point slide fallback (world coords; sev = normalForce in N)
 -- The GE side dispatches by kind; (I) scales synth-camera distance by sev.
 local pendingDetectEvents = {}
+-- Serialized streams flushed this frame, each already a "{{x,y,z,nx,ny,nz},...}"
+-- literal. Shipped with pendingDetectEvents — one GE compile per frame instead
+-- of one per stream (a big crash flushes dozens of streams a frame).
+local pendingStreams = {}
 
 -- aggregate stats since last dumpStats / since load
 local stats = {
@@ -96,6 +122,7 @@ local stats = {
   rejPartExcluded  = 0,
   rejBelowThresh   = 0,
   rejNormalForce   = 0,
+  rejNonFinite     = 0,
 }
 
 -- ---- thresholds (from particles.json) ----
@@ -142,17 +169,27 @@ local STREAM_IDLE_TIMEOUT = 0.06  -- s; gap before we treat the slide as ended
 local STREAM_MAX_DURATION = 0.25  -- s; force-flush so one camera covers the points
 local STREAM_MAX_POINTS   = 80    -- safety cap; MAX_DURATION should bound this earlier
 local STREAM_MIN_POINTS   = 2     -- below this, fall back to a single discrete stamp
+-- Minimum world distance between kept samples. The GE side chops paths into
+-- 0.22 m chunks, so 1.5 cm spacing keeps every bend it can use while a slow
+-- grind (the contact barely moving) stops piling near-duplicate points into
+-- the payload, the GE parse, and the segmentation pass.
+local STREAM_MIN_SPACING_SQ = 0.015 * 0.015
 
 local BODY_MATERIAL_NAMES = {
   "METAL", "PLASTIC", "GLASS",
 }
+-- Names must exist in lua/common/particles.json "materials" — the ground-model
+-- list has no CONCRETE / ASPHALT_PREPPED / SAND_DENSE (concrete barriers and
+-- kerbs report as ROCK or ASPHALT). buildSets resolves names exactly and warns
+-- about any that don't exist instead of letting particles.getMaterialIDByName
+-- silently fall back to id 3 (PLASTIC).
 local SURFACE_MATERIAL_NAMES = {
-  "ASPHALT", "ASPHALT_WET", "ASPHALT_PREPPED", "SLIPPERY", "ROCK",
-  "METAL", "COBBLESTONE", "RUMBLE_STRIP", "GRAVEL",
+  "ASPHALT", "ASPHALT_WET", "SLIPPERY", "ROCK",
+  "METAL", "COBBLESTONE", "RUMBLE_STRIP", "GRAVEL", "SANDY_ROAD",
   -- Anything you might smash into on a typical map:
-  "CONCRETE", "WOOD", "PLASTIC", "RUBBER",
+  "WOOD", "PLASTIC", "RUBBER",
   -- Off-road:
-  "DIRT", "DIRT_DUSTY", "GRASS", "MUD", "SAND", "SAND_DENSE",
+  "DIRT", "DIRT_DUSTY", "GRASS", "MUD", "SAND",
   "ICE", "SNOW",
 }
 
@@ -186,23 +223,28 @@ local function buildSets()
   if not materials then return false end
 
   nameById = {}
+  local idByName = {}
   for id, mat in pairs(materials) do
     if type(mat) == "table" and mat.name then
       nameById[id] = mat.name
+      idByName[mat.name] = id
     end
   end
 
-  bodyMatSet = {}
-  for _, name in ipairs(BODY_MATERIAL_NAMES) do
-    local id = particles.getMaterialIDByName(materials, name)
-    if id then bodyMatSet[id] = name end
+  local function resolve(names)
+    local set = {}
+    for _, name in ipairs(names) do
+      local id = idByName[name]
+      if id then
+        set[id] = name
+      else
+        log('W', logTag, "unknown ground-model material '" .. name .. "' ignored")
+      end
+    end
+    return set
   end
-
-  surfaceMatSet = {}
-  for _, name in ipairs(SURFACE_MATERIAL_NAMES) do
-    local id = particles.getMaterialIDByName(materials, name)
-    if id then surfaceMatSet[id] = name end
-  end
+  bodyMatSet    = resolve(BODY_MATERIAL_NAMES)
+  surfaceMatSet = resolve(SURFACE_MATERIAL_NAMES)
 
   log('I', logTag, string.format(
     "material sets resolved: %d body materials, %d surface materials",
@@ -215,10 +257,10 @@ end
 -- and from the slide branch (force-flush at MAX_DURATION/MAX_POINTS).
 --
 -- 0 points: just clear the entry (nothing to draw).
--- 1 point:  fall back to a single discrete stamp via stampAt — the brushStroke
---           layer needs >= 2 dataPoints to interpolate.
--- 2+:       serialize as a Lua table literal of {x,y,z,nx,ny,nz} entries and
---           queue a single scratches_paint.stampStream(points) call.
+-- 1 point:  fall back to a single discrete stamp — a stretched decal needs
+--           >= 2 points to have a direction.
+-- 2+:       serialize as a Lua table literal of {x,y,z,nx,ny,nz} entries onto
+--           pendingStreams; updateGFX ships it with the frame's batch.
 local function flushStream(id1)
   local s = nodeStreams[id1]
   if not s then return end
@@ -240,52 +282,68 @@ local function flushStream(id1)
   end
 
   -- Build a Lua table-literal payload like {{x,y,z,nx,ny,nz},{...},...}.
+  -- Normals only steer the camera axis, so 3 decimals is plenty.
   local parts = {}
   for i, p in ipairs(s.points) do
-    parts[i] = string.format("{%.4f,%.4f,%.4f,%.4f,%.4f,%.4f}",
+    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f}",
       p.x, p.y, p.z, p.nx, p.ny, p.nz)
   end
 
   stats.streamsFlushed    = stats.streamsFlushed + 1
   stats.streamPointsTotal = stats.streamPointsTotal + n
 
-  obj:queueGameEngineLua(string.format(
-    "if scratches_paint and scratches_paint.stampStream then " ..
-    "  pcall(scratches_paint.stampStream, {%s}) " ..
-    "end",
-    table.concat(parts, ",")))
+  pendingStreams[#pendingStreams + 1] = "{" .. table.concat(parts, ",") .. "}"
+end
+
+-- NaN fails x == x; inf and absurd magnitudes fail the bound.
+local function finite(x) return x == x and x > -1e9 and x < 1e9 end
+
+-- Resolve (and cache) whether node id1 is a paintable body node. Returns the
+-- body material name, or a REJ_* sentinel.
+local function classifyNode(id1)
+  local node = v.data.nodes and v.data.nodes[id1]
+  if not node then return REJ_NO_NODE end
+  if node.wheelID then return REJ_WHEEL end
+  local bodyName = bodyMatSet[node.nodeMaterial]
+  if not bodyName then return REJ_BODY_MAT end
+  -- part deny-list (mechanical / non-paintable parts). find with the 4th arg
+  -- `true` does plain (non-pattern) substring search.
+  local partLower = (node.partOrigin or node.partPath or ""):lower()
+  for _, pat in ipairs(EXCLUDE_PART_PATTERNS) do
+    if partLower:find(pat, 1, true) then return REJ_PART end
+  end
+  return bodyName
 end
 
 -- ---- the filter ----
 local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slipVel,
                                 slipForce, normalForce, depth, mat1, mat2)
   if not enabled then return end
+  -- The painter only ever decorates the player's car, but this extension is
+  -- auto-loaded into EVERY vehicle — AI traffic included. Without this gate
+  -- each traffic car ran the full filter on every contact and shipped its
+  -- world-space hits to GE, where they were converted with the PLAYER's
+  -- matrix and stamped onto the player's body.
+  if not playerInfo.firstPlayerSeated then return end
   stats.totalCalls = stats.totalCalls + 1
 
   if not buildSets() then return end
 
-  -- node lookup; reject if missing or a wheel
-  local node = v.data.nodes and v.data.nodes[id1]
-  if not node then stats.rejNoNode = stats.rejNoNode + 1; return end
-  if node.wheelID then stats.rejWheel = stats.rejWheel + 1; return end
-
-  -- body material
-  local bodyName = bodyMatSet[node.nodeMaterial]
-  if not bodyName then stats.rejBodyMat = stats.rejBodyMat + 1; return end
-
-  -- part deny-list (mechanical / non-paintable parts). Strings.find with the
-  -- 4th arg `true` does plain (non-pattern) substring search.
-  local part = node.partOrigin or node.partPath or ""
-  local partLower = part:lower()
-  for _, pat in ipairs(EXCLUDE_PART_PATTERNS) do
-    if partLower:find(pat, 1, true) then
-      stats.rejPartExcluded = stats.rejPartExcluded + 1
-      return
-    end
+  local bodyName = nodeClass[id1]
+  if bodyName == nil then
+    bodyName = classifyNode(id1)
+    nodeClass[id1] = bodyName
   end
+  if bodyName == REJ_WHEEL then stats.rejWheel = stats.rejWheel + 1; return end
+  if bodyName == REJ_BODY_MAT then stats.rejBodyMat = stats.rejBodyMat + 1; return end
+  if bodyName == REJ_PART then stats.rejPartExcluded = stats.rejPartExcluded + 1; return end
+  if bodyName == REJ_NO_NODE then stats.rejNoNode = stats.rejNoNode + 1; return end
+  local node = v.data.nodes[id1]
 
-  -- surface material
-  local surfaceName = surfaceMatSet[mat2]
+  -- surface material: materialId1 is what the node hit (the ground-model
+  -- material, e.g. ASPHALT); materialId2 is the node's own material.
+  -- Verified in game by tallying (mat1, mat2) pairs during a slide.
+  local surfaceName = surfaceMatSet[mat1]
   if not surfaceName then stats.rejSurfaceMat = stats.rejSurfaceMat + 1; return end
 
   -- magnitude
@@ -324,10 +382,9 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   local n = (nodeEventCount[id1] or 0) + 1
   nodeEventCount[id1] = n
 
-  if not logCandidates then return end
-
-  local shouldLog = verbose
-  if not shouldLog then
+  -- logCandidates gates only this log line, never the paint coupling below.
+  local shouldLog = logCandidates and verbose
+  if logCandidates and not shouldLog then
     local last = nodeEventLast[id1] or 0
     if n - last >= logEveryNth then
       shouldLog = true
@@ -361,6 +418,15 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   --       per-node brushStroke stream, which flushes on idle timeout.
   -- Fire-and-forget: we don't observe the result; failures will surface as
   -- silent missing decals (paint.lua logs its own diagnostics on stampAt).
+  -- A NaN/inf sample (exploding node) would format as nan/inf, which the GE
+  -- chunk reads as undefined globals — losing the WHOLE frame's batch, since
+  -- streams and impacts share one call. Drop just the bad sample instead.
+  if not (finite(pos.x) and finite(pos.y) and finite(pos.z)
+          and finite(normal.x) and finite(normal.y) and finite(normal.z)
+          and finite(normalForce)) then
+    stats.rejNonFinite = stats.rejNonFinite + 1
+    return
+  end
   if paintEnabled and obj and obj.queueGameEngineLua then
     -- `now` is the simTime resolved in the magnitude section above.
     if impactHit then
@@ -403,13 +469,25 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
         nodeStreams[id1] = stream
       end
       stream.lastTime = now
-      table.insert(stream.points, {
-        x = pos.x, y = pos.y, z = pos.z,
+      local pts  = stream.points
+      local prev = pts[#pts]
+      local px, py, pz = pos.x, pos.y, pos.z
+      if prev then
+        local dx, dy, dz = px - prev.x, py - prev.y, pz - prev.z
+        if dx*dx + dy*dy + dz*dz < STREAM_MIN_SPACING_SQ then
+          -- Contact hasn't moved enough to add shape; keep the stream alive
+          -- (lastTime above) and remember the stronger force for the fallback.
+          if normalForce > prev.f then prev.f = normalForce end
+          return
+        end
+      end
+      pts[#pts + 1] = {
+        x = px, y = py, z = pz,
         nx = normal.x, ny = normal.y, nz = normal.z,
-        f  = normalForce,  -- (I) force per sample; the highest one drives the
-                           --     fallback's synth-camera distance if the
-                           --     stream ends up <STREAM_MIN_POINTS.
-      })
+        f  = normalForce,  -- (I) force per sample; drives the fallback's
+                           --     synth-camera distance if the stream ends
+                           --     up <STREAM_MIN_POINTS.
+      }
 
       -- Force-flush if the stream exceeds MAX_DURATION (camera coverage
       -- starts to fail for points spread over a large body extent) or hits
@@ -423,34 +501,48 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   end
 end
 
--- (G) Flush the per-frame impact+fallback batch as ONE queueGameEngineLua
--- call. Empty case is the common one (cheap early-out). Builds a Lua table-
--- literal payload that scratches_paint.stampBatch unpacks on the GE side.
+-- (G) Flush the frame's impact/fallback events AND flushed streams as ONE
+-- queueGameEngineLua call. Empty case is the common one (cheap early-out).
+-- The vehicle id rides along so GE can drop a batch that arrives after the
+-- player has switched cars — it would otherwise be converted with the new
+-- car's matrix and land on the wrong body.
 local function flushDetectEvents()
-  local n = #pendingDetectEvents
-  if n == 0 then return end
+  local n, ns = #pendingDetectEvents, #pendingStreams
+  if n == 0 and ns == 0 then return end
   if not (paintEnabled and obj and obj.queueGameEngineLua) then
     pendingDetectEvents = {}
+    pendingStreams = {}
     return
   end
   local parts = {}
   for i = 1, n do
     local e = pendingDetectEvents[i]
-    parts[i] = string.format("{%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%q,%.0f}",
+    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%q,%.0f}",
       e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8] or 0)
   end
+  local streams = table.concat(pendingStreams, ",")
   pendingDetectEvents = {}
+  pendingStreams = {}
   obj:queueGameEngineLua(string.format(
-    "if scratches_paint and scratches_paint.stampBatch then " ..
-    "  pcall(scratches_paint.stampBatch, {%s}) " ..
+    "if scratches_paint and scratches_paint.ingest then " ..
+    "  pcall(scratches_paint.ingest, %d, {%s}, {%s}) " ..
     "end",
-    table.concat(parts, ",")))
+    obj:getId(), table.concat(parts, ","), streams))
 end
 
 -- (K) Periodic stats push to GE so the IMGUI debug panel can read VLUA-side
 -- counts and current threshold values without needing a query mechanism.
 -- Pushed via queueGameEngineLua; cheap (one Lua compile per ~0.25s).
 local lastStatsPush     = 0
+
+-- ---- opt-in profiler (tools/bench.py) ----
+-- Off by default, where it costs one boolean test per contact. On, every
+-- contact and every updateGFX is timed with os.clockhp; frameMs is the
+-- detector's total for one render frame (contacts since the last updateGFX
+-- plus updateGFX itself).
+local profiling = false
+local clockhp = os.clockhp or os.clock
+local prof = { contactMs = 0, contacts = 0, gfxMs = 0, frames = 0, frameMsMax = 0, frameMsPending = 0 }
 local STATS_PUSH_PERIOD = 0.25  -- seconds
 
 local function pushStatsToGE(now)
@@ -496,22 +588,46 @@ end
 -- Walks the stream table once per render frame; cheap because the table is
 -- empty whenever no node is in slide contact. Any stream whose last sample
 -- is older than STREAM_IDLE_TIMEOUT is flushed.
-local function updateGFX(dt)
+local function detectFrame(dt)
   if not (obj and obj.getSimTime) then return end
-  flushDetectEvents()
+  -- Non-player vehicles (traffic, parked cars) do nothing at all. If the
+  -- player just left this car, drop its half-built work instead of shipping
+  -- it to a painter that is now decorating a different vehicle.
+  if not playerInfo.firstPlayerSeated then
+    if next(nodeStreams) ~= nil then table.clear(nodeStreams) end
+    if #pendingDetectEvents > 0 then pendingDetectEvents = {} end
+    if #pendingStreams > 0 then pendingStreams = {} end
+    return
+  end
   local now = obj:getSimTime() or 0
+  -- Idle-flush streams first so anything that ended this frame rides in the
+  -- same GE call as the frame's impacts.
+  if next(nodeStreams) ~= nil then
+    for nid, s in pairs(nodeStreams) do
+      if (now - s.lastTime) >= STREAM_IDLE_TIMEOUT then
+        flushStream(nid)
+      end
+    end
+  end
+  flushDetectEvents()
   -- (K) Throttled stats push to drive the GE-side IMGUI panel.
   if (now - lastStatsPush) >= STATS_PUSH_PERIOD then
     pushStatsToGE(now)
     pushLogsToGE()
     lastStatsPush = now
   end
-  if next(nodeStreams) == nil then return end
-  for nid, s in pairs(nodeStreams) do
-    if (now - s.lastTime) >= STREAM_IDLE_TIMEOUT then
-      flushStream(nid)
-    end
-  end
+end
+
+local function updateGFX(dt)
+  if not profiling then return detectFrame(dt) end
+  local t = clockhp()
+  detectFrame(dt)
+  local ms = (clockhp() - t) * 1000
+  prof.gfxMs = prof.gfxMs + ms
+  prof.frames = prof.frames + 1
+  local frameMs = prof.frameMsPending + ms
+  if frameMs > prof.frameMsMax then prof.frameMsMax = frameMs end
+  prof.frameMsPending = 0
 end
 
 -- ---- wrap / unwrap ----
@@ -525,7 +641,16 @@ local function install()
   end
   _G.onNodeCollision = function(...)
     origOnNodeCollision(...)
-    onScrapeContact(...)
+    if profiling then
+      local t = clockhp()
+      onScrapeContact(...)
+      local ms = (clockhp() - t) * 1000
+      prof.contactMs = prof.contactMs + ms
+      prof.contacts = prof.contacts + 1
+      prof.frameMsPending = prof.frameMsPending + ms
+    else
+      onScrapeContact(...)
+    end
   end
   log('I', logTag, "detect installed (wrapping onNodeCollision)")
 end
@@ -564,6 +689,7 @@ M.dumpStats = function()
   log('I', logTag, string.format("  surfaceMat    = %d", stats.rejSurfaceMat))
   log('I', logTag, string.format("  belowThresh   = %d", stats.rejBelowThresh))
   log('I', logTag, string.format("  normalForce   = %d", stats.rejNormalForce))
+  log('I', logTag, string.format("  nonFinite     = %d", stats.rejNonFinite))
   log('I', logTag, "by body material:")
   for n, c in pairs(stats.byBodyMat) do log('I', logTag, string.format("  %-12s %d", n, c)) end
   log('I', logTag, "by surface material:")
@@ -607,6 +733,7 @@ M.pushFullDumpToGE = function()
   add(string.format("  surfaceMat   = %d", stats.rejSurfaceMat))
   add(string.format("  belowThresh  = %d", stats.rejBelowThresh))
   add(string.format("  normalForce  = %d", stats.rejNormalForce))
+  add(string.format("  nonFinite    = %d", stats.rejNonFinite))
   add("by body material:")
   for n, c in pairs(stats.byBodyMat) do add(string.format("  %-12s %d", n, c)) end
   add("by surface material:")
@@ -637,11 +764,41 @@ M.resetStats = function()
     maxSlipVel = 0, maxPerpVel = 0, maxNormalForce = 0,
     rejNoNode = 0, rejWheel = 0, rejBodyMat = 0,
     rejSurfaceMat = 0, rejPartExcluded = 0,
-    rejBelowThresh = 0, rejNormalForce = 0,
+    rejBelowThresh = 0, rejNormalForce = 0, rejNonFinite = 0,
   }
   table.clear(nodeEventCount)
   table.clear(nodeEventLast)
   log('I', logTag, "stats reset")
+end
+
+M.setProfile = function(b)
+  profiling = b and true or false
+  for k in pairs(prof) do prof[k] = 0 end
+  log('I', logTag, "profiling = " .. tostring(profiling))
+end
+
+-- Lua table literal of numbers and number maps (stats + prof), for shipping
+-- to GE in one queueGameEngineLua call.
+local function numLiteral(t)
+  local parts = {}
+  for k, v in pairs(t) do
+    local key = string.format("[%q]", tostring(k))
+    if type(v) == "number" then
+      parts[#parts + 1] = key .. "=" .. string.format("%.17g", v)
+    elseif type(v) == "table" then
+      parts[#parts + 1] = key .. "=" .. numLiteral(v)
+    end
+  end
+  return "{" .. table.concat(parts, ",") .. "}"
+end
+
+-- Send stats + profile to a GE callback, e.g. "scratches_bench.recvDetect".
+-- Only a plain module.function name is accepted; it is spliced into GE code.
+M.sendStatsTo = function(geFn)
+  local mod, fn = tostring(geFn):match("^([%a_][%w_]*)%.([%a_][%w_]*)$")
+  if not (mod and obj and obj.queueGameEngineLua) then return end
+  obj:queueGameEngineLua(string.format("if %s and %s.%s then %s.%s(%s, %s) end",
+    mod, mod, fn, mod, fn, numLiteral(stats), numLiteral(prof)))
 end
 
 M.setEnabled = function(b)
@@ -739,11 +896,14 @@ local function onReset()
   table.clear(nodeLastContactTime)
   table.clear(nodeStreams)
   pendingDetectEvents = {}
+  pendingStreams = {}
   bootstrapPainter()
   -- Wipe baked decals on the GE side so the reset cleans up cosmetics too.
   -- pcall-guarded on GE because scratches_paint may not be loaded yet on a
   -- very early reset (just after vehicle spawn, before bootstrap completes).
-  if obj and obj.queueGameEngineLua then
+  -- Only the player's own reset may do this: the painter decorates the
+  -- player's car, so a traffic car resetting must not wipe it.
+  if playerInfo.firstPlayerSeated and obj and obj.queueGameEngineLua then
     obj:queueGameEngineLua(
       "if scratches_paint and scratches_paint.clearStamps then " ..
       "  pcall(scratches_paint.clearStamps) " ..
