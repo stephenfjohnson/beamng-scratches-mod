@@ -112,7 +112,9 @@ per-contact cost on the physics tick is a table lookup.
 
 Surviving contacts split into two event kinds:
 
-- **Impacts** — single hard hits past a normal-force threshold.
+- **Impacts** — the first hard hit past a normal-force threshold in each
+  contact. A soft initial touch stays armed while force builds; sustained
+  pressure cannot repeatedly trigger impacts. Separation re-arms the node.
 - **Slides** — sustained slipping contact, accumulated into multi-point
   *streams* that describe the scrape path.
 
@@ -155,7 +157,9 @@ Work is scheduled around two measured engine costs:
   way share its projection, with the camera backed off to fit every band.
 - **Baking** costs ~0.85 ms per layer with no toll, so captured layers are
   baked on the frames *between* projection batches, 6 at a time. No frame
-  pays both costs.
+  pays both costs. Each captured batch drains before another is projected,
+  so low frame rates or a zero flush interval cannot starve baking or grow
+  its backlog indefinitely.
 
 A spot that has already been painted twice (8 cm grid) skips further marks
 until the canvas is cleared, so a long slide doesn't pay to repaint the same
@@ -319,7 +323,62 @@ logic regressions show up without launching BeamNG:
 lua tools/sim/harness.lua
 ```
 
+Regression checks also cover force ramp-up and impact re-arming, merged
+scrape layer counts, continuous-input bake progress at zero flush intervals
+and low frame rates, and diagnostics on skipped vehicles or without a car.
+
 It does not render anything; whether marks *look* right still needs the game.
+
+### Repeatable accuracy tests
+
+```powershell
+python tools/test_accuracy.py                       # Lua regressions, no game needed
+python -m pip install -r tools/requirements-accuracy.txt
+python tools/dev.py launch --game-arg=-gfx --game-arg=vk
+python tools/test_accuracy.py --ingame --repeat 2    # frozen rendered fixtures
+python tools/test_accuracy.py --physics --repeat 2   # fixtures + five crash scenarios
+```
+
+The in-game suite requires Gridmap v2 and the local BeamNG MCP connection.
+It deploys the current source and **replaces the player vehicle** with the
+stock D15 4WD automatic configuration. Each repetition starts from that
+configuration at the same coordinates, with a private painter RNG seed of
+1977. It restores the prior pause, HUD, exposure and background-FPS settings afterward;
+it leaves the test pickup in the level.
+
+The rendered fixtures inject the same node contacts while physics is paused:
+roof contact must mark the roof and leave the bed clean; outside-bed contact
+must leave the floor and inner wall clean; direct floor contact must visibly
+mark the bed. Captures use fixed exposure (10.3 EV, automatic exposure off).
+Every camera has clean-to-clean control captures to detect lighting/camera
+instability. The test compares lossless PNGs in the central
+60% of each view, counting pixels whose largest RGB-channel change exceeds
+20/255. Targets require at least 25 changed pixels and less than 5% changed
+area; controls and protected regions allow at most 10 pixels. Bake or
+projection errors also fail the run. These checks prevent an entirely broken
+renderer from passing simply because it painted nothing.
+
+`bench/accuracy/<timestamp>/` contains the exact contact packets, node names,
+camera poses, before/control/after PNGs, difference masks, game logs, painter
+counters and a JSON manifest with source hashes and engine version. The
+process exits nonzero on failure or an interrupted run. `--physics` also
+writes the existing crash reports under `bench/runs/`. Physics runs check
+positive bakes, empty queues and errors. Roofdrop and rollover also freeze the
+wreck, capture it, then clear only cosmetic damage and capture the same
+deformation again: the body must show paint damage and the bed floor must
+remain unchanged. The rollover must reach an up-vector Z below -0.7; merely
+tipping onto its side fails. These are not pixel-identical crash trajectories. Fixed inputs make comparisons repeatable,
+but engine timing and soft-body simulation can change the final deformation.
+
+The headless suite additionally checks rotation and translation between
+collision and delivery, node deformation between projection and bake,
+mesh ownership, shallow non-mirrored projection, malformed packets,
+deterministic brush selection and recovery from a native bake failure.
+The image-comparison checks themselves are tested with:
+
+```powershell
+python -m unittest discover -s tools/sim -p "test_*.py"
+```
 
 ### Debugging
 
@@ -355,6 +414,15 @@ BeamNG, and confirm a [clean install](#players--packaged-mod) works.
 
 ## Known issues
 
+- **Contact placement is conservative, not triangle-exact.** Live contacts
+  stay anchored to the collision node, use its part's paintable flexbodies,
+  and project through only 4 cm of depth with no mirror or position jitter.
+  This prevents the old metre-deep projection from reaching unrelated panels.
+  BeamNG's collision nodes approximate the visual mesh; badly folded panels,
+  shared UVs and surfaces closer than that depth can still be ambiguous.
+  Unknown paintable ownership is rejected, so some vehicles may show less
+  damage rather than put it on an unrelated panel. No global shader override
+  or vehicle-specific mesh edits are installed.
 - **No scratches on the D3D12 renderer (BeamNG 0.39.4).** The game's own
   dynamic-decal shader (`shaders/common/dynamicDecals/decal.ps.hlsl`) fails to
   compile under D3D12, so every decal draw is dropped

@@ -117,7 +117,7 @@ ENGINE_GLOBALS = {
         "getVehicleColor", "log", "scenetree", "ui_imgui",
     },
     "lua/vehicle/": {
-        "dump", "log", "obj", "particles", "playerInfo", "tableSize", "v",
+        "dump", "log", "obj", "particles", "playerInfo", "tableSize", "v", "quat",
     },
 }
 GLOBAL_RE = re.compile(r"\b(GETGLOBAL|SETGLOBAL)\b.*;\s*([A-Za-z_][A-Za-z0-9_]*)")

@@ -50,6 +50,7 @@ Mx.__index = Mx
 function MatrixF()
   return setmetatable({c = {[0] = vec3(1,0,0), vec3(0,1,0), vec3(0,0,1), vec3(0,0,0)}}, Mx)
 end
+function Mx:getColumn(i) return self.c[i] end
 function Mx:setColumn(i, v) self.c[i] = vec3(v.x, v.y, v.z); return self end
 function Mx:copy()
   local m = MatrixF()
@@ -75,6 +76,15 @@ function Mx:fullInverse()
 end
 Mx.inverse = Mx.fullInverse
 
+local Q = {}; Q.__index = Q
+function quat(m)
+  local rotation = m:copy(); rotation:setColumn(3, vec3(0, 0, 0))
+  return setmetatable({m = rotation}, Q)
+end
+function Q:inversed() return quat(self.m:fullInverse()) end
+Q.__mul = function(q, p) return q.m:mulP3F(p) end
+local mockNodes = {}
+
 function Point4F(r, g, b, a) return {x = r, y = g, z = b, w = a} end
 function Point2F(x, y) return {x = x, y = y} end
 
@@ -85,6 +95,7 @@ local vehicle = {
   JBeam = "pickup",
   getId = function() return playerVid end,
   getRefNodeMatrix = function() return refM:copy() end,
+  getNodePosition = function(self, id) return mockNodes[id] or vec3(0, 0, 0.6) end,
   getDecalProjectionShape = function() return {} end,
   getSpawnLocalAABB = function()
     return {minExtents = vec3(-1, -2.5, 0), maxExtents = vec3(1, 2.5, 1.8)}
@@ -120,14 +131,34 @@ end }
 local counters = { projects = 0, bakes = 0, bakeLayers = 0, combines = 0, apiUpdates = 0,
                    maxProjectsInFrame = 0, projectsThisFrame = 0, clears = 0 }
 local decalProjection = {}
+local decalScale = vec3(0.1, 1, 0.1)
+local decalRotation, decalBrush = 0, ""
+local bakedLayers = {}
+local usedLayerUids = {}
+local syncedWorldTransform
 function decalProjection:projectDynamicDecals()
   counters.projects = counters.projects + 1
   counters.projectsThisFrame = counters.projectsThisFrame + 1
 end
 function decalProjection:getDecalData()
-  return { cursorPosScreenUv = {x = 0.5, y = 0.5}, decalPos = {x = 0, y = 0, z = 0} }
+  return { cursorPosScreenUv = {x = 0.5, y = 0.5}, decalPos = {x = 0, y = 0, z = 0},
+           decalScale = vec3(decalScale.x, decalScale.y, decalScale.z),
+           decalRotation = decalRotation, colorTexturePath = decalBrush }
 end
 function decalProjection:bakeLayers(list)
+  for _, layer in ipairs(list) do
+    assert(layer.uid and not usedLayerUids[layer.uid], "engine layer UID must not repeat across seed resets or hot reloads")
+    usedLayerUids[layer.uid] = true
+    if layer.decalNorm then
+      assert(getmetatable(layer.decalPos) == V and getmetatable(layer.decalNorm) == V,
+        "explicit decal coordinates require native vec3 objects")
+      for axis=0,3 do
+        assert(syncedWorldTransform and (syncedWorldTransform:getColumn(axis)-refM:getColumn(axis)):length()<1e-6,
+          "bake must refresh engine transforms after a deferred projection")
+      end
+    end
+  end
+  for _, layer in ipairs(list) do bakedLayers[#bakedLayers + 1] = layer end
   counters.bakes = counters.bakes + 1
   counters.bakeLayers = counters.bakeLayers + #list
   counters.bakesThisFrame = (counters.bakesThisFrame or 0) + 1
@@ -137,7 +168,7 @@ function decalProjection:clearBakedTextures() counters.clears = counters.clears 
 function decalProjection:flushDynamicTextures() end
 function decalProjection:combineTextures() counters.combines = counters.combines + 1 end
 function decalProjection:setShape() end
-function decalProjection:setWorldTransform() end
+function decalProjection:setWorldTransform(m) syncedWorldTransform = m:copy() end
 function decalProjection:setTransform() end
 
 local api = { ready = false, layerTypes = {fill = 1}, blendModesMap = {Normal = 1},
@@ -151,6 +182,7 @@ api.onUpdate_ = function()
 end
 api.onVehicleSwitched = function() end
 api.setProjectDynamicDecalsState = function() end
+api.getShapeMeshes = function() return {pickup_body=true,pickup_door_L=true,pickup_bed=true} end
 api.getShapeMaterialNames = function() return {"pickup_body", "pickup_glass"} end
 local boundIdx = {}
 api.getMaterialIndices = function() return boundIdx end
@@ -165,7 +197,10 @@ for _, n in ipairs({"setDecalTexturePath", "setMetallicIntensity", "setRoughness
                     "setDecalColor", "setDecalScale", "setDecalRotation", "setUseSurfaceNormal"}) do
   api[n] = function() end
 end
-api.setDecalLocalPos = function(decal) decal.cursorPosScreenUv = {x = 0.5, y = 0.5} end
+api.setDecalScale = function(scale) decalScale = scale end
+api.setDecalRotation = function(rotation) decalRotation = rotation end
+api.setDecalTexturePath = function(channel, path) if channel == "color" then decalBrush = path end end
+api.setDecalLocalPos = function(decal, p) decal.cursorPosScreenUv = {x = 0.5 + p.x * 0.001, y = 0.5 + p.y * 0.001} end
 
 local partConfig = { partsTree = { id = "root", children = { { id = "paint_design", chosenPartName = "" } } } }
 extensions = {
@@ -177,7 +212,7 @@ extensions = {
   },
   load = function() end,
 }
-core_vehicle_manager = { getPlayerVehicleData = function() return {} end }
+core_vehicle_manager = { getPlayerVehicleData = function() return {vdata = v and v.data} end }
 
 -- Minimal ImGui: any unknown function is a no-op returning false; pointers
 -- are {[0]=value} like the FFI-backed ones.
@@ -235,6 +270,9 @@ local queuedGE = {}
 obj = {
   simTime = 0,
   getSimTime = function(self) return self.simTime end,
+  getRotation = function() return refM end,
+  getPosition = function() return refM:getColumn(3) end,
+  getNodePosition = function(self, id) return vehicle:getNodePosition(id) end,
   getId = function() return playerVid end,
   queueGameEngineLua = function(self, s) queuedGE[#queuedGE + 1] = s end,
 }
@@ -258,6 +296,7 @@ v = { data = { nodes = {
   [20] = { nodeMaterial = METAL, partOrigin = "pickup_engine_v8", },
   [30] = { nodeMaterial = 4, wheelID = 1, partOrigin = "tire" },
 } } }
+v.data.flexbodies = {{mesh="pickup_door_L",partOrigin="pickup_door_L"}}
 playerInfo = { firstPlayerSeated = true }
 function onNodeCollision() end
 
@@ -277,6 +316,7 @@ local function runGE()
 end
 
 local function contact(id, x, y, z, slipVel, normalForce)
+  mockNodes[id] = vec3(x, y, z) - refM:getColumn(3)
   _G.onNodeCollision(id, vec3(x, y, z), vec3(0, 0, 1), vec3(0, 0, 0), 0, vec3(0, 0, 0),
                      slipVel, 0, normalForce, 0.01, ASPHALT, METAL)  -- (surface, node material) as the engine passes them
 end
@@ -407,6 +447,7 @@ for _ = 1, 20 do frame() end
 -- 4c) Two slides 10 cm apart share one projection (each projecting frame
 -- costs a ~14 ms toll in game).
 local m0, pr0 = paint.getStats().stamp.streamsMerged, counters.projects
+local mergedLayersBefore = counters.bakeLayers
 paint.ingest(playerVid, nil, {
   { {100.0, 0.0, 0.6, 0, 0, 1}, {100.4, 0.0, 0.6, 0, 0, 1} },
   { {100.0, 0.1, 0.6, 0, 0, 1}, {100.4, 0.1, 0.6, 0, 0, 1} },
@@ -414,6 +455,33 @@ paint.ingest(playerVid, nil, {
 for _ = 1, 20 do frame() end
 check(paint.getStats().stamp.streamsMerged == m0 + 1 and counters.projects == pr0 + 1,
   "adjacent slides share one projection (" .. (counters.projects - pr0) .. " projections)")
+check(counters.bakeLayers - mergedLayersBefore == 4,
+  "two merged bands each bake one haze and one scrape (got " .. (counters.bakeLayers - mergedLayersBefore) .. ")")
+
+-- Continuous input must still bake, even if every frame is eligible to
+-- project (zero interval, or a frame slower than the default interval).
+for _, timing in ipairs({{0, 1 / 60}, {0.2, 0.25}}) do
+  paint.clearStamps()
+  frame()
+  paint.setFlushInterval(timing[1])
+  local bakedBefore, maxWaiting = counters.bakeLayers, 0
+  for i = 1, 60 do
+    for j = 1, 12 do
+      paint.stampAtLocal(vec3(0, 0, 0.6), vec3(0, 0, 1), {noJitter = true})
+    end
+    frame(timing[2])
+    maxWaiting = math.max(maxWaiting, paint.getStats().queue.bake)
+  end
+  check(counters.bakeLayers > bakedBefore, "continuous input makes bake progress at interval " .. timing[1])
+  check(maxWaiting <= paint.getStats().config.aggregateCap,
+    "bake backlog stays within one batch at interval " .. timing[1] .. " (max " .. maxWaiting .. ")")
+  for _ = 1, 200 do frame(timing[2]) end
+  local q = paint.getStats().queue
+  check(q.bake == 0 and q.jobs == 0 and q.stamps == 0, "overload backlog drains completely")
+end
+paint.setFlushInterval(0.2)
+check((counters.projectAndBakeFrames or 0) == 0, "overload keeps projection and baking on separate frames")
+check(counters.maxBakeLayers <= 6, "overload preserves six-layer bake budget")
 
 -- 5) Vehicle switch mid-backlog: no error, queue dropped (the WIP crash).
 paint.ingest(playerVid, { {100, 0, 0.5, 0, 0, 1, "i", 6000} }, nil)
@@ -454,6 +522,29 @@ _G.onNodeCollision(10, vec3(300, 0.5, 0.3), vec3(0, 0, 1), vec3(0, 0, 0), 0, vec
 check((detStats().rejSurfaceMat or 0) == rejBefore + 1,
   "surface filter reads materialId1 (body node on FOLIAGE rejected)")
 
+-- A contact stays armed through a soft onset, fires once when force ramps
+-- up, and only re-arms after separation. Force chatter is not a new impact.
+detect.onReset()
+runGE()
+obj.simTime = obj.simTime + 1
+contact(10, 100, 0, 0.6, 0, 100)
+obj.simTime = obj.simTime + dtPhys
+contact(10, 100, 0, 0.6, 0, 12000)
+check(detStats().impactEvents == 1, "soft-to-hard onset registers its first qualifying impact")
+for i = 1, 1000 do
+  obj.simTime = obj.simTime + dtPhys
+  contact(10, 100, 0, 0.6, 0, i % 2 == 0 and 12000 or 100)
+end
+check(detStats().impactEvents == 1, "sustained contact and force chatter do not repeat impacts")
+obj.simTime = obj.simTime + 0.2
+contact(10, 100, 0, 0.6, 0, 12000)
+check(detStats().impactEvents == 2, "separation re-arms the impact")
+detect.onReset()
+runGE()
+obj.simTime = 0
+contact(10, 100, 0, 0.6, 0, 12000)
+check(detStats().impactEvents == 1, "reset re-arms contact even at simulation time zero")
+
 local st = paint.getStats()
 check(st.perf.frames > 0 and type(st.perf.msMax) == "number", "painter reports its own frame cost")
 check(type(st.stamp.projectsIssued) == "number" and st.queue.jobs ~= nil, "painter stats snapshot is complete")
@@ -473,9 +564,156 @@ local ok3, err3 = pcall(frame)
 check(ok3, "debug panel draws: " .. tostring(err3))
 check(type(paint.buildDebugReport()) == "string", "debug report builds")
 
+-- Diagnostics remain usable when setup is pending, the car is skipped,
+-- or no player vehicle exists. Toggle must also load ImGui in these states.
+do
+  paint.toggleUI() -- hide before testing a fresh show
+  local savedIm, savedLoad = ui_imgui, extensions.load
+  local begins, imguiLoads = 0, 0
+  savedIm.Begin = function() begins = begins + 1; return true end
+  extensions.load = function(name)
+    if name == "ui_imgui" then ui_imgui = savedIm; imguiLoads = imguiLoads + 1 end
+  end
+  paint.onVehicleSwitched(playerVid, playerVid, 0)
+  partConfig.partsTree.children[1].chosenPartName = "pickup_skin_livery"
+  ui_imgui = nil
+  paint.toggleUI()
+  for _ = 1, 3 do frame() end
+  check(imguiLoads == 1, "showing diagnostics loads ImGui without a ready painter")
+  check(not paint.getStats().ready and begins == 3, "panel draws on every skipped-livery frame")
+  check(partConfig.partsTree.children[1].chosenPartName == "pickup_skin_livery", "diagnostics preserve the livery")
+  check(paint.buildDebugReport():find("painter ready: false", 1, true) ~= nil, "report remains available for a skipped vehicle")
+  hasPlayer = false
+  paint.onVehicleSwitched(playerVid, nil, 0)
+  begins = 0
+  for _ = 1, 3 do frame() end
+  check(begins == 3, "panel draws while waiting for a player vehicle")
+  hasPlayer = true
+  partConfig.partsTree.children[1].chosenPartName = ""
+  extensions.load = savedLoad
+  ui_imgui = savedIm
+  for _ = 1, 70 do frame() end
+  check(paint.getStats().ready, "painter recovers when a supported player vehicle returns")
+end
+
+-- Contact accuracy: a physics sample must follow its node through delayed
+-- delivery, rigid rotation/translation and deformation before the bake.
+do
+  detect.onReset(); runGE()
+  paint.clearStamps(); frame()
+  paint.setFlushInterval(0)
+  local initialPose = MatrixF()
+  initialPose:setColumn(0,vec3(0,1,0)):setColumn(1,vec3(-1,0,0)):setColumn(3,vec3(400,-200,30))
+  refM = initialPose
+  local localNode, offset = vec3(0.7,0.2,1.2), vec3(0.005,0.01,0)
+  local rot = refM:copy(); rot:setColumn(3,vec3(0,0,0))
+  mockNodes[10] = rot:mulP3F(localNode)
+  obj.simTime = obj.simTime + 1
+  _G.onNodeCollision(10, refM:mulP3F(localNode+offset), rot:mulP3F(vec3(0,0,-1)),
+    vec3(0,0,0), 0, rot:mulP3F(vec3(1,0,0)), 0, 0, 6000, 0.01, ASPHALT, METAL)
+  detect.updateGFX(1/60)
+  local captured, originalIngest = nil, paint.ingestContacts
+  paint.ingestContacts = function(vid, records) captured = records; originalIngest(vid,records) end
+  refM = MatrixF()
+  refM:setColumn(1,vec3(0,-1,0)):setColumn(2,vec3(0,0,-1)):setColumn(3,vec3(-600,700,20))
+  rot = refM:copy(); rot:setColumn(3,vec3(0,0,0))
+  mockNodes[10] = rot:mulP3F(localNode)
+  runGE()
+  paint.ingestContacts = originalIngest
+  check(captured and #captured == 1 and captured[1][1] == 10, "physics packet identifies the contacting node")
+  check(captured and math.abs(captured[1][2]-.005)<1e-6 and math.abs(captured[1][3]-.01)<1e-6,
+    "contact offset captured in the collision-time rotation frame")
+  check(captured and captured[1][7] == 1 and captured[1][8] == 1 and captured[1][9] == 0,
+    "outward normal and slip direction survive rotation and deferred delivery")
+  frame()
+  check(paint.getStats().queue.bake == 1, "anchored contact reaches deferred bake queue")
+  localNode = localNode + vec3(.17,-.03,.02)
+  refM = initialPose:copy(); refM:setColumn(3,vec3(-800,-40,10))
+  rot = refM:copy(); rot:setColumn(3,vec3(0,0,0))
+  mockNodes[10] = rot:mulP3F(localNode)
+  frame()
+  local layer = bakedLayers[#bakedLayers]
+  check((layer.decalPos - (localNode+offset)):length()<1e-6, "bake follows node deformation after projection")
+  check((layer.decalNorm-vec3(0,0,1)):length()<1e-6, "rollover retains the roof-facing local normal")
+  check(getmetatable(layer.decalPos)==V and getmetatable(layer.decalNorm)==V, "pinned coordinates use native vectors")
+  check(#layer.meshes.pickup==1 and layer.meshes.pickup[1]=='pickup_door_L', "contact cannot project onto the bed or other parts")
+  check(layer.decalScale.y==.04 and layer.mirrored==false, "contact volume is shallow and never mirrored")
+  check(layer.decalScale.x<=.14 and layer.decalScale.z<=.14, "impact footprint is contact sized")
+
+  refM = MatrixF(); refM:setColumn(3,vec3(100,0,0))
+  mockNodes[10],mockNodes[11] = vec3(0,0,.6),vec3(.1,0,.6)
+  local function record(id,nz) return {id,0,0,0,0,0,nz or 1,1,0,0,'s',6000,1} end
+  paint.clearStamps(); frame(); paint.resetPaintStats()
+  local invalid = {record(20), record(999), record(10,0), record(10),record(10),record(10),false}
+  invalid[4][2]=.2; invalid[5][13]=-1; invalid[6][5]=0/0
+  paint.ingestContacts(playerVid,invalid)
+  check(paint.getStats().stamp.contactsRejected == 7, "unknown ownership, bad normals, excessive offsets and malformed packets fail closed")
+  frame(); frame()
+  check(paint.getStats().stamp.projectsIssued == 0, "rejected contacts never project onto a nearby painted part")
+  paint.ingestContacts(4242,{record(10)})
+  check(paint.getStats().stamp.foreignDropped == 1, "foreign node-based packet is rejected")
+
+  paint.ingestContacts(playerVid,{record(10,1),record(11,-1)})
+  frame(); frame()
+  check(paint.getStats().stamp.projectsIssued == 2, "opposite-facing contacts never share a projection camera")
+
+  local signatures = {}
+  local originalRandom = math.random
+  math.random = function() error('painter must not consume the game RNG') end
+  for seed=1,8 do
+    for pass=1,2 do
+      -- Disturb both RNG and recent-brush history differently before replay.
+      for noise=1,pass+1 do
+        paint.clearStamps(); frame()
+        paint.ingestContacts(playerVid,{record(10)})
+        frame(); frame()
+      end
+      paint.clearStamps(); frame(); paint.setRandomSeed(seed)
+      paint.ingestContacts(playerVid,{record(10)})
+      frame(); frame()
+      layer = bakedLayers[#bakedLayers]
+      signatures[pass] = layer.colorTexturePath .. ':' .. layer.decalRotation .. ':' .. layer.decalScale.x
+    end
+    check(signatures[1]==signatures[2], "seed " .. seed .. " repeats independently of brush history")
+  end
+  math.random = originalRandom
+
+  paint.clearStamps(); frame(); paint.resetPaintStats()
+  local realBake = decalProjection.bakeLayers
+  decalProjection.bakeLayers = function() error('simulated native bake failure') end
+  paint.ingestContacts(playerVid,{record(10)})
+  local bakeOk = pcall(function() frame(); frame() end)
+  decalProjection.bakeLayers = realBake
+  check(bakeOk and paint.getStats().stamp.bakesFailed==1, "native bake failure is observable without aborting the frame")
+  check(paint.getStats().perf.bakeLayersTotal==0 and paint.getStats().queue.bake==0, "failed bake is not counted as visible work or retried forever")
+  paint.ingestContacts(playerVid,{record(11)})
+  frame(); frame()
+  check(paint.getStats().perf.bakeLayersTotal==1, "painting recovers after a failed bake")
+  for i=#logLines,1,-1 do
+    if logLines[i]:find('simulated native bake failure',1,true) then table.remove(logLines,i) end
+  end
+  paint.resetPaintStats()
+  check(paint.getStats().stamp.bakesFailed==0 and paint.getStats().stamp.contactsRejected==0, "accuracy error counters reset between test runs")
+  paint.setFlushInterval(.2)
+end
+
 -- 8) Unload/reload of the extension doesn't error.
 local ok4, err4 = pcall(paint.onExtensionUnloaded)
 check(ok4, "onExtensionUnloaded runs cleanly: " .. tostring(err4))
+
+local reloadUids = {}
+for reload=1,2 do
+  paint = dofile(ROOT .. "/lua/ge/extensions/scratches/paint.lua")
+  scratches_paint = paint
+  paint.onExtensionLoaded()
+  for _=1,5 do frame() end
+  paint.setRandomSeed(1977)
+  paint.stampAtLocal(vec3(0,0,.6),vec3(0,0,1),{noJitter=true})
+  for _=1,20 do frame() end
+  reloadUids[reload] = bakedLayers[#bakedLayers].uid
+  paint.onExtensionUnloaded()
+end
+check(reloadUids[1]~=reloadUids[2], "same-seed hot reloads use distinct native layer identities")
 
 for _, l in ipairs(logLines) do
   if l:sub(1, 1) == "E" then check(false, "error logged: " .. l) end

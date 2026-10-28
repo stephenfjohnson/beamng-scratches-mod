@@ -174,6 +174,47 @@ Done — `README.md` rewritten as a full install + tech guide.
 - [x] `tools/sim/harness.lua`: mocked-engine checks for both VMs, run by
   `tools/package.py`.
 
+## Review fixes (2026-10-28)
+
+- [x] Keep impact contacts armed through a soft initial physics tick until
+  the first qualifying hit. Sustained pressure / force chatter cannot fire
+  again until separation; reset also permits a first hit at simulation time zero.
+- [x] Give merged scrape jobs a separate combined segment list. Previously
+  it aliased the first band's list and painted subsequent bands twice.
+- [x] Drain captured layers before projecting another batch. This preserves
+  the six-layer bake limit and separate projection/bake frames while preventing
+  starvation at a zero flush interval or frame times above the flush interval.
+- [x] Draw diagnostics independently of painter readiness; showing the panel
+  loads ImGui even when vehicle setup is skipped.
+- [x] Regression checks: 112 passed, including overload recovery, impact
+  re-arming, exact merged-band layer counts, and skipped/no-vehicle diagnostics.
+  Release syntax/global/sidecar checks also passed.
+- [x] Live smoke tests on BeamNG **0.40.3.0.290897, Vulkan**, Gridmap v2,
+  default pickup: baseline, roofdrop, sideslide, rollover, and nosedive.
+  All finished with empty painter queues and zero failed/dropped jobs.
+  Baseline generated no marks; the four crash scenarios registered 19, 27,
+  14, and 11 impacts respectively. Side and roof screenshots were inspected.
+  The Percheron (unsupported) displayed the NOT READY panel with inactive
+  canvas controls, and switching back to the pickup restored readiness.
+  Local reports/screenshots: `bench/runs/*_review-fixes/` (gitignored).
+- [x] Additional live sideslide with `paint.setFlushInterval=0` completed
+  with bake progress and an empty final backlog; the benchmark restored
+  default tuning afterwards. Report: `bench/runs/*_review-zero-interval/`.
+
+Next review items:
+
+- [ ] Profile projection and bake spikes on the current engine. These smoke
+  runs measured peak painter frame costs of 41–69 ms during crashes; this
+  is a follow-up measurement, not a before/after performance comparison.
+- [ ] Carry surface and body material into the painter for distinct damage styles.
+- [ ] Replace hard spot saturation with severity-aware accumulation; avoid
+  consuming spot allowances for work that is dropped before painting.
+- [ ] Persist tuning presets and expose flush interval / bake backlog controls.
+- [ ] Require Lua 5.1 tools for release builds instead of silently skipping
+  validation when the toolchain is unavailable.
+- [ ] Research livery coexistence and scratch-specific metallic/roughness
+  independently of these reliability fixes.
+
 ## Robustness fixes (2026-09-08)
 
 - [x] `decalProjection` (plucked from an `api.bakeLayers` upvalue) is now
@@ -188,3 +229,50 @@ Done — `README.md` rewritten as a full install + tech guide.
 - [x] Stale UI/doc strings: 'Clear stamps' tooltip said Ctrl+L (it's Ctrl+R),
   aggregate-cap tooltip said default 32 (it's 96), README still listed the
   paint-canvas re-seed as an open bug (fixed 2026-05-23).
+
+
+## Contact placement and reproducible accuracy checks (2026-10-28)
+
+- [x] Replace delayed world-space collision samples with node IDs, offsets,
+  outward normals and tangential slip captured in the physics-time vehicle
+  rotation frame. Resolve the node again immediately before baking so rigid
+  motion and later deformation do not move a contact onto another panel.
+  Refresh the engine shape and transforms before deferred bakes as well as
+  before projection; otherwise the updated anchor and engine transform can
+  refer to different frames.
+- [x] Restrict each contact to paintable flexbodies owned by its JBeam part.
+  Reject unknown ownership and invalid packets instead of projecting through
+  structural parts onto whichever painted panel happens to be behind them.
+- [x] Explicit native-vector decal position/normal, no mirroring or positional
+  jitter, and 4 cm total projection depth. Small contact footprints replace
+  broad decorative slide bands in the live detector protocol.
+- [x] Private seeded RNG, including brush-recency reset, without consuming the
+  game's RNG. Native layer IDs use a separate per-load namespace and counter
+  so seeded tests and hot reloads cannot reuse cached renderer identities.
+  Bake failures are counted/logged and do not wedge the queue.
+- [x] 142 Lua checks and 7 Python runner checks, including delayed/rotated
+  delivery, deformation before bake, native vector types, mesh ownership,
+  invalid contacts, bake failure recovery, and repeatability across brush
+  histories. Existing review-fix regressions remain covered.
+- [x] `tools/test_accuracy.py`: fixed D15 configuration and spawn, seed 1977,
+  fixed-exposure PNG captures with clean control images, protected-bed and
+  direct-bed-contact fixtures, source/environment manifests, logs and pixel
+  difference masks; nonzero exit status for failed/incomplete runs.
+- [x] Correct the rollover launch velocity so it rolls onto its roof instead
+  of righting itself. Validate up-vector Z < -0.7. Compare the frozen wreck
+  against the same deformation with only cosmetic damage cleared.
+
+Accuracy boundary: JBeam contact nodes approximate the render mesh. A shallow
+volume plus part ownership is conservative rather than triangle-exact;
+closely folded surfaces and shared UVs remain possible ambiguities. Unknown
+ownership may omit legitimate marks. No global engine shader is overridden.
+
+Validation: `python tools/test_accuracy.py --physics` passed all three
+placement fixtures and five crash scenarios on BeamNG 0.40.3.0.290897 / Vulkan.
+The frozen roofdrop and rollover comparisons detected 771 and 589 changed
+roof pixels respectively, with zero above-threshold bed-floor changes in
+both. Direct bed-floor contact was visible; outside-bed contact left the
+inner wall and floor clean. Normal driving produced zero stamps. All queues
+drained with zero projection/bake failures. Source hashes and complete PNG
+comparisons: `bench/accuracy/20261028-125442/manifest.json` (gitignored).
+Release packaging passed with 142 Lua regressions and all brush sidecars.

@@ -1,11 +1,43 @@
 -- scratches_mod / paint.lua  (GELUA)
 -- Game-engine-side painter. Owns the Dynamic Decals projection per player vehicle.
 -- Loads editor_api_dynamicDecals, auto-sets the dynamicTextures skin on
--- supported vehicles, turns scratches_detect batches (M.ingest) into
+-- supported vehicles, turns scratches_detect batches (M.ingestContacts) into
 -- projection jobs drained under a per-frame budget, and composites the canvas
 -- only when it changed.
 
 local M = {}
+
+-- Engine layer identities must stay unique across hot reloads. They are
+-- deliberately independent of the reproducible brush RNG: a repeated UID
+-- can reuse the native renderer's cached decal transform from an older run.
+local layerUidSalt = string.format("%d-%06x", os.time(),
+  math.floor((os.clockhp or os.clock)() * 1e6) % 0xffffff)
+local layerUidSeq = 0
+local function nextLayerUid(prefix)
+  layerUidSeq = layerUidSeq + 1
+  return string.format("%s-%s-%x", prefix or "scr", layerUidSalt, layerUidSeq)
+end
+
+-- Private generator: repeatable tests without reseeding the game's RNG.
+local randomSeed, randomState = 1977, 1977
+local recentBrushes = {}
+local function random(a, b)
+  randomState = (randomState * 16807) % 2147483647
+  local value = (randomState - 1) / 2147483646
+  if not a then return value end
+  if not b then a, b = 1, a end
+  return a + math.floor(value * (b - a + 1))
+end
+M.setRandomSeed = function(seed)
+  seed = tonumber(seed)
+  if not seed or seed ~= seed or math.abs(seed) == math.huge then seed = 1977 end
+  randomSeed = math.max(1, math.floor(seed) % 2147483647)
+  randomState = randomSeed
+  -- Brush recency influences re-rolls too; resetting only the generator
+  -- would make the same seed depend on the previous crash's brush history.
+  table.clear(recentBrushes)
+end
+
 
 local logTag = "scratches.paint"
 
@@ -91,7 +123,6 @@ local CLUSTER_RADIUS         = 0.65
 -- ---- variation: brush recency avoidance ----
 -- Ring buffer of recently picked brushes. pickBrush() re-rolls once if it lands
 -- on a recent pick. Cheap fix for "two identical chip_cluster brushes adjacent".
-local recentBrushes    = {}
 local RECENT_BRUSH_MAX = 3
 
 -- Per-brush scale bias for discrete stamps. Chips are dense, so they read at
@@ -625,7 +656,7 @@ M.addPaintFill = function()
     colorPaletteMapId = 0,
     enabled           = true,
     locked            = false,
-    uid               = string.format("scr-fill-%08x", math.random(0, 0x7fffffff)),
+    uid               = nextLayerUid("scr-fill"),
     parentUid         = nil,
     children          = {},
   } }, veh.JBeam or veh.jbeam)
@@ -650,6 +681,11 @@ local flushPendingStampsRef
 local bakePendingRef
 local hasPendingWorkRef
 local drawUIRef
+-- One captured batch at a time. Drain it before projecting more so even
+-- zero flush intervals or very slow frames cannot starve baking or grow
+-- this queue without bound. Projection jobs remain in their bounded queue.
+local bakeQueue = {}
+local layerTargets = {}
 
 -- Run the API's per-frame update: re-bind the vehicle's texture set, refresh
 -- the projection shape/transforms, and composite the canvas into the
@@ -722,7 +758,7 @@ local function onUpdate(dtReal, dtSim, dtRaw)
     -- skip), sync first so the projections don't use a stale pose.
     sinceFlush = sinceFlush + (dtReal or 0)
     local projected = false
-    if hasPendingWorkRef and hasPendingWorkRef() and sinceFlush >= FLUSH_INTERVAL then
+    if #bakeQueue == 0 and hasPendingWorkRef and hasPendingWorkRef() and sinceFlush >= FLUSH_INTERVAL then
       sinceFlush = 0
       projected = true
       -- Project against the car's current (possibly deforming) shape.
@@ -758,18 +794,16 @@ local function onUpdate(dtReal, dtSim, dtRaw)
     if ms > perfStats.msMax then perfStats.msMax = ms end
     if ms > 1 then perfStats.framesOver1ms = perfStats.framesOver1ms + 1 end
     if ms > 4 then perfStats.framesOver4ms = perfStats.framesOver4ms + 1 end
-    -- (K) Draw the IMGUI debug panel after the combine so its frame state
-    -- is consistent. drawUI is a no-op when uiVisible is false.
-    if drawUIRef then drawUIRef() end
-    return
-  end
-  if pendingSetup then
+  elseif pendingSetup then
     setupAttemptTimer = setupAttemptTimer + (dtReal or 0)
     if setupAttemptTimer >= SETUP_RETRY then
       setupAttemptTimer = 0
       trySetup()
     end
   end
+  -- Diagnostics must also work while setup is pending or the car was skipped.
+  -- drawUI is a no-op when hidden and guards controls that need the painter.
+  if drawUIRef then drawUIRef() end
 end
 
 -- ---- vehicle lifecycle ----
@@ -1001,10 +1035,10 @@ local STREAM_MERGE_MAX_BANDS = 6
 -- Recency-aware random picker. Avoids the last RECENT_BRUSH_MAX picks if
 -- possible. One re-roll max so small brush sets don't loop.
 local function pickFromSet(set)
-  local b = set[math.random(#set)]
+  local b = set[random(#set)]
   for _, r in ipairs(recentBrushes) do
     if r == b then
-      b = set[math.random(#set)]
+      b = set[random(#set)]
       break
     end
   end
@@ -1023,10 +1057,10 @@ local function pickBrush() return pickFromSet(SCRAPE_BRUSHES) end
 local function damageTone(layer)
   local t = math.max(0, math.min(1, (paintLum - 0.35) / 0.3))  -- 0 dark paint .. 1 light paint
   local function mix(dark, light) return dark + (light - dark) * t end
-  local j = (math.random() - 0.5) * 0.08
+  local j = (random() - 0.5) * 0.08
   if layer == "haze" then
     local v = mix(0.86, paintLum * 0.72) + j * 0.5
-    return v, v, math.min(1, v + 0.015), 0.18 + math.random() * 0.10
+    return v, v, math.min(1, v + 0.015), 0.18 + random() * 0.10
   elseif layer == "metal" then
     local v = mix(0.86, 0.62) + j
     return v - 0.01, v, math.min(1, v + 0.03), 1
@@ -1037,13 +1071,13 @@ end
 
 -- Primer or bare metal, more often metal the harder the hit (severity 0..1).
 local function lineTone(severity)
-  return damageTone(math.random() < 0.15 + 0.5 * (severity or 0) and "metal" or "primer")
+  return damageTone(random() < 0.15 + 0.5 * (severity or 0) and "metal" or "primer")
 end
 
 -- Scale wobble + per-brush bias. baseScale is the caller-supplied scale
 -- (or stampAtLocal's default 0.10). Returns final scale.
 local function pickStampScale(baseScale, brushPath)
-  local wobble = 0.75 + math.random() * 0.5  -- 0.75..1.25
+  local wobble = 0.75 + random() * 0.5  -- 0.75..1.25
   local bias   = BRUSH_SCALE_BIAS[brushPath] or 1.0
   return baseScale * wobble * bias
 end
@@ -1051,7 +1085,7 @@ end
 -- Roughness jitter (only affects the canvas's M/R channels, which the car
 -- currently renders from its factory maps).
 local function pickRoughness()
-  return 0.10 + math.random() * 0.25
+  return 0.10 + random() * 0.25
 end
 
 -- ---- synthetic-camera stamping (Phase 3 step 1) ----
@@ -1175,10 +1209,8 @@ local function averageNormals(samples)
 end
 
 setScratchProjectionFence = function(_enabled)
-  -- BeamNG exposes a depth-lock flag for authored decal editing, but in the
-  -- free-standing bake path it can produce layers that project successfully
-  -- yet write no visible pixels. Keep automated scratch bakes unfenced and
-  -- rely on hull-face camera aiming plus tighter clustering for panel locality.
+  -- Depth lock freezes the editor's sampled cursor depth. Contact locality
+  -- instead comes from explicit position/normal, mesh ownership and scale.y.
   if api and api.setLockDepth then api.setLockDepth(false) end
 end
 
@@ -1186,9 +1218,9 @@ end
 -- view that's OUTSIDE the owning hull face at `localPos` looking IN.
 -- BeamNG/Torque convention: col0=right(+X), col1=forward(+Y), col2=up(+Z),
 -- col3=position. (Verified in lua/ge/spawn.lua lines 98-101.)
-local function buildSyntheticCameraLocal(localPos, localNormal, dist)
+local function buildSyntheticCameraLocal(localPos, localNormal, dist, contactOwned)
   dist = dist or 0.5
-  local outward = chooseHullOutward(localPos, localNormal)
+  local outward = contactOwned and localNormal:normalized() or chooseHullOutward(localPos, localNormal)
 
   local fwd = -outward                  -- camera looks inward toward impact
   local camPos = localPos + outward * dist  -- camera placed outside the body
@@ -1218,25 +1250,16 @@ end
 -- long hitch. Positions are vehicle-local, so a job deferred a frame or two
 -- still lands on the right panel.
 local jobQueue               = {}
+local contactMeshes = {}
 -- Captured decal layers waiting to be baked. Baking costs ~0.85 ms per layer
 -- and has no per-frame toll of its own, so it runs on the frames between
 -- projection batches, BAKE_LAYERS_PER_FRAME at a time, instead of piling onto
 -- the projection frame. Layers are car-local, so a short delay is harmless.
-local bakeQueue              = {}
 local BAKE_LAYERS_PER_FRAME  = 6
 local jobQueueVid            = nil  -- vehicle the queued jobs belong to
 local MAX_PROJECTS_PER_FRAME = 6    -- projection passes per flush: ~14 ms toll + ~1.4 ms each (tunable)
 local MAX_LAYERS_PER_FLUSH   = 24   -- layers captured per flush; baked later (tunable)
 local MAX_QUEUED_JOBS        = 64   -- backlog bound; further jobs drop
-
--- Layer uids only need to be unique; a per-load salt plus a counter is cheaper
--- than formatting a fresh 32-bit random per layer and can't collide.
-local layerUidSalt = math.random(0, 0xffffff)
-local layerUidSeq  = 0
-local function nextLayerUid(prefix)
-  layerUidSeq = layerUidSeq + 1
-  return string.format("%s-%06x-%x", prefix or "scr", layerUidSalt, layerUidSeq)
-end
 
 local function enqueueJob(job, vid)
   if jobQueueVid ~= vid then
@@ -1260,7 +1283,56 @@ hasPendingWorkRef = hasPendingWork
 M._dropQueuedJobs = function()
   table.clear(jobQueue)
   table.clear(bakeQueue)
+  table.clear(layerTargets)
+  table.clear(contactMeshes)
   jobQueueVid = nil
+end
+
+-- Contact ownership is resolved from the vehicle's processed flexbody data,
+-- not mesh-name guesses. Only paintable meshes belonging to this node's part
+-- are eligible; unknown/structural nodes fail closed rather than painting
+-- whatever panel the camera can see behind them.
+local CONTACT_DEPTH = 0.04 -- total decal volume thickness, metres
+local function meshesForNode(veh, nid)
+  local cached = contactMeshes[nid]
+  if cached ~= nil then return cached or nil end
+  local data = core_vehicle_manager.getPlayerVehicleData()
+  local vd = data and data.vdata
+  local node = vd and vd.nodes and vd.nodes[nid]
+  local available = api.getShapeMeshes and api.getShapeMeshes() or {}
+  local meshes = {}
+  if node and node.partOrigin then
+    for _, body in pairs(vd.flexbodies or {}) do
+      if body.partOrigin == node.partOrigin and available[body.mesh] then
+        meshes[#meshes + 1] = body.mesh
+      end
+    end
+  end
+  table.sort(meshes)
+  contactMeshes[nid] = #meshes > 0 and meshes or false
+  return #meshes > 0 and meshes or nil
+end
+
+local function nodeLocalPosition(veh, nid)
+  -- getNodePosition is world-oriented relative to the reference node. The
+  -- reference translation must NOT be subtracted again.
+  local inverse = veh:getRefNodeMatrix():fullInverse()
+  inverse:setColumn(3, vec3(0, 0, 0))
+  return inverse:mulP3F(veh:getNodePosition(nid))
+end
+
+local function pinLayer(layer, position, normal, target)
+  -- Explicit decalPos/decalNorm bypass the editor's screen-depth lookup.
+  -- Depth lock merely freezes a sampled depth; it is not a clipping fence.
+  layer.decalPos = vec3(position.x, position.y, position.z)
+  local n = normal:normalized()
+  layer.decalNorm = vec3(n.x, n.y, n.z)
+  layer.mirrored = false
+  layer.decalScale.y = CONTACT_DEPTH
+  if target then
+    layer.meshes = {[target.jbeam] = target.meshes}
+    layerTargets[layer] = target
+  end
 end
 
 -- Record one discrete stamp for vehicle `vid` (vehicle-local inputs). No api
@@ -1277,9 +1349,9 @@ local function enqueueStamp(localPos, localNormal, opts, vid)
   if not opts.noJitter then
     local jitter = 0.03  -- ±3 cm
     localPos = vec3(
-      localPos.x + (math.random() - 0.5) * 2 * jitter,
-      localPos.y + (math.random() - 0.5) * 2 * jitter,
-      localPos.z + (math.random() - 0.5) * 2 * jitter)
+      localPos.x + (random() - 0.5) * 2 * jitter,
+      localPos.y + (random() - 0.5) * 2 * jitter,
+      localPos.z + (random() - 0.5) * 2 * jitter)
   end
 
   -- Pick per-stamp style. opts overrides (used by probeBrushes / impact
@@ -1289,7 +1361,7 @@ local function enqueueStamp(localPos, localNormal, opts, vid)
   local brush     = opts.colorTex or pickBrush()
   local scale     = opts.noJitter and baseScale or pickStampScale(baseScale, brush)
   -- setDecalRotation takes radians (editor/api/dynamicDecals.lua setDecalRotation).
-  local rot       = opts.rot or math.random() * 2 * math.pi
+  local rot       = opts.rot or random() * 2 * math.pi
   local r, g, b, a
   if opts.r or opts.g or opts.b then
     r, g, b, a = opts.r or 0.7, opts.g or 0.7, opts.b or 0.7, opts.a or 1
@@ -1322,6 +1394,11 @@ local function enqueueStamp(localPos, localNormal, opts, vid)
     roughness   = roughness,
     skipMetal   = opts.skipMetal and true or false,
     dist        = opts.dist,
+    target      = opts.target,
+    tangent     = opts.tangent,
+    scaleX      = opts.scaleX,
+    scaleZ      = opts.scaleZ,
+    kind        = opts.kind,
   }
   stampStats.stampsEnqueued = stampStats.stampsEnqueued + 1
 end
@@ -1351,7 +1428,11 @@ local function buildClusters(inputs)
       local dx = s.localPos.x - c.cx
       local dy = s.localPos.y - c.cy
       local dz = s.localPos.z - c.cz
-      if (dx*dx + dy*dy + dz*dz) < (CLUSTER_RADIUS * CLUSTER_RADIUS) then
+      local other = c.members[1]
+      local sameOwner = (not s.target and not other.target) or
+        (s.target and other.target and s.target.meshKey == other.target.meshKey)
+      if sameOwner and s.localNormal:dot(other.localNormal) > 0.95
+         and (dx*dx + dy*dy + dz*dz) < (CLUSTER_RADIUS * CLUSTER_RADIUS) then
         local k = #c.members
         c.cx = (c.cx * k + s.localPos.x) / (k + 1)
         c.cy = (c.cy * k + s.localPos.y) / (k + 1)
@@ -1532,10 +1613,15 @@ local function enqueueStreamLocal(localPos, localNormals, vid, severity)
       end
     end
   end
+  -- Keep the job-wide list separate from the first band's list. Merging
+  -- extends only this list; otherwise later bands get drawn twice and the
+  -- first haze incorrectly stretches across all the merged bands.
+  local allSegments = {}
+  for i, sg in ipairs(segments) do allSegments[i] = sg end
   enqueueJob({
     stream   = true,
     bands    = { band },
-    segments = segments,     -- all bands' segments, for layer budgeting
+    segments = allSegments, -- all bands' segments, for layer budgeting
     centroid = centroid,
     normal   = normal,
   }, vid)
@@ -1578,7 +1664,7 @@ local function runStreamJob(job, projM, bakeList)
     api.setRoughnessIntensity(pickRoughness())
     api.setDecalColor(Point4F(r, g, b, a))
     -- Asymmetric scale: long along travel, thin across. Both are half-sizes.
-    api.setDecalScale(vec3(halfLen, 1, halfWidth))
+    api.setDecalScale(vec3(halfLen, CONTACT_DEPTH, halfWidth))
     api.setDecalRotation(angle)
     api.setUseSurfaceNormal(true)
     local tl = clockhp()
@@ -1606,7 +1692,7 @@ local function runStreamJob(job, projM, bakeList)
     api.setDecalLocalPos(probe, p1)
     local bUx, bUy = probe.cursorPosScreenUv.x, probe.cursorPosScreenUv.y
     return (math.abs(bUx - aUx) + math.abs(bUy - aUy)) > 1e-5
-      and math.atan2(bUy - aUy, bUx - aUx) or (math.random() * 2 * math.pi)
+      and math.atan2(bUy - aUy, bUx - aUx) or (random() * 2 * math.pi)
   end
 
   local before = #bakeList
@@ -1616,7 +1702,7 @@ local function runStreamJob(job, projM, bakeList)
     -- band rather than a string of unrelated marks.
     local brush     = pickFromSet(SCRAPE_BRUSHES)
     local hazeBrush = pickFromSet(HAZE_BRUSHES)
-    local width     = 0.10 + math.random() * 0.10          -- 10..20 cm band
+    local width     = 0.10 + random() * 0.10          -- 10..20 cm band
     local lr, lg, lb, la = lineTone(band.severity or 0.3)
     local hr, hg, hb, ha = damageTone("haze")
     local segs = band.segments
@@ -1631,8 +1717,8 @@ local function runStreamJob(job, projM, bakeList)
              total * 0.5 * STRETCH_OVERLAP, width * 0.95, angleOf(s1.startP, sn.endP),
              "scrape-haze-" .. bi)
     for si, seg in ipairs(segs) do
-      local w = width * (0.9 + math.random() * 0.2)
-      local v = (math.random() - 0.5) * 0.04
+      local w = width * (0.9 + random() * 0.2)
+      local v = (random() - 0.5) * 0.04
       addLayer(brush, lr + v, lg + v, lb + v, la, seg.center, seg.length * 0.5 * STRETCH_OVERLAP,
                w * 0.5, angleOf(seg.startP, seg.endP), "scrape-" .. bi .. "-" .. si)
     end
@@ -1665,7 +1751,8 @@ local function runClusterJob(cluster, projM, bakeList)
       clusterDist = s.dist
     end
   end
-  local camLocal = buildSyntheticCameraLocal(centroid, averageNormals(cluster.members), clusterDist)
+  local camLocal = buildSyntheticCameraLocal(centroid, averageNormals(cluster.members), clusterDist,
+                                             cluster.members[1].target ~= nil)
   setScratchProjectionFence(true)
   local tp = clockhp()
   decalProjection:projectDynamicDecals(camLocal, projM)
@@ -1688,7 +1775,7 @@ local function runClusterJob(cluster, projM, bakeList)
       api.setRoughnessIntensity(s.roughness)
     end
     api.setDecalColor(Point4F(s.r, s.g, s.b, s.a or 1))
-    api.setDecalScale(vec3(s.scale, 1, s.scale))
+    api.setDecalScale(vec3(s.scaleX or s.scale, CONTACT_DEPTH, s.scaleZ or s.scale))
     api.setDecalRotation(s.rot)
     api.setUseSurfaceNormal(true)
 
@@ -1698,7 +1785,20 @@ local function runClusterJob(cluster, projM, bakeList)
       -- Move the layer's cursor from the cluster centroid (where project
       -- placed it) to the actual stamp position. This recomputes
       -- cursorPosScreenUv and decalPos for s.localPos under the shared cam.
-      api.setDecalLocalPos(decalData, s.localPos)
+      local position = s.localPos
+      if s.target then
+        position = nodeLocalPosition(getPlayerVehicle(0), s.target.node) + s.target.offset
+      end
+      api.setDecalLocalPos(decalData, position)
+      if s.tangent and s.tangent:length() > 1e-6 then
+        local uv = decalData.cursorPosScreenUv
+        local ux, uy = uv.x, uv.y
+        api.setDecalLocalPos(decalData, position + s.tangent)
+        local endUV = decalData.cursorPosScreenUv
+        decalData.decalRotation = math.atan2(endUV.y - uy, endUV.x - ux)
+        api.setDecalLocalPos(decalData, position)
+      end
+      pinLayer(decalData, position, s.localNormal, s.target)
     end
     perfAdd(tl, "layerMsTotal", nil, "layerCalls")
     if decalData then
@@ -1707,7 +1807,7 @@ local function runClusterJob(cluster, projM, bakeList)
       -- (cursor outside [0,1]) — those would paint nothing or paint at the
       -- frustum edge incorrectly.
       local cuv = decalData.cursorPosScreenUv
-      if not cuv or cuv.x < 0 or cuv.x > 1 or cuv.y < 0 or cuv.y > 1 then
+      if not s.target and (not cuv or cuv.x < 0 or cuv.x > 1 or cuv.y < 0 or cuv.y > 1) then
         skipped = skipped + 1
       else
         decalData.uid       = nextLayerUid()
@@ -1717,6 +1817,7 @@ local function runClusterJob(cluster, projM, bakeList)
         decalData.parentUid = nil
         decalData.children  = {}
         bakeList[#bakeList + 1] = decalData
+        if s.kind == "s" then stampStats.streamsBaked = stampStats.streamsBaked + 1 end
 
         if stampVerbose then
           log('I', logTag, string.format(
@@ -1800,7 +1901,10 @@ local function flushPendingStamps()
     local ok, err = pcall(job.stream and runStreamJob or runClusterJob, job, projM, bakeList)
     if not ok then
       -- Discard whatever the failed job half-produced.
-      for k = #bakeList, before + 1, -1 do bakeList[k] = nil end
+      for k = #bakeList, before + 1, -1 do
+        layerTargets[bakeList[k]] = nil
+        bakeList[k] = nil
+      end
       setScratchProjectionFence(false)
       stampStats.jobsFailed = stampStats.jobsFailed + 1
       log('E', logTag, "projection job failed: " .. tostring(err))
@@ -1822,16 +1926,34 @@ local function bakePending()
   if n == 0 then return false end
   local veh = getPlayerVehicle(0)
   if not veh or veh:getId() ~= jobQueueVid or not resolveDecalProjection() then
+    for _, layer in ipairs(bakeQueue) do layerTargets[layer] = nil end
     table.clear(bakeQueue)
     return false
   end
+  -- Projection and baking happen on different frames. Refresh BOTH the
+  -- engine's shape/rotation and our node anchors for this frame; updating
+  -- only the anchor compares it against yesterday's rotated/deformed mesh.
+  syncShape(veh)
   local k = math.min(n, BAKE_LAYERS_PER_FRAME)
   local chunk = {}
-  for i = 1, k do chunk[i] = bakeQueue[i] end
+  for i = 1, k do
+    local layer = bakeQueue[i]
+    local target = layerTargets[layer]
+    if target then
+      pinLayer(layer, nodeLocalPosition(veh, target.node) + target.offset, target.normal, target)
+    end
+    chunk[i] = layer
+  end
   for i = k + 1, n do bakeQueue[i - k] = bakeQueue[i] end
   for i = n - k + 1, n do bakeQueue[i] = nil end
   local tb = clockhp()
-  decalProjection:bakeLayers(chunk, veh.JBeam or veh.jbeam)
+  local ok, err = pcall(function() decalProjection:bakeLayers(chunk, veh.JBeam or veh.jbeam) end)
+  for _, layer in ipairs(chunk) do layerTargets[layer] = nil end
+  if not ok then
+    stampStats.bakesFailed = (stampStats.bakesFailed or 0) + 1
+    log('E', logTag, "bake failed: " .. tostring(err))
+    return false
+  end
   perfAdd(tb, "bakeMsTotal", "bakeMsMax", "bakeCalls")
   perfStats.bakeLayersTotal = perfStats.bakeLayersTotal + k
   M._lastDecal = chunk[k]
@@ -1861,7 +1983,7 @@ local function styleForEvent(kind, force)
   if (force or 0) > 800 then
     return { dist = 0.7 + heavy * 1.6, scale = 0.06 + heavy * 0.06, severity = heavy }
   end
-  return { scale = 0.05 + math.random() * 0.03 }
+  return { scale = 0.05 + random() * 0.03 }
 end
 
 -- An impact lays down chipped paint and, on harder hits, a gouge on top
@@ -1871,7 +1993,7 @@ local function enqueueImpact(localPos, localNormal, force, vid)
   local main = styleForEvent("impact", force)
   local heavy = main.severity
   enqueueStamp(localPos, localNormal, main, vid)
-  if math.random() < 0.25 + 0.6 * heavy then
+  if random() < 0.25 + 0.6 * heavy then
     enqueueStamp(localPos, localNormal, { colorTex = pickFromSet(GOUGE_BRUSHES),
       scale = 0.08 + heavy * 0.12, dist = main.dist, severity = math.min(1, heavy + 0.3) }, vid)
   end
@@ -1918,10 +2040,61 @@ local function enqueueSlide(points, invM, rotOnly, vid)
                      math.min(1, dist / 3 + (pass - 1) * 0.35))   -- a repeat pass digs deeper
 end
 
--- (G) Single per-frame entry point from scratches_detect. The vehicle sends
--- its id, the frame's discrete events and every slide stream that ended this
--- frame in ONE call. World -> vehicle-local conversion happens here, once per
--- batch (one matrix inverse per frame instead of one per event).
+-- Physics protocol v2: node id, local offset xyz, outward normal xyz,
+-- local slip xyz, kind, force, accumulated slip distance. No world positions
+-- survive into the deferred queue. Keep ingest below only for console probes.
+M.ingestContacts = function(vid, contacts)
+  local veh = getPlayerVehicle(0)
+  if not ready or not veh then return end
+  if veh:getId() ~= vid then
+    stampStats.foreignDropped = stampStats.foreignDropped + 1
+    return
+  end
+  if type(contacts) ~= "table" then return end
+  for _, e in ipairs(contacts or {}) do
+    if type(e) ~= "table" then e = {} end
+    local valid = #e == 13 and (e[11] == "i" or e[11] == "s")
+    for i = 1, 13 do
+      if i ~= 11 then
+        local n = e[i]
+        if type(n) ~= "number" or n ~= n or math.abs(n) > 1e8 then valid = false end
+      end
+    end
+    valid = valid and e[1] >= 0 and e[1] == math.floor(e[1]) and e[12] >= 0 and e[13] >= 0
+    local meshes = valid and meshesForNode(veh, e[1])
+    local normal = valid and vec3(e[5], e[6], e[7])
+    local offset = valid and vec3(e[2], e[3], e[4])
+    if meshes and normal:length() > 0.5 and offset:length() <= 0.15 then
+      normal = normal:normalized()
+      local target = {node = e[1], offset = offset, normal = normal,
+                      meshes = meshes, meshKey = table.concat(meshes, ":"), jbeam = veh.JBeam or veh.jbeam}
+      local position = nodeLocalPosition(veh, e[1]) + offset
+      local tangent = vec3(e[8], e[9], e[10])
+      tangent = tangent - normal * tangent:dot(normal)
+      if tangent:length() > 1e-6 then tangent = tangent:normalized() end
+      -- One small footprint at the actual contacting node. Large arbitrary
+      -- 30-70 cm bands crossed panel edges; neighbouring nodes supply coverage.
+      local pass = spotTake(position, e[11], e[11] == "i" and SPOT_MAX_IMPACT or SPOT_MAX_SLIDE)
+      if pass then
+        local severity = severityOf(e[12])
+        local r, g, b, a = lineTone(severity)
+        local opts = {target = target, noJitter = true, tangent = tangent, kind = e[11],
+                      scale = 0.08 + 0.06 * severity, r = r, g = g, b = b, a = a,
+                      colorTex = pickFromSet(e[11] == "i" and CHIP_BRUSHES or SCRAPE_BRUSHES)}
+        if e[11] == "s" then
+          opts.scaleX = math.min(0.18, 0.08 + e[13] * 0.1)
+          opts.scaleZ = 0.045
+        end
+        enqueueStamp(position, normal, opts, vid)
+      end
+    else
+      stampStats.contactsRejected = (stampStats.contactsRejected or 0) + 1
+    end
+  end
+end
+
+-- Legacy world-space console/benchmark helper. The detector uses the
+-- node-anchored ingestContacts protocol; never defer world samples here.
 --   events  : list of {x,y,z,nx,ny,nz,kind,sev}
 --             kind "i" = collision impact, "s" = 1-point slide fallback;
 --             sev = normalForce in N.
@@ -2273,6 +2446,8 @@ M.resetPaintStats = function()
   stampStats.streamSubstrokesTotal = 0
   stampStats.jobsDropped = 0
   stampStats.jobsFailed = 0
+  stampStats.bakesFailed = 0
+  stampStats.contactsRejected = 0
   stampStats.framesDeferred = 0
   stampStats.foreignDropped = 0
   stampStats.combinesRun = 0
@@ -2297,6 +2472,7 @@ M.getStats = function()
     detect = lastDetectStats,
     queue  = { stamps = #pendingStampInputs, jobs = #jobQueue, bake = #bakeQueue },
     config = { aggregateCap = AGGREGATE_PER_FRAME_CAP, clusterRadius = CLUSTER_RADIUS,
+               contactDepth = CONTACT_DEPTH, randomSeed = randomSeed,
                projBudget = MAX_PROJECTS_PER_FRAME, flushInterval = FLUSH_INTERVAL,
                layerBudget = MAX_LAYERS_PER_FLUSH,
                fullRateCombine = fullRateCombine },
@@ -2449,6 +2625,7 @@ M.recordFullDump = function(text) lastFullDump = text or "" end
 -- pointers on first show.
 M.toggleUI = function()
   uiVisible = not uiVisible
+  if uiVisible and not ui_imgui then extensions.load("ui_imgui") end
   log('I', logTag, "UI " .. (uiVisible and "shown" or "hidden"))
 end
 
