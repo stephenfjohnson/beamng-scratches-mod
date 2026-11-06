@@ -89,20 +89,33 @@ local AGGREGATE_PER_FRAME_CAP = 160 -- stamps held per flush batch; further enqu
 local CLUSTER_RADIUS         = 0.65
 
 -- ---- variation: brush recency avoidance ----
--- Ring buffer of recently picked brushes. pickBrush() re-rolls once if it lands
+-- Ring buffer of recently picked brushes. pickFromSet() re-rolls once if it lands
 -- on a recent pick. Cheap fix for "two identical chip_cluster brushes adjacent".
 local recentBrushes    = {}
 local RECENT_BRUSH_MAX = 3
 
--- Per-brush scale bias for discrete stamps. Chips are dense, so they read at
--- a slightly smaller size than the gouges. Path -> multiplier.
-local BRUSH_SCALE_BIAS = {
-  ["/art/dynamicDecals/textures/scr_chips_01.png"] = 0.85,
-  ["/art/dynamicDecals/textures/scr_chips_02.png"] = 0.85,
-}
+-- Style randomness (brush picks, jitter, tones) comes from the painter's own
+-- generator (Park-Miller), so a seeded run - tools/bench.py gallery - paints
+-- the same marks every time without reseeding the game's shared rand.
+local rngState = (os.time() % 2147483646) + 1
+local function rand(a, b)
+  rngState = (rngState * 16807) % 2147483647
+  local u = (rngState - 1) / 2147483646
+  if a == nil then return u end
+  if b == nil then return math.floor(u * a) + 1 end
+  return a + math.floor(u * (b - a + 1))
+end
+M.seedRandom = function(seed)
+  rngState = (math.floor(tonumber(seed) or 1) % 2147483646) + 1
+  -- Brush recency steers re-rolls, so a seeded run must start without it.
+  table.clear(recentBrushes)
+end
 
--- Luminance (0..1) of the current car's paint, set when the base fill is
--- seeded. Damage reads light on dark paint and dark on light paint.
+-- The current car's paint colour and its luminance (0..1), set when the base
+-- fill is seeded. Damage tones are mixed from it: a scuff is the paint a
+-- little greyer and lighter, and exposed layers read light on dark paint and
+-- darker on light paint.
+local paintRGB = { 0.5, 0.5, 0.5 }
 local paintLum = 0.3
 
 -- ---- paint-side stats (D) ----
@@ -128,6 +141,15 @@ local stampStats = {
   spotsSkipped        = 0,  -- marks skipped: that spot was already painted enough
   streamsMerged       = 0,  -- slides that shared another slide's projection
   framesTicked        = 0,  -- ready frames seen (combinesRun / framesTicked = combine rate)
+  stampsSkippedGap    = 0,  -- impact stamps whose ray overshot the contact by more than GAP.max
+  stampsGapDeepened   = 0,  -- impact stamps whose box was laid along the camera axis to reach the contact
+  stampsUnmeasured    = 0,  -- impact stamps captured without a reading at their own contact
+  reaims              = 0,  -- projections re-aimed from the nearest hull face after a hole reading
+  reaimsHelped        = 0,  -- of those, re-aims that found the skin
+  marksRetracted      = 0,  -- impact marks taken back because none of their stamps baked
+  -- How far impact rays overshot the contact (per stamp position): in front
+  -- (visible skin over the node), under 5/10/18/25 cm, and past GAP.max.
+  gapFront = 0, gapUnder5 = 0, gapUnder10 = 0, gapUnder18 = 0, gapUnder25 = 0, gapHole = 0,
 }
 -- The painter's own CPU cost per ready frame, in ms (os.clockhp). Cheap enough
 -- to leave on: two clock reads per frame, a few more while there is work. The
@@ -143,6 +165,7 @@ local perfStats = {
   projectMsTotal = 0, projectMsMax = 0, projectCalls = 0,
   layerMsTotal = 0, layerCalls = 0,
   bakeMsTotal = 0, bakeMsMax = 0, bakeCalls = 0, bakeLayersTotal = 0,
+  cvcMsTotal = 0, cvcMsMax = 0, cvcProbes = 0, -- car-on-car contact probes
 }
 
 -- Add the time since t0 (os.clockhp seconds) to perfStats[totalKey], track
@@ -211,22 +234,119 @@ local sinceFlush           = math.huge
 -- layer each time, with nothing visible changing after the first couple of
 -- passes. Each spot takes a few passes (later ones scrape deeper), then
 -- further marks there are skipped until the canvas is cleared.
-local SPOT_CELL       = 0.08  -- m
-local SPOT_MAX_SLIDE  = 2
-local SPOT_MAX_IMPACT = 2
+local SPOT = { cell = 0.08, maxSlide = 2, maxImpact = 2 }  -- cell in m; passes per spot
 local spotHits        = {}
--- Returns this spot's pass number (1..maxHits), or nil once it's saturated.
-local function spotTake(p, kind, maxHits)
-  local k = kind .. math.floor(p.x / SPOT_CELL) .. ":" .. math.floor(p.y / SPOT_CELL)
-            .. ":" .. math.floor(p.z / SPOT_CELL)
-  local n = (spotHits[k] or 0) + 1
-  if n > maxHits then
-    stampStats.spotsSkipped = stampStats.spotsSkipped + 1
-    return nil
-  end
-  spotHits[k] = n
-  return n
+-- Peek/commit form, for a mark that only claims its spots once it knows it
+-- will paint something (an empty composition must not use up the budget).
+local function spotKey(p, kind, cell)
+  cell = cell or SPOT.cell
+  return kind .. math.floor(p.x / cell) .. ":" .. math.floor(p.y / cell) .. ":" .. math.floor(p.z / cell)
 end
+local function spotFree(key, maxHits) return (spotHits[key] or 0) < maxHits end
+local function spotCommit(key) spotHits[key] = (spotHits[key] or 0) + 1 end
+
+-- Where marks were laid since the last clear: vehicle-local position, outward
+-- normal, kind ("i" impact, "s" slide), depth (the deepest look laid, see
+-- damageLook), radius (m) and slide direction (car-local unit vector, or 0s),
+-- newest last. Tooling reads it to look at the damage (tools/bench.py aims
+-- its close-up photos here); the painter reads it to keep a later scuff from
+-- repainting a deeper mark (deepMarkNear) and to give neighbouring hits one
+-- direction (dirNear).
+local MARK_LOG_MAX = 400
+local markLog      = {}
+local markGen      = 0   -- bumped whenever spots and marks are cleared: older claims are void
+local function logMark(p, n, kind, depth, radius, dir)
+  if #markLog >= MARK_LOG_MAX then table.remove(markLog, 1) end
+  local m = { p.x, p.y, p.z, n.x, n.y, n.z, kind, depth or 0, radius or 0,
+              dir and dir.x or 0, dir and dir.y or 0, dir and dir.z or 0 }
+  markLog[#markLog + 1] = m
+  return m
+end
+
+-- True if a mark at least `depth` deep overlaps a footprint of `radius`
+-- around p. The canvas blends roughness/metallic by plain lerp, so a later
+-- haze would lift an earlier gouge or primer streak back toward "intact".
+local function deepMarkNear(p, radius, depth)
+  for i = #markLog, 1, -1 do
+    local m = markLog[i]
+    if m[8] >= depth then
+      local dx, dy, dz = m[1] - p.x, m[2] - p.y, m[3] - p.z
+      local r = radius + m[9]
+      if dx * dx + dy * dy + dz * dz <= r * r then return true end
+    end
+  end
+  return false
+end
+
+-- Slide direction of the newest directed mark within `radius` of p, or nil.
+-- Neighbouring nodes of one crumpling panel report noisy directions; sharing
+-- one keeps their streaks parallel instead of crossing into a star.
+local function dirNear(p, radius)
+  local r2 = radius * radius
+  for i = #markLog, 1, -1 do
+    local m = markLog[i]
+    if m[10] ~= 0 or m[11] ~= 0 or m[12] ~= 0 then
+      local dx, dy, dz = m[1] - p.x, m[2] - p.y, m[3] - p.z
+      if dx * dx + dy * dy + dz * dz <= r2 then return vec3(m[10], m[11], m[12]) end
+    end
+  end
+  return nil
+end
+
+-- An impact or a slide band claims its spots and logs its mark when it is
+-- composed, before projection. Its pending pieces - an impact's stamps, a
+-- band's captured layers - carry a handle (`mark`) to that claim and settle it
+-- once each: painted when the layer bakes, lost when it is dropped first (a
+-- refused or dropped job, a projection miss, a ray through a hole, a failed
+-- job or bake). When the last piece settles the claim is reconciled with what
+-- reached the canvas: the mark keeps only the depth and size that baked, a
+-- piece that never baked frees its own spot, and a claim with nothing baked
+-- is taken back whole - so a phantom mark can't block later marks there, bend
+-- their direction, or draw the bench's close-ups to bare paint. A cleared
+-- canvas has already dropped the claim (`gen`).
+local function newClaim(keys)
+  return { keys = keys or {}, live = 0, gen = markGen, painted = false, bakedDepth = 0, bakedRadius = 0 }
+end
+local function claimDone(mk)
+  if mk.done or mk.gen ~= markGen then return end
+  mk.done = true
+  local idx = nil
+  for i = #markLog, 1, -1 do
+    if markLog[i] == mk.entry then
+      idx = i
+      break
+    end
+  end
+  if mk.painted then
+    if idx then
+      markLog[idx][8] = mk.bakedDepth
+      if mk.bakedRadius > 0 then markLog[idx][9] = mk.bakedRadius end
+    end
+    return
+  end
+  if idx then table.remove(markLog, idx) end
+  -- (A full log may have evicted the entry already; the spots are still ours.)
+  for _, k in ipairs(mk.keys) do spotHits[k] = math.max(0, (spotHits[k] or 1) - 1) end
+  stampStats.marksRetracted = stampStats.marksRetracted + 1
+end
+local function stampSettled(st, painted)
+  local mk = st.mark
+  if not mk or st.settled then return end
+  st.settled = true
+  if mk.gen ~= markGen then return end
+  if painted then
+    mk.painted = true
+    mk.bakedDepth = math.max(mk.bakedDepth, st.look and st.look.depth or 0)
+    mk.bakedRadius = math.max(mk.bakedRadius, st.radius or 0)
+  elseif st.key then
+    spotHits[st.key] = math.max(0, (spotHits[st.key] or 1) - 1)   -- its own cell (a haze, a streak) is free again
+  end
+  mk.live = mk.live - 1
+  if mk.live <= 0 then claimDone(mk) end
+end
+-- Captured layer -> its stamp, until the layer bakes (kept off the layer
+-- table itself, which goes to the engine).
+local layerStamp = setmetatable({}, { __mode = "k" })
 
 -- Player vehicle id we must not retry setup on (unsupported, or liveried and
 -- intentionally skipped). Without it every traffic spawn re-ran setup and
@@ -419,44 +539,64 @@ end
 -- Trade-off: scratch stamps' setMetallicIntensity / setRoughnessIntensity
 -- still write to an unused dynamic canvas (harmless no-ops). Scratches read
 -- as color marks; no metal-glint. The seam is gone with it.
+-- The damage layer's identity (see setupDamageLayer below): the stage above
+-- the canvas paint stage fades on the canvas roughness channel.
+local DMG_TEX    = "/art/dynamicDecals/textures/"
+local DMG_MARKER = "@DynamicTextureRoughness"
+
+-- Stage index whose baseColor comes from the canvas, or nil.
+local function paintStageOf(mat)
+  for stage = 0, 3 do
+    if mat:getField("baseColorMap", stage) == "@DynamicTextureBaseColor" then return stage end
+  end
+  return nil
+end
+
+local function isDamageLayerDone(mat)
+  local p = paintStageOf(mat)
+  return p ~= nil and p < 3 and mat:getField("opacityMap", p + 1) == DMG_MARKER
+end
+
+-- Re-point one material's canvas metallic/roughness stages at the static
+-- factory maps. Returns true if it changed (and was reloaded).
+local function staticMR(skinMat)
+  local function isDynamic(value)
+    return type(value) == "string" and value:sub(1, 15) == "@DynamicTexture"
+  end
+  local changed = false
+  for stage = 0, 3 do
+    if isDynamic(skinMat:getField("metallicMap", stage)) then
+      skinMat:setField("metallicMap", stage, DMG_TEX .. "_zero.png")
+      changed = true
+    end
+    if isDynamic(skinMat:getField("roughnessMap", stage)) then
+      skinMat:setField("roughnessMap", stage, DMG_TEX .. "_paint_roughness.png")
+      changed = true
+    end
+  end
+  if changed then
+    -- Live-update pattern: setField, then flush() to mark dirty, then
+    -- reload() to apply. Both, in that order — reload alone re-reads
+    -- the stale state.
+    if skinMat.flush  then pcall(function() skinMat:flush()  end) end
+    if skinMat.reload then pcall(function() skinMat:reload() end) end
+  end
+  return changed
+end
+
 local function restoreFactoryMR()
   if not api or not api.getShapeMaterialNames then return false end
   if not scenetree or not scenetree.findObject then return false end
   local ok, names = pcall(api.getShapeMaterialNames)
   if not ok or type(names) ~= "table" then return false end
 
-  local METALLIC_PATH  = "/art/dynamicDecals/textures/_zero.png"
-  local ROUGHNESS_PATH = "/art/dynamicDecals/textures/_paint_roughness.png"
-
-  local function isDynamic(value)
-    return type(value) == "string" and value:sub(1, 15) == "@DynamicTexture"
-  end
-
   local restored = 0
   for _, matName in pairs(names) do
     if type(matName) == "string" then
       local skinMat = scenetree.findObject(matName .. ".skin.dynamicTextures")
-      if skinMat then
-        local changed = false
-        for stage = 0, 3 do
-          if isDynamic(skinMat:getField("metallicMap", stage)) then
-            skinMat:setField("metallicMap", stage, METALLIC_PATH)
-            changed = true
-          end
-          if isDynamic(skinMat:getField("roughnessMap", stage)) then
-            skinMat:setField("roughnessMap", stage, ROUGHNESS_PATH)
-            changed = true
-          end
-        end
-
-        if changed then
-          -- Live-update pattern: setField, then flush() to mark dirty, then
-          -- reload() to apply. Both, in that order — reload alone re-reads
-          -- the stale state.
-          if skinMat.flush  then pcall(function() skinMat:flush()  end) end
-          if skinMat.reload then pcall(function() skinMat:reload() end) end
-          restored = restored + 1
-        end
+      -- A damage-layer material keeps metallic on the canvas on purpose.
+      if skinMat and not isDamageLayerDone(skinMat) and staticMR(skinMat) then
+        restored = restored + 1
       end
       -- Non-body materials (no skin variant) are skipped silently — they
       -- don't render off the dynamic canvas, so there's nothing to fix.
@@ -468,6 +608,226 @@ local function restoreFactoryMR()
       restored))
   end
   return restored > 0
+end
+
+-- ---- damage layer (gloss loss) ----
+-- Real paint damage reads mostly through gloss: abraded clear coat goes
+-- satin, primer is matte, scraped metal is satin-shiny. The dynamic-textures
+-- skin paints the body in one stage (canvas baseColor under a glossy clear
+-- coat), so a mark could only ever be a colour under glass. setupDamageLayer
+-- splits that stage in two:
+--   stage p    the exposed surface: canvas baseColor, no clear coat, its
+--              roughness read from the canvas METALLIC channel, plus tiling
+--              micro-scratch detail maps finer than the canvas can resolve.
+--   stage p+1  the factory paint, a copy of the original stage with static
+--              metallic/roughness maps, drawn over it with
+--              opacity = canvas ROUGHNESS (UV1) * paint mask (UV0)
+--              (shaders/common/material/shadergen/defaultMat.hlsl processLayers
+--              lerps every property, clear coat included, by it).
+-- So the canvas roughness channel means "paint intact" and the metallic
+-- channel means "roughness of what's exposed". BeamNG binds @DynamicTexture*
+-- maps in main map slots (opacityMap, roughnessMap...) but not in detail
+-- slots, and both channels clear and fill to 1 (measured with
+-- exportTextures): an untouched car is all factory paint, with no seed and no
+-- projection seams. A mark writes roughness below 1 where paint came off
+-- (0 = fully exposed) and metallic = the exposed surface's roughness. There is
+-- no bare-metal metallic: scraped steel reads as a light, smoother grey.
+-- Cars whose paint stage has no free stage above it keep the old colour-only
+-- behaviour (restoreFactoryMR).
+--
+-- The skin material is shared and outlives respawns, so setup is idempotent:
+-- the factory stage's opacityMap marks a material as done.
+local DMG_DETAIL_DIR     = "/art/scratches/"
+local DMG_DETAIL_SCALE   = "96 48" -- micro-scratch tiles across the 2:1 canvas UV (~43 canvas texels a tile)
+-- Every per-stage material field (editor/materialEditor.lua's layer list),
+-- copied verbatim so the pristine stage renders exactly like the original.
+local STAGE_FIELDS = {
+  "diffuseColor", "instanceDiffuse", "instanceEmissive", "instanceOpacity", "diffuseMap", "paletteBaseColor",
+  "paletteMetallic", "paletteRoughness", "paletteClearCoat", "paletteClearCoatRoughness", "diffuseMapUseUV",
+  "overlayMapUseUV", "detailMapUseUV", "normalMapUseUV", "normalDetailMapUseUV", "opacityMapUseUV",
+  "colorPaletteMapUseUV", "specularMapUseUV", "reflectivityMapUseUV", "roughnessMapUseUV", "metallicMapUseUV",
+  "clearCoatMapUseUV", "ambientOcclusionMapUseUV", "emissiveMapUseUV", "colorMap", "normalMap",
+  "normalMapStrength", "detailBaseColorMapStrength", "roughnessFactor", "specularPower", "baseColorMap",
+  "baseColorFactor", "opacityFactor", "metallicMap", "metallicFactor", "metallicDetailMap",
+  "detailMetallicMapStrength", "roughnessMap", "roughnessDetailMap", "detailRoughnessMapStrength",
+  "ambientOcclusionMap", "ambientOcclusionDetailMap", "detailAoMapStrength", "emissiveFactor",
+  "emissiveIntensityNits", "emissiveIgnoreExposure", "emissiveMap", "retroreflectivity", "retroreflectiveColor",
+  "clearCoatMap", "clearCoatFactor", "clearCoatRoughnessFactor", "clearCoatBottomNormalMap",
+  "clearCoatBottomNormalMapStrength", "specularityMap", "clearCoatRoughnessMap", "overlayMap", "opacityMap",
+  "opacityDetailMap", "detailOpacityMapStrength", "opacityDetailMapUseUV", "colorPaletteMap", "lightMap",
+  "detailMap", "detailScale", "detailNormalMap", "detailNormalMapStrength", "specularMap", "envMap",
+  "reflectivityMap", "reflectivityMapFactor", "specular", "pixelSpecular", "annotationMap", "parallaxScale",
+  "useAnisotropic", "useAnisotropicFilter", "vertLit", "vertColor", "vertColorEmissive", "minnaertConstant",
+  "subSurface",
+}
+
+-- Original fields of every material we split, by material name, so unloading
+-- the painter can put the car's skin back exactly as it was.
+local dmgOriginals = {}
+
+-- Detail slots the split would clobber: the exposed stage takes its own detail
+-- maps and the factory stage's detailScale becomes 1 1 for the paint mask.
+local DETAIL_FIELDS = { "detailMap", "detailNormalMap", "roughnessDetailMap", "metallicDetailMap",
+                        "ambientOcclusionDetailMap", "opacityDetailMap" }
+
+local function snapshotStages(mat, p)
+  local snap = { active = mat:getField("activeLayers", 0), stages = {} }
+  for _, st in ipairs({ p, p + 1 }) do
+    local t = {}
+    for _, f in ipairs(STAGE_FIELDS) do t[f] = mat:getField(f, st) end
+    snap.stages[st] = t
+  end
+  return snap
+end
+
+local function applyMaterial(mat)
+  local ok1 = not mat.flush or pcall(function() mat:flush() end)
+  local ok2 = not mat.reload or pcall(function() mat:reload() end)
+  return ok1 and ok2
+end
+
+local function restoreStages(mat, snap)
+  for st, t in pairs(snap.stages) do
+    for f, v in pairs(t) do mat:setField(f, st, v) end
+  end
+  mat:setField("activeLayers", 0, snap.active)
+  applyMaterial(mat)
+end
+
+-- Returns true if `mat` now has (or already had) the damage layer. Layouts it
+-- can't split without losing something (paint stage not on top, or already
+-- using detail maps) are left alone, as is a material whose split didn't
+-- stick - the caller falls back to colour-only marks.
+local function setupMaterialDamageLayer(mat, name)
+  if isDamageLayerDone(mat) then return true end
+  local p = paintStageOf(mat)
+  if not p then return false end
+  local active = tonumber(mat:getField("activeLayers", 0)) or 1
+  if p + 1 > 3 or active ~= p + 1 then return false end
+  for _, f in ipairs(DETAIL_FIELDS) do
+    if mat:getField(f, p) ~= "" then return false end
+  end
+  local snap = snapshotStages(mat, p)
+
+  local function set(f, st, v) mat:setField(f, st, tostring(v)) end
+  for _, f in ipairs(STAGE_FIELDS) do set(f, p + 1, mat:getField(f, p)) end
+
+  -- p+1: factory paint over the damage, faded out where the canvas says so.
+  -- The original paint mask (which keeps paint off trim) moves to the opacity
+  -- detail slot, with full strength so it multiplies: saturate(2 * mask).
+  local mask, maskUV = mat:getField("opacityMap", p), mat:getField("opacityMapUseUV", p)
+  set("metallicMap", p + 1, DMG_TEX .. "_zero.png")
+  set("roughnessMap", p + 1, DMG_TEX .. "_paint_roughness.png")
+  set("opacityMap", p + 1, DMG_MARKER)
+  set("opacityMapUseUV", p + 1, 1)
+  set("opacityDetailMap", p + 1, mask)
+  set("opacityDetailMapUseUV", p + 1, maskUV ~= "" and maskUV or 0)
+  set("detailOpacityMapStrength", p + 1, 1)
+  set("detailScale", p + 1, "1 1")
+
+  -- p: the exposed surface. Roughness comes from the canvas metallic channel.
+  set("metallicMap", p, DMG_TEX .. "_zero.png")
+  set("metallicFactor", p, 0)
+  set("roughnessMap", p, "@DynamicTextureMetallic")
+  set("roughnessMapUseUV", p, 1)
+  set("roughnessFactor", p, 1)
+  set("clearCoatFactor", p, 0)
+  set("clearCoatMap", p, "")
+  -- Micro-scratches, tiled on the canvas UV: faintly lighter fine lines,
+  -- rougher grooves, and relief that catches the light.
+  set("detailMap", p, DMG_DETAIL_DIR .. "scratch_detail_b.data.png")
+  set("detailBaseColorMapStrength", p, 0.03)
+  set("roughnessDetailMap", p, DMG_DETAIL_DIR .. "scratch_detail_r.data.png")
+  set("detailRoughnessMapStrength", p, 0.15)
+  set("detailNormalMap", p, DMG_DETAIL_DIR .. "scratch_detail_n.normal.png")
+  set("detailNormalMapStrength", p, 0.12)
+  set("detailMapUseUV", p, 1)
+  set("normalDetailMapUseUV", p, 1)
+  set("detailScale", p, DMG_DETAIL_SCALE)
+
+  set("activeLayers", 0, p + 2)
+  if not (applyMaterial(mat) and isDamageLayerDone(mat)
+          and mat:getField("roughnessMap", p) == "@DynamicTextureMetallic"
+          and tonumber(mat:getField("activeLayers", 0)) == p + 2) then
+    log('W', logTag, "damage layer didn't apply to " .. tostring(name) .. "; restoring it (colour-only marks)")
+    restoreStages(mat, snap)
+    return false
+  end
+  dmgOriginals[name] = snap
+  return true
+end
+
+-- Un-split every material (painter unload) and leave it in the safe
+-- colour-only state: the shipped stage reads canvas metallic/roughness, which
+-- sit at 1 (a matte-metal body), so restoreFactoryMR re-points them at static
+-- factory values whether or not the canvas stays bound.
+local function restoreDamageLayers()
+  if not (scenetree and scenetree.findObject) then return end
+  for name, snap in pairs(dmgOriginals) do
+    local mat = scenetree.findObject(name)
+    -- Every restored material, whichever car it belongs to.
+    if mat then restoreStages(mat, snap); staticMR(mat) end
+  end
+  table.clear(dmgOriginals)
+end
+
+-- Give the factory-paint stage of the current car's split materials its own
+-- paint finish (metallic flake, base roughness) instead of the flat
+-- dielectric the static maps give it. Cached so a later re-split (respawn,
+-- reset) gets it too.
+local lastFinish = nil
+local function applyPaintFinish(metallic, roughness)
+  metallic = math.max(0, math.min(1, metallic))
+  roughness = math.max(0.05, math.min(1, roughness))
+  lastFinish = { metallic, roughness }
+  if not (scenetree and scenetree.findObject and api and api.getShapeMaterialNames) then return end
+  local ok, names = pcall(api.getShapeMaterialNames)
+  if not ok or type(names) ~= "table" then return end
+  -- Fields read back as float text ("0.850000024"), so compare as numbers.
+  local function differs(mat, f, st, v) return math.abs((tonumber(mat:getField(f, st)) or -1) - v) > 1e-4 end
+  for _, matName in pairs(names) do
+    local mat = type(matName) == "string" and scenetree.findObject(matName .. ".skin.dynamicTextures")
+    local p = mat and isDamageLayerDone(mat) and paintStageOf(mat)
+    if p and p < 3 and (differs(mat, "metallicFactor", p + 1, metallic) or differs(mat, "roughnessFactor", p + 1, roughness)
+                        or mat:getField("metallicMap", p + 1) ~= "") then
+      mat:setField("metallicMap", p + 1, "")
+      mat:setField("metallicFactor", p + 1, tostring(metallic))
+      mat:setField("roughnessMap", p + 1, "")
+      mat:setField("roughnessFactor", p + 1, tostring(roughness))
+      applyMaterial(mat)
+    end
+  end
+end
+
+-- Give every body material the damage layer; fall back to restoreFactoryMR's
+-- static maps for materials that can't take one. Cheap when already done.
+local function setupDamageLayer()
+  if not api or not api.getShapeMaterialNames then return false end
+  if not scenetree or not scenetree.findObject then return false end
+  local ok, names = pcall(api.getShapeMaterialNames)
+  if not ok or type(names) ~= "table" then return false end
+  local added, fallback = 0, 0
+  for _, matName in pairs(names) do
+    if type(matName) == "string" then
+      local mat = scenetree.findObject(matName .. ".skin.dynamicTextures")
+      if mat then
+        local wasDone = isDamageLayerDone(mat)
+        if setupMaterialDamageLayer(mat, matName .. ".skin.dynamicTextures") then
+          if not wasDone then added = added + 1 end
+        else
+          fallback = fallback + 1
+        end
+      end
+    end
+  end
+  if fallback > 0 then restoreFactoryMR() end
+  -- A fresh split starts from the static maps; give it the paint finish back.
+  if added > 0 and lastFinish then applyPaintFinish(lastFinish[1], lastFinish[2]) end
+  if added > 0 or fallback > 0 then
+    log('I', logTag, string.format("damage layer: %d material(s) set up, %d without a free stage (colour only)",
+      added, fallback))
+  end
+  return true
 end
 
 -- Per-tick stabilizer. Idempotent: each call diffs the current bindings
@@ -483,7 +843,7 @@ local function ensureDesiredMaterialsBound()
     -- Nothing to enforce; let BeamNG's heuristic stand and do the seed
     -- one-shot so single-material vehicles still get the baseColor fill.
     if not seedDone then
-      restoreFactoryMR()
+      setupDamageLayer()
       M.addPaintFill()
       seedDone = true
     end
@@ -508,7 +868,7 @@ local function ensureDesiredMaterialsBound()
       "material bindings stable: desired=%d  current=%d",
       #desiredMatIndices, type(current) == "table" and #current or 0))
     if not seedDone then
-      restoreFactoryMR()
+      setupDamageLayer()
       M.addPaintFill()
       seedDone = true
     end
@@ -552,6 +912,9 @@ local function trySetup()
   -- (The earlier theory that disabling this broke visibility on pigeon was
   -- wrong — that was the brush channel-layout bug masking the truth.)
   api.setProjectDynamicDecalsState(false)
+  -- The car-on-car probe needs this car's body-node list; after a painter
+  -- reload the detector won't send it again on its own.
+  veh:queueLuaCommand("if scratches_detect and scratches_detect.resendBodyNodes then scratches_detect.resendBodyNodes() end")
   ready = true
   rebindDirty = true
   pendingSetup = false
@@ -575,12 +938,16 @@ end
 -- numeric RGB. Tolerant of either commas or whitespace as separators and of
 -- nil / non-string returns (some vehicles or transient states don't expose a
 -- color). Returns nil if it can't extract three numbers.
+-- Also returns the paint's metallic and roughness (fields 5 and 6 of the
+-- "r g b a metallic roughness clearcoat clearcoatRoughness" string) when
+-- present, else nil for both.
 local function parseVehicleColor(s)
   if type(s) ~= "string" or s == "" then return nil end
-  local r, g, b = s:match("([%-%d%.]+)[,%s]+([%-%d%.]+)[,%s]+([%-%d%.]+)")
-  r, g, b = tonumber(r), tonumber(g), tonumber(b)
+  local nums = {}
+  for v in s:gmatch("[%-%d%.]+") do nums[#nums + 1] = tonumber(v) end
+  local r, g, b = nums[1], nums[2], nums[3]
   if not (r and g and b) then return nil end
-  return r, g, b
+  return r, g, b, nums[5], nums[6]
 end
 
 -- Seed the dynamic-decals canvas with a uniform baseColor.
@@ -609,10 +976,12 @@ M.addPaintFill = function()
   -- rendered from the factory maps (see restoreFactoryMR), so a fill is all
   -- the seed needs.
   local r, g, b = 0.5, 0.5, 0.5
-  local pr, pg, pb = parseVehicleColor(getVehicleColor and getVehicleColor() or nil)
+  local pr, pg, pb, pm, pro = parseVehicleColor(getVehicleColor and getVehicleColor() or nil)
   if pr then
     r, g, b = pr, pg, pb
+    paintRGB = { r, g, b }
     paintLum = math.max(0, math.min(1, 0.2126 * r + 0.7152 * g + 0.0722 * b))
+    if pm and pro then applyPaintFinish(pm, pro) end
   else
     log('W', logTag, "addPaintFill: getVehicleColor unavailable; using mid-grey fallback")
   end
@@ -648,6 +1017,8 @@ M.getPaintSeedColor  = function() return PAINT_SEED_COLOR end
 -- alongside the K probes for drawUI).
 local flushPendingStampsRef
 local bakePendingRef
+local updateCarContactsRef
+local resetCarContactsRef
 local hasPendingWorkRef
 local drawUIRef
 
@@ -742,6 +1113,11 @@ local function onUpdate(dtReal, dtSim, dtRaw)
     end
     -- Bake on the frames between projection batches, a chunk at a time.
     if not projected and bakePendingRef then bakePendingRef() end
+    -- Contacts with other cars are found geometrically (see updateCarContacts).
+    if updateCarContactsRef then
+      local veh = getPlayerVehicle(0)
+      if veh then updateCarContactsRef(dtReal or 0, veh) end
+    end
     -- Composite only when something changed, while setup is still settling,
     -- or on the heartbeat that keeps the texture-set binding fresh.
     if combineDirty or rebindDirty or fullRateCombine or not seedDone then
@@ -787,6 +1163,9 @@ local function onVehicleSwitched(oldId, newId, player)
   rebindDirty        = true
   apiApp             = nil
   table.clear(spotHits)
+  table.clear(markLog)
+  markGen = markGen + 1
+  if resetCarContactsRef then resetCarContactsRef() end
   skippedVid         = nil
   -- Drop the previous vehicle's material-binding state so the new vehicle
   -- runs the discover/stabilize cycle from scratch.
@@ -817,7 +1196,19 @@ local function onVehicleSpawned(vid)
   if veh and veh:getId() == vid then
     spawnAabbCache.vid = nil
     spawnAabbCache.box = nil
-    if ready then combineDirty = true; rebindDirty = true end
+    if ready then
+      combineDirty = true; rebindDirty = true
+      -- A respawn (paint or part change) can rebuild the skin material from
+      -- its JSON, which would leave the canvas channels read the vanilla way.
+      setupDamageLayer()
+      -- ...and may have changed the paint the damage tones are mixed from.
+      local pr, pg, pb, pm, pro = parseVehicleColor(getVehicleColor and getVehicleColor() or nil)
+      if pr then
+        paintRGB = { pr, pg, pb }
+        paintLum = math.max(0, math.min(1, 0.2126 * pr + 0.7152 * pg + 0.0722 * pb))
+        if pm and pro then applyPaintFinish(pm, pro) end
+      end
+    end
   end
   if not ready then
     pendingSetup = true
@@ -974,15 +1365,22 @@ end
 -- ---- scratch brushes ----
 -- Generated by tools/generate_brushes.py: white RGB, shape in alpha, tinted
 -- per stamp by setDecalColor. All are drawn along +x.
---   SCRAPE - slide bands of parallel lines; stretched along the slide path.
---   HAZE   - soft scuffed clear coat, laid under scrapes and impacts.
---   CHIPS  - impact paint loss (sharp flakes).
---   GOUGE  - impact dig-in crater with short deep scores.
+--   STREAK - a scrape band of primer streaks; stretched along the slide.
+--   HAZE   - abraded clear coat: a ragged patch of streaky abrasion.
+--   CHIPS  - sharp-edged flakes scattered downstream of a hit.
+--   GOUGES - a torn gouge as a pair: the paint rim and the bare core inside it.
+--   SMEAR  - transfer: a broken, streaky smudge.
 local TEX = "/art/dynamicDecals/textures/"
-local SCRAPE_BRUSHES = { TEX .. "scr_scrape_01.png", TEX .. "scr_scrape_02.png", TEX .. "scr_scrape_03.png" }
-local HAZE_BRUSHES   = { TEX .. "scr_haze_01.png", TEX .. "scr_haze_02.png" }
+local STREAK_BRUSHES = { TEX .. "scr_streak_01.png", TEX .. "scr_streak_02.png", TEX .. "scr_streak_03.png",
+                         TEX .. "scr_streak_04.png" }
+local HAZE_BRUSHES   = { TEX .. "scr_haze_01.png", TEX .. "scr_haze_02.png", TEX .. "scr_haze_03.png" }
 local CHIP_BRUSHES   = { TEX .. "scr_chips_01.png", TEX .. "scr_chips_02.png" }
-local GOUGE_BRUSHES  = { TEX .. "scr_gouge_01.png", TEX .. "scr_gouge_02.png" }
+local GOUGES         = { { rim = TEX .. "scr_gouge_01_rim.png", core = TEX .. "scr_gouge_01_core.png" },
+                         { rim = TEX .. "scr_gouge_02_rim.png", core = TEX .. "scr_gouge_02_core.png" } }
+local SMEAR_BRUSHES  = { TEX .. "scr_smear_01.png", TEX .. "scr_smear_02.png" }
+-- An impact's streaks: a short cluster ending inside an oval (a band's
+-- streak brush, stamped that small, showed its box).
+local DRAG_BRUSHES   = { TEX .. "scr_drag_01.png", TEX .. "scr_drag_02.png", TEX .. "scr_drag_03.png" }
 
 -- Long straight slides used to become one large projected rectangle. On roof
 -- slides that rectangle could span past the roof edge and mark the rear/side,
@@ -995,16 +1393,15 @@ local STRETCH_MAX_SEGMENTS_PER_STREAM = 40
 -- fade out at their ends to hide the joins).
 local STRETCH_OVERLAP = 1.3
 -- Nearby slides share one projection job (see enqueueStreamLocal).
-local STREAM_MERGE_RADIUS    = 0.35  -- m between band centres
-local STREAM_MERGE_MAX_BANDS = 6
+local STREAM_MERGE = { radius = 0.35, maxBands = 6 }  -- radius: m between band centres
 
 -- Recency-aware random picker. Avoids the last RECENT_BRUSH_MAX picks if
 -- possible. One re-roll max so small brush sets don't loop.
 local function pickFromSet(set)
-  local b = set[math.random(#set)]
+  local b = set[rand(#set)]
   for _, r in ipairs(recentBrushes) do
     if r == b then
-      b = set[math.random(#set)]
+      b = set[rand(#set)]
       break
     end
   end
@@ -1013,45 +1410,137 @@ local function pickFromSet(set)
   return b
 end
 
-local function pickBrush() return pickFromSet(SCRAPE_BRUSHES) end
+-- ---- damage looks ----
+-- A look is everything one decal layer writes: brush, colour, alpha, and the
+-- two damage-layer channels (see setupDamageLayer):
+--   intact  how much factory paint survives (canvas roughness): 0 = fully
+--           exposed, 1 = untouched. A brush's alpha scales it, so exposure
+--           follows the brush shape.
+--   rough   roughness of what's exposed (canvas metallic).
+-- Colours are mixed from the paint colour, so the alpha that drives the gloss
+-- loss doesn't also decide how strong the colour change is.
+--   kind: "haze" | "scuff" | "primer" | "metal" | "plastic" | "transfer"
+local function mix3(a, b, t)
+  return a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t
+end
 
--- Damage tone, layered like real paint: clear coat scuffs to a translucent
--- haze, deeper damage exposes primer, the deepest bare metal. On light paint
--- the same damage reads darker than the paint, so the palette blends toward a
--- darker set as the car's paint luminance rises. Returns r, g, b, a.
---   layer: "haze" | "primer" | "metal"
-local function damageTone(layer)
-  local t = math.max(0, math.min(1, (paintLum - 0.35) / 0.3))  -- 0 dark paint .. 1 light paint
-  local function mix(dark, light) return dark + (light - dark) * t end
-  local j = (math.random() - 0.5) * 0.08
-  if layer == "haze" then
-    local v = mix(0.86, paintLum * 0.72) + j * 0.5
-    return v, v, math.min(1, v + 0.015), 0.18 + math.random() * 0.10
-  elseif layer == "metal" then
-    local v = mix(0.86, 0.62) + j
-    return v - 0.01, v, math.min(1, v + 0.03), 1
+-- How deep each look cuts, for bake order: shallower layers bake first so a
+-- deeper one is never painted back over (the canvas blends by lerp).
+local LOOK_DEPTH = { haze = 0, abrasion = 0, transfer = 1, scuff = 2, primer = 3, plastic = 4, metal = 5 }
+
+local function damageLook(kind, tex)
+  local light = math.max(0, math.min(1, (paintLum - 0.3) / 0.35))  -- 0 dark paint .. 1 light paint
+  local j = (rand() - 0.5) * 0.06
+  local r, g, b, intact, rough = 0, 0, 0, 0, 0.75
+  if kind == "haze" then
+    -- Abraded clear coat is full of micro-fractures that scatter white light:
+    -- dark paint greys a little (losing its reflection alone would only
+    -- darken it; much more reads as grey clouds); light paint goes dull and a
+    -- touch lighter (ref photo 3) - darkening it read as a grey stain. Partly
+    -- intact.
+    local grey = 0.2126 * paintRGB[1] + 0.7152 * paintRGB[2] + 0.0722 * paintRGB[3]
+    local lift = math.min(1, grey * 1.04 + 0.05)
+    local target = light < 0.5 and { 0.5, 0.52, 0.55 } or { lift, lift, lift * 1.01 }
+    r, g, b = mix3(paintRGB, target, (light < 0.5 and 0.2 or 0.3) + 0.08 * rand())
+    intact, rough = 0.45, 0.65
+  elseif kind == "abrasion" then
+    -- Clear coat rubbed off by a panel sliding over concrete (ref photo 1):
+    -- whiter and more matte than a pressed haze - the scuffed area itself
+    -- reads, not only its scores.
+    local grey = 0.2126 * paintRGB[1] + 0.7152 * paintRGB[2] + 0.0722 * paintRGB[3]
+    local lift = math.min(1, grey * 1.06 + 0.07)
+    local target = light < 0.5 and { 0.62, 0.64, 0.68 } or { lift, lift, lift * 1.01 }
+    r, g, b = mix3(paintRGB, target, 0.34 + 0.08 * rand())
+    intact, rough = 0.3, 0.65
+  elseif kind == "scuff" then
+    -- Light scores through the clear coat into the colour coat: a whitened
+    -- paint tone, not primer yet.
+    -- (On light paint, a neutral darker grey: tinted by the paint it read
+    -- dark blue on silver.)
+    local lum = 0.2126 * paintRGB[1] + 0.7152 * paintRGB[2] + 0.0722 * paintRGB[3]
+    local target = light < 0.5 and { 0.68, 0.69, 0.71 } or { lum * 0.62, lum * 0.62, lum * 0.62 }
+    r, g, b = mix3(paintRGB, target, 0.55 + 0.15 * rand())
+    intact, rough = 0.1, 0.6
+  elseif kind == "metal" then
+    -- Bare steel: no metallic flake here (the canvas metallic channel holds
+    -- roughness), so a darker, glossy grey stands in for its reflection - a
+    -- light one merged with the primer rim around it into one white blob.
+    local v = 0.40 + j
+    r, g, b = v - 0.01, v, v + 0.015
+    rough = 0.45
+  elseif kind == "plastic" then
+    -- Bumper plastic under the paint: dark grey.
+    local v = 0.13 + j * 0.5
+    r, g, b = v, v, v + 0.005
+    rough = 0.6
+  elseif kind == "chip" then
+    -- Primer in small flakes (primer depth): a flake reads whiter than a
+    -- streak of the same primer, so on dark paint it's a duller, neutral grey.
+    local v = (light < 0.5 and 0.6 or 0.5) + j
+    r, g, b = v, v, v
+  elseif kind == "transfer" then
+    -- Rubber/grime pressed into the paint: dark, not quite black.
+    local v = 0.08 + j * 0.5
+    r, g, b = v, v, v
+    intact, rough = 0.5, 0.7
+  else
+    -- Primer: off-white and faintly warm on dark cars; mid grey on light cars,
+    -- where it shows up darker than the paint around it.
+    local v = (light < 0.5 and 0.72 or 0.5) + j
+    r, g, b = v + 0.012, v, v - 0.02
   end
-  local v = mix(0.66, 0.45) + j                   -- primer: neutral, faintly warm
-  return math.min(1, v + 0.012), v, math.max(0, v - 0.02), 0.95
+  return { tex = tex, r = math.max(0, math.min(1, r)), g = math.max(0, math.min(1, g)),
+           b = math.max(0, math.min(1, b)), a = 1, intact = intact, rough = rough,
+           depth = LOOK_DEPTH[kind] or LOOK_DEPTH.primer }
 end
 
--- Primer or bare metal, more often metal the harder the hit (severity 0..1).
-local function lineTone(severity)
-  return damageTone(math.random() < 0.15 + 0.5 * (severity or 0) and "metal" or "primer")
+-- Another car's paint smeared on (car-on-car contact): its colour, laid on
+-- top of the scuff, still fairly glossy since it is paint on paint.
+local function transferLook(rgb, tex)
+  local look = damageLook("transfer", tex)
+  look.r, look.g, look.b = rgb[1], rgb[2], rgb[3]
+  look.intact, look.rough = 0.6, 0.5
+  return look
 end
 
--- Scale wobble + per-brush bias. baseScale is the caller-supplied scale
--- (or stampAtLocal's default 0.10). Returns final scale.
-local function pickStampScale(baseScale, brushPath)
-  local wobble = 0.75 + math.random() * 0.5  -- 0.75..1.25
-  local bias   = BRUSH_SCALE_BIAS[brushPath] or 1.0
-  return baseScale * wobble * bias
+-- A decal is a box: the brush maps onto its x/z faces and it paints every
+-- surface inside its y (depth) extent (shaders/common/dynamicDecals/
+-- decal.ps.hlsl). At the old 1 m depth a mark also smeared down any surface
+-- near-parallel to the projection within half a metre - a crumpled lower door,
+-- a sill, a pillar - as long streaks. Depth follows the mark's size: deep
+-- enough for a curved bumper corner, too shallow to reach a folded panel.
+-- Impacts land on crumpled metal, whose skin leaves a thin slab within
+-- centimetres of the hit point, so they get a deeper box (`deep`), and
+-- runClusterJob deepens it further where the ray overshot the contact.
+-- Measured overshoots on crushed panels are 5-18 cm; past this the ray went
+-- through a hole (one measured 2.76 m), and a box deep enough to reach back
+-- would smear down nearby surfaces (see decalDepth).
+local GAP = { max = 0.25, noise = 0.02, borrow = 0.15 }  -- m
+-- Re-aimed projections allowed per flush (each is one more ~1.4 ms pass on
+-- top of the projection budget).
+local reaim = { perFlush = 3, left = 3 }
+-- GAP.noise: a smaller overshoot is a node a little off the skin.
+-- GAP.borrow: another stamp borrows the aim's compensation only this close to
+-- it (the same crushed patch); further off, a deep box on intact skin would
+-- smear.
+local function decalDepth(lenFull, widthFull, deep)
+  local size = math.max(lenFull, widthFull)
+  if deep then return math.max(0.25, math.min(0.5, 1.2 * size)) end
+  return math.max(0.08, math.min(0.3, 0.4 * size))
 end
 
--- Roughness jitter (only affects the canvas's M/R channels, which the car
--- currently renders from its factory maps).
-local function pickRoughness()
-  return 0.10 + math.random() * 0.25
+-- Point the decal API's brush state at a look; getDecalData then snapshots it
+-- into the layer it builds.
+local function applyLook(look)
+  api.setDecalTexturePath("color", look.tex)
+  api.setDecalTexturePath("alpha", TEX .. "_one.png")
+  api.setDecalTexturePath("metallic", TEX .. "_one.png")
+  api.setDecalTexturePath("roughness", TEX .. "_one.png")
+  -- The damage layer reads canvas roughness as "paint intact" and canvas
+  -- metallic as "roughness of what's exposed".
+  api.setRoughnessIntensity(look.intact or 1)
+  api.setMetallicIntensity(look.rough or 1)
+  api.setDecalColor(Point4F(look.r, look.g, look.b, look.a or 1))
 end
 
 -- ---- synthetic-camera stamping (Phase 3 step 1) ----
@@ -1238,9 +1727,24 @@ local function nextLayerUid(prefix)
   return string.format("%s-%06x-%x", prefix or "scr", layerUidSalt, layerUidSeq)
 end
 
+-- Settle what a job still owes as lost: it won't run.
+local function dropJob(job)
+  if job.stream then
+    for _, b in ipairs(job.bands) do
+      if b.claim and b.claim.live == 0 then claimDone(b.claim) end
+    end
+  else
+    for _, st in ipairs(job.members) do stampSettled(st) end
+  end
+end
+local function dropJobs(list)
+  for _, job in ipairs(list) do dropJob(job) end
+  table.clear(list)
+end
+
 local function enqueueJob(job, vid)
   if jobQueueVid ~= vid then
-    table.clear(jobQueue)
+    dropJobs(jobQueue)
     jobQueueVid = vid
   end
   if #jobQueue >= MAX_QUEUED_JOBS then
@@ -1258,14 +1762,24 @@ hasPendingWorkRef = hasPendingWork
 
 -- Drop every queued projection job (vehicle switch, clear).
 M._dropQueuedJobs = function()
-  table.clear(jobQueue)
+  dropJobs(jobQueue)
+  for _, l in ipairs(bakeQueue) do
+    local st = layerStamp[l]
+    if st then stampSettled(st) end
+  end
   table.clear(bakeQueue)
   jobQueueVid = nil
 end
 
+-- Stamps the per-flush aggregate can still take for this vehicle.
+local function stampRoom(vid)
+  if pendingStampsVid ~= vid then return AGGREGATE_PER_FRAME_CAP end
+  return AGGREGATE_PER_FRAME_CAP - #pendingStampInputs
+end
+
 -- Record one discrete stamp for vehicle `vid` (vehicle-local inputs). No api
 -- calls, no projection: flushPendingStamps clusters the frame's stamps into
--- jobs. Callers have already checked readiness.
+-- jobs. Callers have already checked readiness. Returns whether it was taken.
 local function enqueueStamp(localPos, localNormal, opts, vid)
   opts = opts or {}
 
@@ -1277,53 +1791,56 @@ local function enqueueStamp(localPos, localNormal, opts, vid)
   if not opts.noJitter then
     local jitter = 0.03  -- ±3 cm
     localPos = vec3(
-      localPos.x + (math.random() - 0.5) * 2 * jitter,
-      localPos.y + (math.random() - 0.5) * 2 * jitter,
-      localPos.z + (math.random() - 0.5) * 2 * jitter)
+      localPos.x + (rand() - 0.5) * 2 * jitter,
+      localPos.y + (rand() - 0.5) * 2 * jitter,
+      localPos.z + (rand() - 0.5) * 2 * jitter)
   end
 
-  -- Pick per-stamp style. opts overrides (used by probeBrushes / impact
-  -- branch) win over the jitter helpers. No api state is set here — the job
-  -- replays the style on each stamp's getDecalData call.
-  local baseScale = opts.scale or 0.10
-  local brush     = opts.colorTex or pickBrush()
-  local scale     = opts.noJitter and baseScale or pickStampScale(baseScale, brush)
-  -- setDecalRotation takes radians (editor/api/dynamicDecals.lua setDecalRotation).
-  local rot       = opts.rot or math.random() * 2 * math.pi
-  local r, g, b, a
-  if opts.r or opts.g or opts.b then
-    r, g, b, a = opts.r or 0.7, opts.g or 0.7, opts.b or 0.7, opts.a or 1
-  else
-    r, g, b, a = lineTone(opts.severity)
-    a = opts.a or a
+  -- Per-stamp style. No api state is set here - the job replays the look on
+  -- each stamp's getDecalData call. opts.look wins; plain opts.r/g/b (console
+  -- probes) become a colour-only look; otherwise a primer streak.
+  local look = opts.look
+  if not look and opts.kind then look = damageLook(opts.kind, opts.colorTex or pickFromSet(HAZE_BRUSHES)) end
+  if not look and (opts.r or opts.g or opts.b) then
+    look = { tex = opts.colorTex or STREAK_BRUSHES[1], r = opts.r or 0.7, g = opts.g or 0.7, b = opts.b or 0.7,
+             a = opts.a or 1, intact = 1, rough = 1 }
   end
-  local roughness = opts.skipMetal and 0.5 or pickRoughness()
+  look = look or damageLook("primer", opts.colorTex or pickFromSet(STREAK_BRUSHES))
+  local baseScale = opts.scale or 0.10
+  local scale     = opts.noJitter and baseScale or baseScale * (0.8 + rand() * 0.4)
+  -- setDecalRotation takes radians (editor/api/dynamicDecals.lua setDecalRotation).
+  local rot       = opts.rot or rand() * 2 * math.pi
 
   stampStats.stampsAttempted = stampStats.stampsAttempted + 1
 
   if pendingStampsVid ~= vid then
+    for _, st in ipairs(pendingStampInputs) do stampSettled(st) end
     pendingStampInputs = {}
     pendingStampsVid = vid
   end
 
   if #pendingStampInputs >= AGGREGATE_PER_FRAME_CAP then
     stampStats.aggregateDropped = stampStats.aggregateDropped + 1
-    return
+    return false
   end
 
   pendingStampInputs[#pendingStampInputs + 1] = {
     localPos    = localPos,
     localNormal = localNormal,
-    brush       = brush,
-    alpha       = opts.alphaTex or "/art/dynamicDecals/textures/_one.png",
-    r = r, g = g, b = b, a = a,
+    look        = look,
     scale       = scale,
+    scaleY      = opts.scaleY and scale * opts.scaleY / baseScale or nil,
     rot         = rot,
-    roughness   = roughness,
-    skipMetal   = opts.skipMetal and true or false,
+    dir         = opts.dir,
     dist        = opts.dist,
+    mark        = opts.mark,
+    contact     = opts.contact,   -- the unjittered contact point (impacts)
+    key         = opts.key,       -- its own spot (released if it never bakes)
+    radius      = opts.radius,    -- its footprint, for the mark it bakes into
   }
+  if opts.mark then opts.mark.live = opts.mark.live + 1 end
   stampStats.stampsEnqueued = stampStats.stampsEnqueued + 1
+  return true
 end
 
 -- Vehicle-local entry point. Stamps a decal at `localPos` (vehicle-local
@@ -1341,17 +1858,22 @@ end
 
 -- Greedy spatial clustering of pending inputs. O(N*K) where K is cluster
 -- count; with N <= 24 and most rolls producing K=1, this is trivial.
+-- Stamps share a projection only if they want the same camera: the hull
+-- face chooseHullOutward picks for each (one axis can't serve a front face
+-- and a side face - at a corner the side one grazed past the front; and two
+-- contacts 10 deg apart either side of 45 deg want different axes).
 local function buildClusters(inputs)
   local clusters = {}
   for i = 1, #inputs do
     local s = inputs[i]
+    local face = chooseHullOutward(s.localPos, s.localNormal)
     local placed = false
     for j = 1, #clusters do
       local c = clusters[j]
       local dx = s.localPos.x - c.cx
       local dy = s.localPos.y - c.cy
       local dz = s.localPos.z - c.cz
-      if (dx*dx + dy*dy + dz*dz) < (CLUSTER_RADIUS * CLUSTER_RADIUS) then
+      if face:dot(c.face) > 0.99 and (dx*dx + dy*dy + dz*dz) < (CLUSTER_RADIUS * CLUSTER_RADIUS) then
         local k = #c.members
         c.cx = (c.cx * k + s.localPos.x) / (k + 1)
         c.cy = (c.cy * k + s.localPos.y) / (k + 1)
@@ -1364,6 +1886,7 @@ local function buildClusters(inputs)
     if not placed then
       clusters[#clusters + 1] = {
         cx = s.localPos.x, cy = s.localPos.y, cz = s.localPos.z,
+        face = face,
         members = {s},
       }
     end
@@ -1479,7 +2002,11 @@ end
 -- Turn a stream's vehicle-local path into a queued job. The path is first
 -- split by curvature, then any long straight section is chopped by length so
 -- one roof slide cannot stamp a giant rectangle across roof/rear/side at once.
-local function enqueueStreamLocal(localPos, localNormals, vid, severity)
+-- guard: {noHaze, noLine} - skip the band's haze / streak lines because a
+-- deeper earlier mark lies under it (see deepMarkNear). claim: the band's
+-- claim (newClaim), settled by its layers. Returns whether the band was
+-- admitted (a full queue drops it).
+local function enqueueStreamLocal(localPos, localNormals, vid, severity, mat, transfer, guard, claim)
   local rawSegments = chunkStretchSegments(localPos, buildStretchSegments(localPos))
 
   -- Materialize each segment's geometry (start/end/center/length/width).
@@ -1501,7 +2028,7 @@ local function enqueueStreamLocal(localPos, localNormals, vid, severity)
       }
     end
   end
-  if #segments == 0 then return end
+  if #segments == 0 then return false end
 
   -- Centroid of segment centers for the shared camera
   local cx, cy, cz = 0, 0, 0
@@ -1514,28 +2041,34 @@ local function enqueueStreamLocal(localPos, localNormals, vid, severity)
   end
   local centroid = vec3(cx / #segments, cy / #segments, cz / #segments)
   local normal   = averageNormals(normalSamples)
-  local band     = { segments = segments, severity = severity }
+  local band     = { segments = segments, severity = severity, mat = mat, transfer = transfer,
+                     noHaze = guard and guard.noHaze, noLine = guard and guard.noLine, claim = claim }
   -- Share a queued job's projection if it's close by on a panel facing the
   -- same way (each projecting frame costs a ~14 ms toll; see FLUSH_INTERVAL).
   if jobQueueVid == vid then
     for i = #jobQueue, 1, -1 do
       local j = jobQueue[i]
-      if j.stream and #j.bands < STREAM_MERGE_MAX_BANDS
-         and distLocal(j.centroid, centroid) <= STREAM_MERGE_RADIUS
+      if j.stream and #j.bands < STREAM_MERGE.maxBands
+         and distLocal(j.centroid, centroid) <= STREAM_MERGE.radius
          and j.normal:dot(normal) >= 0.8 then
         local k = #j.bands
         j.bands[k + 1] = band
         for _, sg in ipairs(segments) do j.segments[#j.segments + 1] = sg end
         j.centroid = (j.centroid * k + centroid) * (1 / (k + 1))
         stampStats.streamsMerged = stampStats.streamsMerged + 1
-        return
+        return true
       end
     end
   end
-  enqueueJob({
+  -- The job's segment list grows as nearby slides merge in; it must be its
+  -- own table, or merged segments land in the first band too (which then drew
+  -- streaks across every merged contact, angled from one to another).
+  local all = {}
+  for i = 1, #segments do all[i] = segments[i] end
+  return enqueueJob({
     stream   = true,
     bands    = { band },
-    segments = segments,     -- all bands' segments, for layer budgeting
+    segments = all,          -- all bands' segments, for layer budgeting
     centroid = centroid,
     normal   = normal,
   }, vid)
@@ -1566,19 +2099,15 @@ local function runStreamJob(job, projM, bakeList)
   if not (probe and probe.cursorPosScreenUv) then
     setScratchProjectionFence(false)
     log('W', logTag, "stream job: getDecalData returned nil")
+    dropJob(job)
     return
   end
 
-  local function addLayer(tex, r, g, b, a, center, halfLen, halfWidth, angle, name)
-    api.setDecalTexturePath("color", tex)
-    api.setDecalTexturePath("alpha", "/art/dynamicDecals/textures/_one.png")
-    api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_one.png")
-    api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
-    api.setMetallicIntensity(1.0)
-    api.setRoughnessIntensity(pickRoughness())
-    api.setDecalColor(Point4F(r, g, b, a))
-    -- Asymmetric scale: long along travel, thin across. Both are half-sizes.
-    api.setDecalScale(vec3(halfLen, 1, halfWidth))
+  local function addLayer(look, center, halfLen, halfWidth, angle, name, claim)
+    applyLook(look)
+    -- Asymmetric scale: long along travel, thin across. setDecalScale takes
+    -- the full extent in metres (measured: scale 0.3 paints a ~30 cm brush).
+    api.setDecalScale(vec3(2 * halfLen, decalDepth(2 * halfLen, 2 * halfWidth), 2 * halfWidth))
     api.setDecalRotation(angle)
     api.setUseSurfaceNormal(true)
     local tl = clockhp()
@@ -1591,11 +2120,16 @@ local function runStreamJob(job, projM, bakeList)
     if cuv and cuv.x >= 0 and cuv.x <= 1 and cuv.y >= 0 and cuv.y <= 1 then
       layer.uid       = nextLayerUid()
       layer.name      = name
+      layer.scrDepth  = look.depth or 0
       layer.enabled   = true
       layer.locked    = false
       layer.parentUid = nil
       layer.children  = {}
       bakeList[#bakeList + 1] = layer
+      if claim then
+        claim.live = claim.live + 1
+        layerStamp[layer] = { mark = claim, look = look }   -- settled when it bakes
+      end
     end
   end
 
@@ -1606,19 +2140,25 @@ local function runStreamJob(job, projM, bakeList)
     api.setDecalLocalPos(probe, p1)
     local bUx, bUy = probe.cursorPosScreenUv.x, probe.cursorPosScreenUv.y
     return (math.abs(bUx - aUx) + math.abs(bUy - aUy)) > 1e-5
-      and math.atan2(bUy - aUy, bUx - aUx) or (math.random() * 2 * math.pi)
+      and math.atan2(bUy - aUy, bUx - aUx) or (rand() * 2 * math.pi)
   end
 
   local before = #bakeList
   for bi, band in ipairs(job.bands) do
     -- One look per scrape: a single brush, width and tone for the whole band
     -- (with slight per-segment variation), so it reads as one continuous
-    -- band rather than a string of unrelated marks.
-    local brush     = pickFromSet(SCRAPE_BRUSHES)
-    local hazeBrush = pickFromSet(HAZE_BRUSHES)
-    local width     = 0.10 + math.random() * 0.10          -- 10..20 cm band
-    local lr, lg, lb, la = lineTone(band.severity or 0.3)
-    local hr, hg, hb, ha = damageTone("haze")
+    -- band rather than a string of unrelated marks. Depth by severity:
+    --   any       abraded clear coat (haze) under the whole band, with
+    --             light scuff streaks along it
+    --   >= 0.25   the streaks cut down to primer
+    --   >= 0.6    narrower bare cores among them: metal on a steel panel,
+    --             dark plastic on a bumper
+    local sev       = band.severity or 0.3
+    local width     = 0.10 + rand() * 0.10          -- 10..20 cm band
+    local hazeLook  = damageLook("haze", pickFromSet(HAZE_BRUSHES))
+    local glass     = band.mat == "G"
+    local lineLook  = damageLook((sev >= 0.25 and not glass) and "primer" or "scuff", pickFromSet(STREAK_BRUSHES))
+    local coreLook  = damageLook(band.mat == "P" and "plastic" or "metal", pickFromSet(STREAK_BRUSHES))
     local segs = band.segments
     local s1, sn = segs[1], segs[#segs]
     local total, cx, cy, cz = 0, 0, 0, 0
@@ -1626,16 +2166,45 @@ local function runStreamJob(job, projM, bakeList)
       total = total + sg.length
       cx, cy, cz = cx + sg.center.x, cy + sg.center.y, cz + sg.center.z
     end
-    -- One haze underlay for the whole band, under its scrape segments.
-    addLayer(hazeBrush, hr, hg, hb, ha, vec3(cx / #segs, cy / #segs, cz / #segs),
-             total * 0.5 * STRETCH_OVERLAP, width * 0.95, angleOf(s1.startP, sn.endP),
-             "scrape-haze-" .. bi)
-    for si, seg in ipairs(segs) do
-      local w = width * (0.9 + math.random() * 0.2)
-      local v = (math.random() - 0.5) * 0.04
-      addLayer(brush, lr + v, lg + v, lb + v, la, seg.center, seg.length * 0.5 * STRETCH_OVERLAP,
-               w * 0.5, angleOf(seg.startP, seg.endP), "scrape-" .. bi .. "-" .. si)
+    local mid, along = vec3(cx / #segs, cy / #segs, cz / #segs), angleOf(s1.startP, sn.endP)
+    if stampVerbose then
+      log('I', logTag, string.format("band: start=(%.2f,%.2f,%.2f) end=(%.2f,%.2f,%.2f) n=(%.2f,%.2f,%.2f) angle=%.0f deg",
+        s1.startP.x, s1.startP.y, s1.startP.z, sn.endP.x, sn.endP.y, sn.endP.z, job.normal.x, job.normal.y, job.normal.z,
+        math.deg(along)))
     end
+    -- The dulled clear coat sits under the scores, no wider than them (a
+    -- wider haze read as a soft slab with the lines on top).
+    -- (A light band is its scores alone: a haze slab under every band drew
+    -- each one's outline.)
+    if not band.noHaze and sev >= 0.25 then
+      addLayer(hazeLook, mid, total * 0.5 * STRETCH_OVERLAP * 0.95, width * 0.5, along, "scrape-haze-" .. bi,
+               band.claim)
+    end
+    -- Paint transfer: the other car's colour on a car-on-car scrape; otherwise
+    -- grime and rubber, which show on light paint (ref: dark marks on silver).
+    -- (Both are fairly intact paint, so they too stay off deeper damage.)
+    if band.transfer and not band.noHaze then
+      addLayer(transferLook(band.transfer, pickFromSet(SMEAR_BRUSHES)), mid, total * 0.5 * STRETCH_OVERLAP,
+               width * 0.4, along, "scrape-transfer-" .. bi, band.claim)
+    elseif not band.noHaze and paintLum > 0.45 and rand() < 0.2 then
+      addLayer(damageLook("transfer", pickFromSet(SMEAR_BRUSHES)), mid, total * 0.5 * STRETCH_OVERLAP,
+               width * 0.3, along, "scrape-transfer-" .. bi, band.claim)
+    end
+    if not band.noLine then
+      -- A primer band still has segments that only scored the colour coat;
+      -- the mix of the two tones is what keeps it from reading as one block.
+      local scoreLook = damageLook("scuff", lineLook.tex)
+      for si, seg in ipairs(segs) do
+        addLayer((sev >= 0.25 and rand() < 0.35) and scoreLook or lineLook, seg.center,
+                 seg.length * 0.5 * STRETCH_OVERLAP, width * (0.45 + rand() * 0.1),
+                 angleOf(seg.startP, seg.endP), "scrape-" .. bi .. "-" .. si, band.claim)
+      end
+    end
+    if sev >= 0.6 and not glass then
+      addLayer(coreLook, mid, total * 0.5 * STRETCH_OVERLAP * 0.8, width * 0.2, along, "scrape-core-" .. bi,
+               band.claim)
+    end
+    if band.claim and band.claim.live == 0 then claimDone(band.claim) end   -- nothing captured
   end
   setScratchProjectionFence(false)
 
@@ -1665,57 +2234,187 @@ local function runClusterJob(cluster, projM, bakeList)
       clusterDist = s.dist
     end
   end
-  local camLocal = buildSyntheticCameraLocal(centroid, averageNormals(cluster.members), clusterDist)
+  -- The engine reads back one surface hit per projection pass: the one under
+  -- the screen centre (a layer's decalPos; setDecalLocalPos moves its cursor,
+  -- not that hit). So the camera is aimed through a real contact, the one
+  -- nearest the centroid, rather than the centroid (which can fall in a gap
+  -- between panels), and that contact's overshoot is read exactly. (An
+  -- impact's stamps are jittered a few cm about their contact; the reading
+  -- uses the contact itself.)
+  local function contactOf(s) return s.contact or s.localPos end
+  local aim, aimD = centroid, math.huge
+  for _, s in ipairs(cluster.members) do
+    local d = distLocal(contactOf(s), centroid)
+    if d < aimD then aim, aimD = contactOf(s), d end
+  end
+  local camLocal = buildSyntheticCameraLocal(aim, cluster.face or averageNormals(cluster.members), clusterDist)
   setScratchProjectionFence(true)
   local tp = clockhp()
   decalProjection:projectDynamicDecals(camLocal, projM)
   perfAdd(tp, "projectMsTotal", "projectMsMax", "projectCalls")
 
+  -- A stamp with a car-local direction is rotated to run along it as seen
+  -- from this job's camera (screen angle of a short step along dir). Stamps
+  -- sharing a direction (one impact's scuff, chips and gouge) share a turn.
+  local probe = nil
+  local dirAngles = {}
+  local function angleFor(s)
+    if not s.dir then return s.rot end
+    if dirAngles[s.dir] then return dirAngles[s.dir] end
+    probe = probe or decalProjection:getDecalData(camLocal, projM)
+    local a = s.rot
+    if probe and probe.cursorPosScreenUv then
+      api.setDecalLocalPos(probe, s.localPos)
+      local ax, ay = probe.cursorPosScreenUv.x, probe.cursorPosScreenUv.y
+      api.setDecalLocalPos(probe, s.localPos + s.dir * 0.05)
+      local bx, by = probe.cursorPosScreenUv.x, probe.cursorPosScreenUv.y
+      if math.abs(bx - ax) + math.abs(by - ay) > 1e-5 then
+        a = math.atan2(by - ay, bx - ax) + (rand() - 0.5) * 0.25
+      end
+    end
+    dirAngles[s.dir] = a
+    return a
+  end
+
+  -- The projection ray can pass a crumpled panel and stop on structure
+  -- behind it (measured on a crushed bumper: 5-18 cm behind the contact, or
+  -- through a hole to the far end of the car). The decal box is centred on
+  -- that hit, so a stamp whose ray overshot gets a box laid along the camera
+  -- axis and deep enough to reach back to the contact, and one that overshot
+  -- by more than GAP.max is dropped. A hit in front of the contact is the
+  -- visible skin (a fold over the node) and needs nothing. The overshoot is
+  -- known only at the aim (above): stamps of that contact are compensated or
+  -- dropped by it; other stamps within GAP.borrow of it (the same crushed
+  -- patch) borrow the compensation; the rest paint without a reading and are
+  -- never dropped on someone else's.
+  local camFwd
+  local function readAim(at)
+    camFwd = camLocal:getColumn(1)
+    probe = probe or decalProjection:getDecalData(camLocal, projM)
+    local hp = probe and probe.decalPos
+    if not hp then return nil end
+    return (hp.x - at.x) * camFwd.x + (hp.y - at.y) * camFwd.y + (hp.z - at.z) * camFwd.z
+  end
+  local aimOver = readAim(aim)
+  -- A hole reading gets up to two more looks (a pass each, out of the flush's
+  -- reaim budget): the same camera aimed 8 cm in from the contact toward the
+  -- car's middle (a node on a panel's edge - a bumper's lower lip - let the
+  -- ray slip past it), then the hull face nearest the contact (a post's side
+  -- face raking a bumper's front corner aims the camera sideways, past the
+  -- front face). The first that finds skin stands for the contact; if neither
+  -- does, the pass goes back to the first camera (the cluster's other stamps
+  -- paint from it).
+  if aimOver and aimOver > GAP.max and reaim.left > 0 then
+    local first, firstCam, firstFwd = aimOver, camLocal, camFwd
+    local face0 = cluster.face or averageNormals(cluster.members)
+    local function tryAim(at, face)
+      reaim.left = reaim.left - 1
+      stampStats.reaims = stampStats.reaims + 1
+      camLocal = buildSyntheticCameraLocal(at, face, clusterDist)
+      local tr = clockhp()
+      decalProjection:projectDynamicDecals(camLocal, projM)
+      perfAdd(tr, "projectMsTotal", "projectMsMax", "projectCalls")
+      probe = nil
+      local v = readAim(at)
+      if v and v <= GAP.max then
+        stampStats.reaimsHelped = stampStats.reaimsHelped + 1
+        return v
+      end
+      return nil
+    end
+    local found = nil
+    local box = getSpawnAabb()
+    if box then
+      local c = vec3((box.minExtents.x + box.maxExtents.x) * 0.5, (box.minExtents.y + box.maxExtents.y) * 0.5,
+                     (box.minExtents.z + box.maxExtents.z) * 0.5)
+      local toC = c - aim
+      toC = toC - firstFwd * toC:dot(firstFwd)
+      if toC:length() > 1e-3 then found = tryAim(aim + toC:normalized() * 0.08, face0) end
+    end
+    if not found and reaim.left > 0 then
+      local face = chooseHullOutward(aim, nil)
+      if face:dot(-firstFwd) < 0.7 then found = tryAim(aim, face) end
+    end
+    if found then
+      aimOver = found
+    elseif camLocal ~= firstCam then
+      camLocal = firstCam
+      decalProjection:projectDynamicDecals(camLocal, projM)
+      probe = nil
+      readAim(aim)
+      aimOver = first
+    end
+  end
+  if aimOver then
+    local bin = aimOver < 0 and "gapFront" or aimOver < 0.05 and "gapUnder5" or aimOver < 0.10 and "gapUnder10"
+                or aimOver < 0.18 and "gapUnder18" or aimOver <= GAP.max and "gapUnder25" or "gapHole"
+    stampStats[bin] = stampStats[bin] + 1
+    if stampVerbose then
+      log('I', logTag, string.format("overshoot %.3f m at (%.2f,%.2f,%.2f) (%d stamps) camFwd (%.2f,%.2f,%.2f)",
+        aimOver, aim.x, aim.y, aim.z, #cluster.members, camFwd.x, camFwd.y, camFwd.z))
+    end
+  end
+  local borrowed = aimOver and aimOver > 0 and aimOver <= GAP.max and aimOver or nil
+
   local skipped = 0
   for _, s in ipairs(cluster.members) do
+    local rot = angleFor(s)
     -- Per-stamp style — getDecalData below snapshots api state into the layer.
-    api.setDecalTexturePath("color", s.brush)
-    api.setDecalTexturePath("alpha", s.alpha)
-    if s.skipMetal then
-      api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_zero.png")
-      api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
-      api.setMetallicIntensity(0)
-      api.setRoughnessIntensity(0.5)
+    applyLook(s.look)
+    -- s.scale / s.scaleY are half-sizes; setDecalScale takes the full extent.
+    local sx, sz = 2 * s.scale, 2 * (s.scaleY or s.scale)
+    local depth = decalDepth(sx, sz, true)
+    local fromAim = distLocal(contactOf(s), aim)
+    local over = nil
+    if fromAim < 0.01 then
+      over = aimOver
+    elseif fromAim <= GAP.borrow then
+      over = borrowed
+    end
+    local decalData = nil
+    if over and over > GAP.max then
+      stampStats.stampsSkippedGap = stampStats.stampsSkippedGap + 1
     else
-      api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_one.png")
-      api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
-      api.setMetallicIntensity(1.0)
-      api.setRoughnessIntensity(s.roughness)
+      -- A compensating box lies along the camera axis the overshoot was
+      -- measured on, whatever its depth: along the surface normal at a
+      -- crushed hit (which can point anywhere) a box reaches back only part
+      -- of its depth, and edge-on to the camera it smears. (Under GAP.noise
+      -- the contact is just a node a little off the skin.)
+      local compensate = over and over > GAP.noise
+      if compensate then
+        depth = math.max(depth, 2 * over + 0.08)
+        stampStats.stampsGapDeepened = stampStats.stampsGapDeepened + 1
+      end
+      api.setDecalRotation(rot)
+      api.setUseSurfaceNormal(not compensate)
+      api.setDecalScale(vec3(sx, depth, sz))
+      local tl = clockhp()
+      decalData = decalProjection:getDecalData(camLocal, projM)
+      -- Move the layer's cursor from the aim (where project placed it) to the
+      -- stamp's own position; the bake places the box on the surface there.
+      if decalData then api.setDecalLocalPos(decalData, s.localPos) end
+      perfAdd(tl, "layerMsTotal", nil, "layerCalls")
     end
-    api.setDecalColor(Point4F(s.r, s.g, s.b, s.a or 1))
-    api.setDecalScale(vec3(s.scale, 1, s.scale))
-    api.setDecalRotation(s.rot)
-    api.setUseSurfaceNormal(true)
-
-    local tl = clockhp()
-    local decalData = decalProjection:getDecalData(camLocal, projM)
-    if decalData then
-      -- Move the layer's cursor from the cluster centroid (where project
-      -- placed it) to the actual stamp position. This recomputes
-      -- cursorPosScreenUv and decalPos for s.localPos under the shared cam.
-      api.setDecalLocalPos(decalData, s.localPos)
-    end
-    perfAdd(tl, "layerMsTotal", nil, "layerCalls")
-    if decalData then
-
+    if not decalData then
+      stampSettled(s)
+    else
       -- Reject stamps whose projection lands outside the camera frustum
       -- (cursor outside [0,1]) — those would paint nothing or paint at the
       -- frustum edge incorrectly.
       local cuv = decalData.cursorPosScreenUv
       if not cuv or cuv.x < 0 or cuv.x > 1 or cuv.y < 0 or cuv.y > 1 then
         skipped = skipped + 1
+        stampSettled(s)
       else
         decalData.uid       = nextLayerUid()
         decalData.name      = "scratch"
+        decalData.scrDepth  = s.look.depth or 0
         decalData.enabled   = true
         decalData.locked    = false
         decalData.parentUid = nil
         decalData.children  = {}
+        layerStamp[decalData] = s   -- settled when it bakes (bakePending)
+        if fromAim >= 0.01 then stampStats.stampsUnmeasured = stampStats.stampsUnmeasured + 1 end
         bakeList[#bakeList + 1] = decalData
 
         if stampVerbose then
@@ -1728,6 +2427,7 @@ local function runClusterJob(cluster, projM, bakeList)
       end
     end
   end
+  api.setUseSurfaceNormal(true)
   setScratchProjectionFence(false)
   if skipped > 0 then
     stampStats.stampsSkippedMissed = stampStats.stampsSkippedMissed + skipped
@@ -1738,15 +2438,11 @@ end
 -- MAX_PROJECTS_PER_FRAME jobs from the head of the queue (the rest wait for
 -- the next frame), and bake everything they produced in ONE bakeLayers call.
 local function flushPendingStamps()
-  if not resolveDecalProjection() then
-    pendingStampInputs = {}
-    table.clear(jobQueue)
-    return
-  end
-  local veh = getPlayerVehicle(0)
+  local veh = resolveDecalProjection() and getPlayerVehicle(0)
   if not veh then
+    for _, st in ipairs(pendingStampInputs) do stampSettled(st) end
     pendingStampInputs = {}
-    table.clear(jobQueue)
+    dropJobs(jobQueue)
     return
   end
   local vid = veh:getId()
@@ -1754,12 +2450,16 @@ local function flushPendingStamps()
   if #pendingStampInputs > 0 then
     if pendingStampsVid == vid then
       local clusters = buildClusters(pendingStampInputs)
-      for i = 1, #clusters do enqueueJob(clusters[i], vid) end
+      for i = 1, #clusters do
+        if not enqueueJob(clusters[i], vid) then dropJob(clusters[i]) end
+      end
+    else
+      for _, st in ipairs(pendingStampInputs) do stampSettled(st) end
     end
     pendingStampInputs = {}
   end
   if jobQueueVid ~= vid then
-    table.clear(jobQueue)
+    dropJobs(jobQueue)
     jobQueueVid = vid
     return
   end
@@ -1774,13 +2474,14 @@ local function flushPendingStamps()
 
   local projM    = getCameraProjMatrix()
   local bakeList = {}
+  reaim.left     = reaim.perFlush
   -- Take jobs from the head until the pass budget or the layer budget is
   -- reached (bake costs ~1 ms per layer); always at least one job.
   local run, layers = 0, 0
   local maxRun = math.min(n, MAX_PROJECTS_PER_FRAME)
   while run < maxRun do
     local j = jobQueue[run + 1]
-    local jl = j.stream and (#j.segments + #j.bands) or #j.members
+    local jl = j.stream and (#j.segments + 3 * #j.bands) or #j.members
     if run > 0 and layers + jl > MAX_LAYERS_PER_FLUSH then break end
     run, layers = run + 1, layers + jl
   end
@@ -1800,7 +2501,13 @@ local function flushPendingStamps()
     local ok, err = pcall(job.stream and runStreamJob or runClusterJob, job, projM, bakeList)
     if not ok then
       -- Discard whatever the failed job half-produced.
-      for k = #bakeList, before + 1, -1 do bakeList[k] = nil end
+      for k = #bakeList, before + 1, -1 do
+        local st = layerStamp[bakeList[k]]
+        if st then stampSettled(st) end
+        bakeList[k] = nil
+      end
+      dropJob(job)
+      api.setUseSurfaceNormal(true)
       setScratchProjectionFence(false)
       stampStats.jobsFailed = stampStats.jobsFailed + 1
       log('E', logTag, "projection job failed: " .. tostring(err))
@@ -1812,6 +2519,14 @@ local function flushPendingStamps()
   stampStats.projectsIssued = stampStats.projectsIssued + run
   stampStats.clustersTotal  = stampStats.clustersTotal + clusters
   if run < n then stampStats.framesDeferred = stampStats.framesDeferred + 1 end
+  -- Shallow before deep (stable): one impact's haze must not land on the
+  -- neighbouring impact's gouge just because it was captured later.
+  for i = 1, #bakeList do bakeList[i].scrOrder = i end
+  table.sort(bakeList, function(a, b)
+    local da, db = a.scrDepth or 0, b.scrDepth or 0
+    if da ~= db then return da < db end
+    return a.scrOrder < b.scrOrder
+  end)
   for i = 1, #bakeList do bakeQueue[#bakeQueue + 1] = bakeList[i] end
 end
 flushPendingStampsRef = flushPendingStamps
@@ -1822,6 +2537,10 @@ local function bakePending()
   if n == 0 then return false end
   local veh = getPlayerVehicle(0)
   if not veh or veh:getId() ~= jobQueueVid or not resolveDecalProjection() then
+    for i = 1, n do
+      local st = layerStamp[bakeQueue[i]]
+      if st then stampSettled(st) end
+    end
     table.clear(bakeQueue)
     return false
   end
@@ -1831,8 +2550,19 @@ local function bakePending()
   for i = k + 1, n do bakeQueue[i - k] = bakeQueue[i] end
   for i = n - k + 1, n do bakeQueue[i] = nil end
   local tb = clockhp()
-  decalProjection:bakeLayers(chunk, veh.JBeam or veh.jbeam)
+  -- (A bake that throws partway may already have put some of the chunk on the
+  -- canvas; its pieces settle as lost all the same, so a later mark there may
+  -- lift what did land. Rare enough to accept.)
+  local ok, err = pcall(decalProjection.bakeLayers, decalProjection, chunk, veh.JBeam or veh.jbeam)
   perfAdd(tb, "bakeMsTotal", "bakeMsMax", "bakeCalls")
+  for i = 1, k do
+    local st = layerStamp[chunk[i]]
+    if st then stampSettled(st, ok) end
+  end
+  if not ok then
+    log('E', logTag, "bake failed: " .. tostring(err))
+    return false
+  end
   perfStats.bakeLayersTotal = perfStats.bakeLayersTotal + k
   M._lastDecal = chunk[k]
   combineDirty = true
@@ -1842,40 +2572,371 @@ local function bakePending()
 end
 bakePendingRef = bakePending
 
+-- enqueueImpact's opts.
+local IMPACT = { plain = {}, onCar = { onCar = true }, brief = { brief = true } }
+
 -- Severity 0..1 from contact force: 0.8 kN (a knock) .. 20.8 kN (a crunch).
 local function severityOf(force)
   return math.min(1, math.max(0, ((force or 0) - 800) / 20000))
 end
 
--- Stamp style for one detector event (also stampAt's 'impact' style). Impacts
--- get chipped paint; (I) scale and camera distance both grow with force so a
--- heavy crunch leaves a bigger mark from a more grazing camera instead of
--- dying in the dent's cavity. A 1-point slide fallback is a small square
--- scrape patch.
-local function styleForEvent(kind, force)
+-- Stamp opts for a single console/legacy event (M.stampAt's kind strings and
+-- a 1-point slide fallback): a small scuff, chipped if it was pressed hard.
+local function styleForEvent(kind, force, mat)
   local heavy = severityOf(force)
-  if kind == "impact" then
-    return { scale = 0.10 + heavy * 0.15, dist = 0.7 + heavy * 1.6,   -- 20..50 cm across
-             colorTex = pickFromSet(CHIP_BRUSHES), severity = heavy }
+  if (kind == "impact" or heavy > 0.3) and mat ~= "G" then
+    return { scale = 0.05 + heavy * 0.04, dist = 0.7 + heavy * 1.6,
+             look = damageLook("chip", pickFromSet(CHIP_BRUSHES)) }
   end
-  if (force or 0) > 800 then
-    return { dist = 0.7 + heavy * 1.6, scale = 0.06 + heavy * 0.06, severity = heavy }
-  end
-  return { scale = 0.05 + math.random() * 0.03 }
+  return { scale = 0.05 + rand() * 0.03, look = damageLook("haze", pickFromSet(HAZE_BRUSHES)) }
 end
 
--- An impact lays down chipped paint and, on harder hits, a gouge on top
--- where an edge dug in. (A haze halo here read as a soft white puff.)
-local function enqueueImpact(localPos, localNormal, force, vid)
-  if not spotTake(localPos, "i", SPOT_MAX_IMPACT) then return end
-  local main = styleForEvent("impact", force)
-  local heavy = main.severity
-  enqueueStamp(localPos, localNormal, main, vid)
-  if math.random() < 0.25 + 0.6 * heavy then
-    enqueueStamp(localPos, localNormal, { colorTex = pickFromSet(GOUGE_BRUSHES),
-      scale = 0.08 + heavy * 0.12, dist = main.dist, severity = math.min(1, heavy + 0.3) }, vid)
+-- An impact is composed by how the panel met what it hit:
+--   sliding across it (dir, car-local, and tangential speed ts in m/s - by
+--     the time BeamNG reports a crash contact the node has mostly stopped, so
+--     0.3-2.5 m/s is typical): the clear coat abrades over the patch around
+--     the node that reported it (static contacts come per physics node, ~30 cm
+--     apart, so one event stands for that area) - a haze patch sized by the
+--     slide, at most one per 30 cm cell, with streaks dragged along it on a
+--     firmer slide;
+--   pressed hard either way (force): small chips, and on a hard glancing hit a
+--     gouge - a primer rim with the bare substrate (steel, or a bumper's
+--     plastic) inside.
+-- A square-on crush leaves the paint mostly glossy (ref photo 5: crushed
+-- metal, paint intact between the creases): a hard one dulls a small, ragged
+-- patch where it pressed (a big round scuff read as a bubble) and chips it.
+-- Glass contacts only scuff. The whole composition is admitted or reduced up
+-- front (deep marks first) so the aggregate cap can't keep the haze and drop
+-- the gouge. Returns whether anything was admitted. (I) Camera distance grows
+-- with force so a heavy crunch is painted from a grazing angle.
+local function enqueueImpact(localPos, localNormal, force, vid, mat, dir, ts, transfer, opts)
+  -- opts.onCar: another car's smooth panel, not concrete or asphalt.
+  -- opts.brief: a slide too brief to trace; its own spots, so a burst of them
+  -- can't use up a real impact's.
+  opts = opts or IMPACT.plain
+  -- No room: drop it whole, before it takes a spot or leaves a mark record.
+  if stampRoom(vid) <= 0 then
+    stampStats.aggregateDropped = stampStats.aggregateDropped + 1
+    return false
   end
+  local iKey = spotKey(localPos, opts.brief and "f" or "i")
+  if not spotFree(iKey, SPOT.maxImpact) then
+    stampStats.spotsSkipped = stampStats.spotsSkipped + 1
+    return false
+  end
+  if dir then
+    -- Neighbouring contacts share one direction: strokes of separate marks
+    -- crossing at large angles (a comb over a band, an asterisk) never happen
+    -- in a real scrape.
+    local shared = dirNear(localPos, 0.35)
+    if shared then dir = shared:dot(dir) < 0 and -shared or shared end
+  end
+  local sev = severityOf(force)
+  local slide = dir and math.min(1, (ts or 0) / 3) or 0
+  local glass = mat == "G"
+  local dist = 0.7 + sev * 1.6
+  local jitter = 0.03
+  local p = vec3(localPos.x + (rand() - 0.5) * 2 * jitter, localPos.y + (rand() - 0.5) * 2 * jitter,
+                 localPos.z + (rand() - 0.5) * 2 * jitter)
+  local rot = rand() * 2 * math.pi
+
+  -- unit: specs that must be admitted together (a gouge's rim and core);
+  -- key: a spot the spec claims if it is kept.
+  local specs = {}
+  local function add(look, scale, scaleY, unit, key)
+    specs[#specs + 1] = { look = look, scale = scale, scaleY = scaleY, unit = unit or #specs + 1,
+                          rank = look.depth, key = key }
+  end
+  -- A gouge needs an edge dragged across the panel, so only glancing hits
+  -- get one (a square-on crush leaves chips); and one per spot, since a
+  -- second at its own angle reads as an X.
+  local gouges = sev >= 0.55 and dir and not glass and not deepMarkNear(p, 0.12, LOOK_DEPTH.plastic)
+  if dir then
+    local patch = (0.08 + 0.07 * math.max(slide, 0.5 * sev)) * (0.85 + 0.3 * rand())  -- half: 16..30 cm across
+    -- (A brief slide uses its own cells: a burst of them left a real impact
+    -- there only chips or a gouge.)
+    local hKey = spotKey(p, opts.brief and "fh" or "h", 0.3)
+    local stKey = spotKey(p, opts.brief and "fst" or "st", 0.3)
+    if spotFree(hKey, 1) and not deepMarkNear(p, patch, LOOK_DEPTH.primer) then
+      -- Concrete rubs the clear coat off; another car's smooth panel only dulls
+      -- it, and around a gouge a light patch read as a halo: the gouge is the
+      -- mark there.
+      local kind = (opts.onCar or gouges) and "haze" or "abrasion"
+      add(damageLook(kind, pickFromSet(HAZE_BRUSHES)), patch, patch * 0.55, nil, hKey)
+    end
+    -- Streaks would lift an earlier bare core or gouge back to primer/scuff.
+    -- Beside this hit's own gouge they are only dulled clear coat: light
+    -- streaks (primer or scuffed paint read alike on dark paint) swamped its
+    -- primer rim and steel core.
+    if (slide > 0.33 or sev >= 0.3) and spotFree(stKey, 1) and not deepMarkNear(p, patch, LOOK_DEPTH.plastic) then
+      local kind = gouges and "haze" or (sev >= 0.3 and not glass) and "primer" or "scuff"
+      add(damageLook(kind, pickFromSet(DRAG_BRUSHES)), patch * 1.1, patch * 0.38, nil, stKey)
+    end
+  elseif sev >= (opts.onCar and 0.3 or 0.15) then
+    -- A hard crush scuffs the paint it presses on: a small, elongated,
+    -- ragged patch of dulled clear coat (a big round one read as a bubble).
+    -- Concrete or asphalt abrades from ~4 kN; another car's smooth panel
+    -- only when much harder (ref 5: paint intact).
+    local hKey = spotKey(p, "h", 0.3)
+    local patch = (0.04 + 0.05 * sev) * (0.85 + 0.3 * rand())   -- half: 8..18 cm long
+    if spotFree(hKey, 1) and not deepMarkNear(p, patch, LOOK_DEPTH.primer) then
+      add(damageLook("haze", HAZE_BRUSHES[2]), patch, patch * 0.5, nil, hKey)
+    end
+  end
+  -- Paint transfers where one panel wipes along the other; a square-on hit
+  -- just presses (a round smear there read as a splat of the other car's paint).
+  if transfer and dir then
+    local half = 0.08 + 0.05 * slide
+    -- Transfer is fairly intact paint; it would lift deeper damage under it.
+    if not deepMarkNear(p, half, LOOK_DEPTH.primer) then
+      add(transferLook(transfer, pickFromSet(SMEAR_BRUSHES)), half, half * 0.45)
+    end
+  end
+  -- Chips are a few flakes, only on a solid hit; most crushed paint stays on.
+  -- (The brush's flakes are 4-11% of its width, so an 8-11 cm patch gives
+  -- flakes of 4-11 mm: a texel or two of the canvas, small enough to read as
+  -- chips, big enough not to blur into a cloud.) Primer chips would lift an
+  -- earlier gouge's core back to primer.
+  local chipHalf = 0.04 + 0.015 * sev
+  if sev >= 0.4 and not glass and not deepMarkNear(p, chipHalf, LOOK_DEPTH.plastic) then
+    add(damageLook("chip", pickFromSet(CHIP_BRUSHES)), chipHalf)
+  end
+  if gouges then
+    local g = GOUGES[rand(#GOUGES)]
+    local len = 0.06 + 0.08 * sev
+    local core = damageLook(mat == "P" and "plastic" or "metal", g.core)
+    add(damageLook("primer", g.rim), len, len * 0.6, "gouge")
+    add(core, len, len * 0.6, "gouge")
+    specs[#specs - 1].rank = core.depth   -- the rim goes wherever its core goes
+  end
+  if #specs == 0 then return false end
+  -- Short on room: keep the deepest marks, a gouge's rim and core together.
+  local room = stampRoom(vid)
+  if room < #specs then
+    for i, sp in ipairs(specs) do sp.order = i end
+    table.sort(specs, function(a, b)
+      if a.rank ~= b.rank then return a.rank > b.rank end
+      return a.order < b.order
+    end)
+    local keep, units = {}, {}
+    for _, sp in ipairs(specs) do units[sp.unit] = (units[sp.unit] or 0) + 1 end
+    local taken = {}
+    for _, sp in ipairs(specs) do
+      if taken[sp.unit] or #keep + units[sp.unit] <= room then
+        taken[sp.unit] = true
+        keep[#keep + 1] = sp
+      end
+    end
+    specs = keep
+    if #specs == 0 then return false end
+    table.sort(specs, function(a, b) return a.look.depth < b.look.depth end)
+  end
+  local depth, radius = 0, 0
+  spotCommit(iKey)
+  for _, sp in ipairs(specs) do
+    depth = math.max(depth, sp.look.depth)
+    radius = math.max(radius, sp.scale, sp.scaleY or 0)
+    if sp.key then spotCommit(sp.key) end
+  end
+  local mark = newClaim({ iKey })
+  mark.entry = logMark(localPos, localNormal, "i", depth, radius, dir)
+  for _, sp in ipairs(specs) do
+    local taken = enqueueStamp(p, localNormal, { look = sp.look, scale = sp.scale, scaleY = sp.scaleY, dist = dist,
+                                                 noJitter = true, rot = rot, dir = dir, mark = mark,
+                                                 contact = localPos,
+                                                 key = sp.key, radius = math.max(sp.scale, sp.scaleY or 0) }, vid)
+    if not taken and sp.key then spotHits[sp.key] = math.max(0, (spotHits[sp.key] or 1) - 1) end
+  end
+  if mark.live == 0 then claimDone(mark) end   -- none taken after all
+  return true
 end
+
+-- A slide band's deepest look, for the mark log.
+local function bandDepth(sev)
+  return sev >= 0.6 and LOOK_DEPTH.metal or sev >= 0.25 and LOOK_DEPTH.primer or LOOK_DEPTH.scuff
+end
+
+-- Which of a new band's layers would lift an earlier, deeper mark under it.
+local function bandGuard(p, half)
+  return { noHaze = deepMarkNear(p, half, LOOK_DEPTH.primer), noLine = deepMarkNear(p, half, LOOK_DEPTH.plastic) }
+end
+
+-- ---- car-on-car contact ----
+-- BeamNG reports node-vs-world contacts to onNodeCollision, but not
+-- node-vs-vehicle ones, in either car's VM (measured: a pickup T-boning the
+-- player car logged only its own tyres). The engine does say which objects
+-- touch (map.objects[id].objectCollisions), and GE can read any vehicle's
+-- nodes. So while the player car touches another vehicle and they are moving
+-- relative to each other, every CVC_INTERVAL the painter finds the player's
+-- body nodes within CVC_RADIUS of the other car's nodes (spatial hash) and
+-- treats each as a contact: an impact sized by the closing speed, oriented by
+-- the relative velocity, plus the other car's paint smeared on. Nodes press
+-- into the other car's triangles rather than its nodes, so the radius is
+-- ~20 cm (8 cm found almost nothing). Two wrecks left wedged together don't
+-- move, so they cost nothing and use up no mark budget.
+local CVC_INTERVAL   = 0.1   -- s between probes while touching
+local CVC_MIN_GAP    = 0.03  -- s; a touch flickering on and off can't probe faster
+local CVC_RADIUS     = 0.2   -- m
+local CVC_MAX_MARKS  = 10    -- contacts painted per probe, over every partner (closest first)
+local CVC_SWIPE_SPEED = 2.0  -- m/s along the panel above which a contact is a scrape, not a hit
+local CVC_SLIDE_MIN  = 1.0   -- m/s along the panel below which a contact has no slide direction
+local CVC_CLOSING_MIN = 1.3  -- m/s; slower and not sliding: resting contact, no mark
+local CVC_SWIPE_HALF = 0.25  -- m, half-length of a scrape band through one contact
+-- Only the contact front is painted: player nodes no further from the other
+-- car than the closest one plus this. Node rows above and below it are within
+-- CVC_RADIUS of the other car's nodes (nodes are 10-30 cm apart) but not
+-- touching, and painted one swipe as bands at several heights.
+local CVC_FRONT      = 0.06  -- m
+local cvcBodyNodes   = {}    -- vid -> { ids = {cid...}, mats = "MPM..." } (from the detector)
+local cvcSince       = 0
+local cvcTouching    = false
+
+-- From the detector: the car's paintable body nodes and each one's material
+-- initial (M/P), in the same order.
+M.setBodyNodes = function(vid, nodes, mats) cvcBodyNodes[vid] = { ids = nodes, mats = mats or "" } end
+
+local function resetCarContacts()
+  table.clear(cvcBodyNodes)
+  cvcSince, cvcTouching = 0, false
+end
+
+-- Other vehicles the player car is touching right now.
+local function touchingVehicles(pid)
+  local mo = map and map.objects and map.objects[pid]
+  local cols = mo and mo.objectCollisions
+  if not cols then return nil end
+  local out = nil
+  for oid, state in pairs(cols) do
+    if state == 1 then
+      local o = scenetree.findObjectById(oid)
+      if o and o.getNodeCount then out = out or {}; out[#out + 1] = o end
+    end
+  end
+  return out
+end
+
+-- Numeric cell key (exact in a double for |coord| < 10 km at 20 cm cells).
+local function cellKey(cx, cy, cz)
+  return ((cx + 50000) * 100000 + (cy + 50000)) * 100000 + (cz + 50000)
+end
+
+-- Player body nodes within CVC_RADIUS of O's nodes, closest first. Only the
+-- nodes inside the other car's box (plus the radius) are tested, and only the
+-- other car's nodes inside ours are hashed.
+local function probeContacts(P, O, nodes)
+  local cell, R2 = CVC_RADIUS, CVC_RADIUS * CVC_RADIUS
+  local pb, ob = P:getWorldBox(), O:getWorldBox()
+  local pmin, pmax, omin, omax = pb.minExtents, pb.maxExtents, ob.minExtents, ob.maxExtents
+  local grid = {}
+  for i = 0, O:getNodeCount() - 1 do
+    local x, y, z = O:getNodeAbsPositionXYZ(i)
+    if x > pmin.x - cell and x < pmax.x + cell and y > pmin.y - cell and y < pmax.y + cell
+       and z > pmin.z - cell and z < pmax.z + cell then
+      local k = cellKey(math.floor(x / cell), math.floor(y / cell), math.floor(z / cell))
+      local b = grid[k]
+      if not b then b = {}; grid[k] = b end
+      b[#b + 1] = x; b[#b + 1] = y; b[#b + 1] = z
+    end
+  end
+  local hits = {}
+  for k, i in ipairs(nodes) do
+    local x, y, z = P:getNodeAbsPositionXYZ(i)
+    if x > omin.x - cell and x < omax.x + cell and y > omin.y - cell and y < omax.y + cell
+       and z > omin.z - cell and z < omax.z + cell then
+      local cx, cy, cz = math.floor(x / cell), math.floor(y / cell), math.floor(z / cell)
+      local best = R2
+      for dx = -1, 1 do for dy = -1, 1 do for dz = -1, 1 do
+        local b = grid[cellKey(cx + dx, cy + dy, cz + dz)]
+        if b then
+          for j = 1, #b, 3 do
+            local ex, ey, ez = b[j] - x, b[j + 1] - y, b[j + 2] - z
+            local d2 = ex * ex + ey * ey + ez * ez
+            if d2 < best then best = d2 end
+          end
+        end
+      end end end
+      if best < R2 then hits[#hits + 1] = { k = k, d2 = best, x = x, y = y, z = z } end
+    end
+  end
+  table.sort(hits, function(a, b) return a.d2 < b.d2 end)
+  return hits
+end
+
+local function updateCarContacts(dt, veh)
+  cvcSince = cvcSince + dt
+  local pid = veh:getId()
+  local body = cvcBodyNodes[pid]
+  if not body then return end
+  local others = touchingVehicles(pid)
+  local fresh = others and not cvcTouching and cvcSince >= CVC_MIN_GAP  -- a swipe is brief: probe at onset
+  cvcTouching = others ~= nil
+  if not others or (cvcSince < CVC_INTERVAL and not fresh) then return end
+  cvcSince = 0
+  local t0 = clockhp()
+  local invM = veh:getRefNodeMatrix():fullInverse()
+  local rotOnly = invM:copy(); rotOnly:setColumn(3, vec3(0, 0, 0))
+  local pv = veh:getVelocity()
+  local budget = CVC_MAX_MARKS
+  for _, O in ipairs(others) do
+    local rel = O:getVelocity() - pv                -- other car relative to ours
+    -- Cars slide past each other horizontally; the vertical part of their
+    -- relative motion is suspension bounce and would tilt the scrapes.
+    local lrel = rotOnly:mulP3F(rel)
+    lrel.z = 0
+    -- Wedged together at rest: nothing can mark, so skip the probe entirely.
+    if budget > 0 and lrel:length() >= math.min(CVC_CLOSING_MIN, CVC_SLIDE_MIN) then
+      local col = O.color
+      local transfer = col and { col.x, col.y, col.z } or nil
+      local hits = probeContacts(veh, O, body.ids)
+      perfStats.cvcProbes = perfStats.cvcProbes + 1
+      local front = hits[1] and (math.sqrt(hits[1].d2) + CVC_FRONT) ^ 2 or 0
+      for k = 1, #hits do
+        if budget <= 0 or hits[k].d2 > front then break end   -- sorted closest first
+        local h = hits[k]
+        local mat = body.mats:sub(h.k, h.k)
+        if mat == "" then mat = "M" end
+        local lp = invM:mulP3F(vec3(h.x, h.y, h.z))
+        local n = chooseHullOutward(lp, nil)
+        local closing = math.max(0, -lrel:dot(n))
+        local tang = lrel - n * lrel:dot(n)
+        local ts = tang:length()
+        -- A crush shoves the panels about; only a real slide has a direction
+        -- (noisy small ones made neighbouring streaks cross).
+        local dir = ts > CVC_SLIDE_MIN and tang * (1 / ts) or nil
+        if stampVerbose then
+          log('I', logTag, string.format("car contact: lp=(%.2f,%.2f,%.2f) n=(%.1f,%.1f,%.1f) rel=(%.2f,%.2f,%.2f) ts=%.2f closing=%.2f",
+            lp.x, lp.y, lp.z, n.x, n.y, n.z, lrel.x, lrel.y, lrel.z, ts, closing))
+        end
+        if ts > CVC_SWIPE_SPEED then
+          -- Sliding along the panel: a scrape band through this contact, along
+          -- the relative motion; neighbouring contacts' bands join into one.
+          -- One band per 20 cm cell: ~10 contacts every 0.1 s over a whole
+          -- swipe would otherwise stack into solid primer.
+          local key = spotKey(lp, "cs", 0.2)
+          if spotFree(key, 1) then
+            local sev = math.min(1, 0.05 + closing / 8 + ts / 60)
+            local guard = bandGuard(lp, CVC_SWIPE_HALF)
+            local claim = newClaim({ key })
+            if enqueueStreamLocal({ lp - dir * CVC_SWIPE_HALF, lp + dir * CVC_SWIPE_HALF }, { n }, pid, sev, mat,
+                                  transfer, guard, claim) then
+              spotCommit(key)
+              claim.entry = logMark(lp, n, "s", bandDepth(sev), CVC_SWIPE_HALF, dir)
+              budget = budget - 1
+            end
+          end
+        elseif (closing >= CVC_CLOSING_MIN or dir)
+               and enqueueImpact(lp, -n, 800 + closing * 2200, pid, mat, dir, ts, transfer, IMPACT.onCar) then
+          budget = budget - 1
+        end
+      end
+    end
+  end
+  local ms = (clockhp() - t0) * 1000
+  perfStats.cvcMsTotal = perfStats.cvcMsTotal + ms
+  if ms > perfStats.cvcMsMax then perfStats.cvcMsMax = ms end
+end
+updateCarContactsRef = updateCarContacts
+resetCarContactsRef = resetCarContacts
 
 -- A slide stream is one body point dragged along the ground. Its world
 -- samples trace how far the CAR moved, not where the body was scraped - the
@@ -1885,13 +2946,18 @@ end
 -- latest contact, along the slide axis (first->last displacement, which is
 -- exact because the ground doesn't move) flattened onto the panel, as long as
 -- a contact patch. Neighbouring contact nodes' bands join into the rash.
--- A longer drag scrapes deeper: severity rises with slide distance.
-local SLIDE_BAND_MIN, SLIDE_BAND_MAX = 0.30, 0.70   -- band length, m (long enough to join neighbours)
+-- Depth comes from how hard it pressed and how far it dragged; a repeat pass
+-- over the same spot digs deeper.
+local SLIDE_BAND = { min = 0.30, max = 0.70 }   -- band length, m (long enough to join neighbours)
 local function enqueueSlide(points, invM, rotOnly, vid)
   local first, last = points[1], points[#points]
   local anchor = invM:mulP3F(vec3(last[1], last[2], last[3]))
-  local pass = spotTake(anchor, "s", SPOT_MAX_SLIDE)
-  if not pass then return end
+  local sKey = spotKey(anchor, "s")
+  if not spotFree(sKey, SPOT.maxSlide) then
+    stampStats.spotsSkipped = stampStats.spotsSkipped + 1
+    return
+  end
+  local pass = (spotHits[sKey] or 0) + 1
   local nx, ny, nz = 0, 0, 0
   for i = 1, #points do
     local p = points[i]
@@ -1907,25 +2973,39 @@ local function enqueueSlide(points, invM, rotOnly, vid)
     dir = dir - normal * dir:dot(normal)            -- onto the panel's plane
   end
   local dlen = dir:length()
-  if dlen < 1e-4 or nlen < 1e-6 then
-    -- No usable direction (pressed, not dragged): a small square patch.
-    enqueueStamp(anchor, nlen > 1e-6 and normal or vec3(0, 0, 1), styleForEvent(nil, 0), vid)
+  -- Pressed, not dragged: no usable direction, or the contact moved mostly
+  -- into the panel (within ~20 deg of its normal - a bumper's front face
+  -- pushed into a post while the car dipped; a band there ran its strokes
+  -- along the dip): a press, composed like a square-on hit (with its claim).
+  if dlen < 1e-4 or nlen < 1e-6 or dlen < 0.35 * dist then
+    enqueueImpact(anchor, nlen > 1e-6 and normal or vec3(0, 0, 1), points.f, vid, points.m, nil, nil, nil, IMPACT.brief)
     return
   end
   dir = dir * (1 / dlen)
-  local half = 0.5 * math.min(SLIDE_BAND_MAX, SLIDE_BAND_MIN + 0.12 * dist)
-  enqueueStreamLocal({ anchor - dir * half, anchor + dir * half }, { normal }, vid,
-                     math.min(1, dist / 3 + (pass - 1) * 0.35))   -- a repeat pass digs deeper
+  local half = 0.5 * math.min(SLIDE_BAND.max, SLIDE_BAND.min + 0.12 * dist)
+  -- How hard it pressed sets the depth; a long drag adds a little.
+  local sev = math.min(1, math.max(0, ((points.f or 0) - 1000) / 14000) + math.min(0.2, dist / 10)
+                          + (pass - 1) * 0.35)
+  local guard = bandGuard(anchor, half)
+  local claim = newClaim({ sKey })
+  if enqueueStreamLocal({ anchor - dir * half, anchor + dir * half }, { normal }, vid, sev, points.m, nil, guard,
+                        claim) then
+    spotCommit(sKey)
+    claim.entry = logMark(anchor, normal, "s", bandDepth(sev), half, dir)
+  end
 end
 
 -- (G) Single per-frame entry point from scratches_detect. The vehicle sends
 -- its id, the frame's discrete events and every slide stream that ended this
 -- frame in ONE call. World -> vehicle-local conversion happens here, once per
 -- batch (one matrix inverse per frame instead of one per event).
---   events  : list of {x,y,z,nx,ny,nz,kind,sev}
+--   events  : list of {x,y,z,nx,ny,nz,kind,sev,mat,dx,dy,dz,ts}
 --             kind "i" = collision impact, "s" = 1-point slide fallback;
---             sev = normalForce in N.
---   streams : list of point lists, each {{x,y,z,nx,ny,nz}, ...} (>= 2 points)
+--             sev = normalForce in N; mat = body material initial (M/P/G);
+--             d = world direction the panel slid along the surface (0 if
+--             none), ts = that tangential speed in m/s.
+--   streams : list of point lists, each {{x,y,z,nx,ny,nz}, ..., m=mat, f=peak force}
+--             (>= 2 points)
 -- A batch from any vehicle other than the current player car is dropped —
 -- it would be converted with the wrong car's matrix.
 M.ingest = function(vid, events, streams)
@@ -1940,15 +3020,55 @@ M.ingest = function(vid, events, streams)
   local invM    = veh:getRefNodeMatrix():fullInverse()
   local rotOnly = invM:copy(); rotOnly:setColumn(3, vec3(0, 0, 0))
 
+  -- The detector also sees a trickle of contacts against another car's body,
+  -- with the node's absolute (not relative) velocity, so their direction is
+  -- meaningless; updateCarContacts paints those. Drop detector contacts that
+  -- lie in a touching car's box (plus a margin); a barrier or the ground
+  -- elsewhere still scrapes as usual.
+  local boxes = nil
+  local others = touchingVehicles(vid)
+  if others then
+    boxes = {}
+    for _, O in ipairs(others) do
+      local b = O:getWorldBox()
+      boxes[#boxes + 1] = { b.minExtents.x - 0.25, b.minExtents.y - 0.25, b.minExtents.z - 0.25,
+                            b.maxExtents.x + 0.25, b.maxExtents.y + 0.25, b.maxExtents.z + 0.25 }
+    end
+  end
+  local function onOtherCar(x, y, z)
+    if not boxes then return false end
+    for _, b in ipairs(boxes) do
+      if x > b[1] and y > b[2] and z > b[3] and x < b[4] and y < b[5] and z < b[6] then
+        stampStats.carContactsDropped = (stampStats.carContactsDropped or 0) + 1
+        return true
+      end
+    end
+    return false
+  end
+
   if events then
     for i = 1, #events do
       local e = events[i]
       local lp = invM:mulP3F(vec3(e[1], e[2], e[3]))
       local ln = rotOnly:mulP3F(vec3(e[4], e[5], e[6]))
-      if e[7] == "i" then
-        enqueueImpact(lp, ln, e[8], vid)
+      if onOtherCar(e[1], e[2], e[3]) then
+        -- painted by updateCarContacts
       else
-        enqueueStamp(lp, ln, styleForEvent(nil, e[8]), vid)
+        local dir = nil
+        if e[10] and (e[10] ~= 0 or e[11] ~= 0 or e[12] ~= 0) then
+          dir = rotOnly:mulP3F(vec3(e[10], e[11], e[12]))
+        end
+        if e[7] == "i" then
+          enqueueImpact(lp, ln, e[8], vid, e[9], dir, e[13])
+        elseif dir then
+          -- A slide too brief to trace (a few physics ticks, the contact
+          -- moving under 1.5 cm - a bumper corner raked across a post): a
+          -- short drag along the slip, composed like a glancing hit.
+          enqueueImpact(lp, ln, e[8], vid, e[9], dir, e[13], nil, IMPACT.brief)
+        else
+          -- No direction either: a press, composed like a square-on hit.
+          enqueueImpact(lp, ln, e[8], vid, e[9], nil, nil, nil, IMPACT.brief)
+        end
       end
     end
   end
@@ -1956,7 +3076,10 @@ M.ingest = function(vid, events, streams)
   if streams then
     for si = 1, #streams do
       local points = streams[si]
-      if points and #points >= 2 then enqueueSlide(points, invM, rotOnly, vid) end
+      local last = points and points[#points]
+      if points and #points >= 2 and not onOtherCar(last[1], last[2], last[3]) then
+        enqueueSlide(points, invM, rotOnly, vid)
+      end
     end
   end
 end
@@ -2016,14 +3139,14 @@ M.probeBrushes = function()
   if not ready then log('W', logTag, "probeBrushes: not ready"); return end
   local brushes = {
     {tex = "/art/dynamicDecals/textures/shape_circle.png",  rgb = {1.0, 0.0, 0.0}, name = "vanilla shape_circle (RED)"},
-    {tex = "/art/dynamicDecals/textures/scr_scrape_01.png", rgb = {0.0, 1.0, 0.0}, name = "scrape_01 (GREEN)"},
-    {tex = "/art/dynamicDecals/textures/scr_scrape_02.png", rgb = {0.0, 1.0, 1.0}, name = "scrape_02 (CYAN)"},
-    {tex = "/art/dynamicDecals/textures/scr_scrape_03.png", rgb = {1.0, 1.0, 0.0}, name = "scrape_03 (YELLOW)"},
-    {tex = "/art/dynamicDecals/textures/scr_haze_01.png",   rgb = {1.0, 0.0, 1.0}, name = "haze_01 (MAGENTA)"},
+    {tex = "/art/dynamicDecals/textures/scr_streak_01.png", rgb = {0.0, 1.0, 0.0}, name = "streak_01 (GREEN)"},
+    {tex = "/art/dynamicDecals/textures/scr_streak_02.png", rgb = {0.0, 1.0, 1.0}, name = "streak_02 (CYAN)"},
+    {tex = "/art/dynamicDecals/textures/scr_haze_01.png",   rgb = {1.0, 1.0, 0.0}, name = "haze_01 (YELLOW)"},
+    {tex = "/art/dynamicDecals/textures/scr_smear_01.png",  rgb = {1.0, 0.0, 1.0}, name = "smear_01 (MAGENTA)"},
     {tex = "/art/dynamicDecals/textures/scr_chips_01.png",  rgb = {0.5, 1.0, 0.5}, name = "chips_01 (LIGHT GREEN)"},
     {tex = "/art/dynamicDecals/textures/scr_chips_02.png",  rgb = {0.5, 0.5, 1.0}, name = "chips_02 (LIGHT BLUE)"},
-    {tex = "/art/dynamicDecals/textures/scr_gouge_01.png",  rgb = {1.0, 0.5, 0.0}, name = "gouge_01 (ORANGE)"},
-    {tex = "/art/dynamicDecals/textures/scr_gouge_02.png",  rgb = {1.0, 0.0, 0.5}, name = "gouge_02 (PINK)"},
+    {tex = "/art/dynamicDecals/textures/scr_gouge_01_rim.png",  rgb = {1.0, 0.5, 0.0}, name = "gouge_01_rim (ORANGE)"},
+    {tex = "/art/dynamicDecals/textures/scr_gouge_01_core.png", rgb = {1.0, 0.0, 0.5}, name = "gouge_01_core (PINK)"},
   }
   -- 9 brushes at 0.05 m spacing → ±0.20 m Y spread, stays on body for small
   -- vehicles too. X=1.0 / Z=0.4 is a right-door-ish point known to hit pigeon
@@ -2037,7 +3160,6 @@ M.probeBrushes = function()
       scale = 0.15,
       rot = 0,
       noJitter = true,
-      skipMetal = true,  -- want raw color tint visible, not metal-shaded
     })
   end
   log('I', logTag, "probeBrushes done. Check the right side of the vehicle.")
@@ -2125,15 +3247,15 @@ M.clearStamps = function()
   combineDirty = true
   rebindDirty  = true
   table.clear(spotHits)
+  table.clear(markLog)
+  markGen = markGen + 1
   log('I', logTag, "cleared all stamps (textures flushed); layers before clear=" ..
     tostring(preClearLayers))
-  -- Re-point metallic/roughness at the static factory maps before re-seeding.
-  -- restoreFactoryMR otherwise runs exactly once, from the binding stabilizer
-  -- at setup — but a respawn (the Ctrl+R path that gets us here) can rebuild
-  -- the .skin.dynamicTextures materials, which puts M/R back on the dynamic
-  -- canvas we just wiped. That is precisely the matte-body symptom Phase 3.3
-  -- chased. Idempotent and cheap at clear frequency, so just re-assert it.
-  restoreFactoryMR()
+  -- Re-assert the damage layer before re-seeding. It otherwise runs once,
+  -- from the binding stabilizer at setup, but a respawn (the Ctrl+R path that
+  -- gets us here) can rebuild the .skin.dynamicTextures materials. Idempotent
+  -- and cheap at clear frequency.
+  setupDamageLayer()
   -- Re-seed the baseColor channel. clearBakedTextures zeroed it; the fill
   -- layer repaints every texel uniformly.
   M.addPaintFill()
@@ -2280,6 +3402,11 @@ M.resetPaintStats = function()
   stampStats.spotsSkipped = 0
   stampStats.streamsMerged = 0
   stampStats.framesTicked = 0
+  for _, k in ipairs({ "stampsSkippedGap", "stampsGapDeepened", "stampsUnmeasured", "reaims", "reaimsHelped",
+                       "marksRetracted", "gapFront", "gapUnder5",
+                       "gapUnder10", "gapUnder18", "gapUnder25", "gapHole" }) do
+    stampStats[k] = 0
+  end
   for k in pairs(perfStats) do perfStats[k] = 0 end
   log('I', logTag, "paint stats reset")
 end
@@ -2305,6 +3432,10 @@ end
 
 -- The painter's cost on the most recent ready frame (ms); bench samples it.
 M.getLastFrameMs = function() return perfStats.lastMs end
+
+-- The mark log (see logMark): {{x,y,z,nx,ny,nz,kind,depth,radius,dx,dy,dz}, ...},
+-- vehicle-local.
+M.getMarks = function() return markLog end
 
 -- Projection passes allowed per frame. Lower = flatter frame times during a
 -- big crash (marks trickle in over a few frames); higher = marks land sooner.
@@ -2588,8 +3719,8 @@ end
 -- context for ordering), each [GE]/[VEH]-tagged. Curated on purpose — not a
 -- full ring dump. The "Copy debug report" button drops the result onto the
 -- clipboard; M.buildDebugReport exposes it for the console.
-local REPORT_RECENT_LINES = 50   -- always keep this many most-recent lines
-local REPORT_MAX_LINES    = 140  -- hard cap on log lines in the report
+-- recent: always keep this many most-recent lines; max: hard cap on log lines in the report.
+local REPORT_LINES = { recent = 50, max = 140 }
 
 local function buildDebugReport()
   local veh   = getPlayerVehicle(0)
@@ -2635,7 +3766,7 @@ local function buildDebugReport()
   w("")
   w("### log  (warnings/errors + recent context; [GE]=painter [VEH]=detector)")
   local n = #logRing
-  local firstRecent = math.max(1, n - REPORT_RECENT_LINES + 1)
+  local firstRecent = math.max(1, n - REPORT_LINES.recent + 1)
   local picked = {}
   for i = 1, n do
     local e = logRing[i]
@@ -2644,7 +3775,7 @@ local function buildDebugReport()
     end
   end
   -- Cap from the front so the most recent lines always survive.
-  local startAt = math.max(1, #picked - REPORT_MAX_LINES + 1)
+  local startAt = math.max(1, #picked - REPORT_LINES.max + 1)
   if startAt > 1 then w("(" .. (startAt - 1) .. " older lines omitted)") end
   for i = startAt, #picked do w(picked[i]) end
 
@@ -2986,6 +4117,8 @@ local function onExtensionLoaded()
 end
 
 local function onExtensionUnloaded()
+  -- The skin material is shared and outlives the painter; leave it as shipped.
+  restoreDamageLayers()
   ready = false
   api = nil
   -- The projection was resolved from an upvalue of the api module we are
@@ -2993,6 +4126,7 @@ local function onExtensionUnloaded()
   decalProjection = nil
   apiApp = nil
   table.clear(spotHits)
+  markGen = markGen + 1
   spawnAabbCache.vid = nil
   spawnAabbCache.box = nil
   pendingStampInputs = {}
@@ -3006,10 +4140,14 @@ M.onExtensionUnloaded = onExtensionUnloaded
 M.onUpdate            = onUpdate
 M.onVehicleSwitched   = onVehicleSwitched
 M.onVehicleSpawned    = onVehicleSpawned
--- A reset can rebuild the car's materials; re-bind on the next composite.
+-- A reset can rebuild the car's materials; re-assert the damage layer and
+-- re-bind on the next composite.
 M.onVehicleResetted   = function(vid)
   local veh = getPlayerVehicle(0)
-  if ready and veh and veh:getId() == vid then rebindDirty = true end
+  if ready and veh and veh:getId() == vid then
+    setupDamageLayer()
+    rebindDirty = true
+  end
 end
 
 return M

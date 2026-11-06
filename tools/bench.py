@@ -74,6 +74,103 @@ SCENARIOS = {
                      offset={"up": 1.6}, euler={"pitch": -40}, vel={"fwd": 9}, maxTime=8),
 }
 
+# Everyday crashes modelled on the reference photos (bench/reference/): the
+# car rolls in neutral into static obstacles, stays on its wheels, and the
+# photos are close-ups aimed at where the painter laid marks.
+# Obstacle offsets: home frame from the car's box center, plus fwdL/rightW
+# multiples of its half-length/half-width (see scratches_bench spawnObstacles).
+COLUMN = "/art/shapes/objects/modular_metal_roof_01/s_column_concrete_01.dae"  # 0.62 m square
+# A row of these makes a flat vertical wall; the road barriers have sloped
+# bases that only the tyres touch.
+PILLAR = "/art/shapes/objects/modular_depot/s_depot_metal_column.dae"  # 1.0 m square
+SITE_SHOTS = [
+    {"label": "site1", "site": 1, "dist": 1.2, "elev": 10, "swing": 25},
+    {"label": "site1_macro", "site": 1, "dist": 0.55, "distPerRadius": 0.25, "elev": 6, "swing": 12},
+    {"label": "site1_wide", "site": 1, "dist": 3.0, "elev": 14, "swing": 40},
+    {"label": "site2", "site": 2, "dist": 1.2, "elev": 10, "swing": -25},
+    {"label": "site3", "site": 3, "dist": 1.2, "elev": 10, "swing": 25},
+]
+SCENARIOS.update({
+    "cornerscuff": dict(desc="creeps at 4 m/s drifting 0.45 m/s right (6.5 deg), so the front-right bumper "
+                             "corner clips a knee-high concrete bollard and drags past it (ref 1: scuffed bumper corner)",
+                        vel={"fwd": 4.0, "right": 0.45}, coast=True, upright=False, shots=SITE_SHOTS,
+                        maxTime=6, footage={"fwd": 2, "right": 6, "up": 3, "lookFwd": 3},
+                        # The bumper corner sits ~0.12 m inside the box (mirrors,
+                        # rounding) and drifts 0.23 m right over the 2 m run-up:
+                        # it meets the bollard ~5 cm deep and rakes past (at
+                        # 10 cm the bollard caught the corner and stopped it).
+                        # The column (6.3 m) sunk to a 0.55 m bollard: at full
+                        # height it met the headlight first and the bumper
+                        # corner below barely touched.
+                        obstacles=[{"shape": COLUMN, "fwdL": 1, "fwd": 2.31, "rightW": 1, "right": 0.345,
+                                    "up": -5.75}]),
+    "cornerpost": dict(desc="rolls at 6 m/s into a concrete column that catches the front-right bumper corner "
+                            "(refs 1, 2: crushed, creased bumper corner)",
+                       vel={"fwd": 6}, coast=True, upright=False, shots=SITE_SHOTS, maxTime=6,
+                       footage={"fwd": 2, "right": 7, "up": 4, "lookFwd": 4},
+                       obstacles=[{"shape": COLUMN, "fwdL": 1, "fwd": 3.0, "rightW": 1, "right": 0.05}]),
+    "wallscrape": dict(desc="rolls at 10 m/s alongside a long flat wall (a ledge from 0.6 m up, above the tyres) on its right, angled 2 deg into it (positive yaw = right) - "
+                            "a sideswipe (refs 2, 3: long horizontal streaks)",
+                       vel={"fwd": 10}, euler={"yaw": 2}, coast=True, upright=False, shots=SITE_SHOTS,
+                       maxTime=8, footage={"fwd": 3, "right": -6, "up": 6, "lookFwd": 8, "lookRight": 1},
+                       obstacles=[{"shape": PILLAR, "fwd": -2.0 + 1.0 * i,
+                                   "rightW": 1, "right": 0.62, "up": 0.6} for i in range(22)]),
+    "poledoor": dict(desc="slides sideways at 11 m/s into a concrete column at the right front door "
+                          "(ref 5: crushed door)",
+                     vel={"right": 11}, coast=True, upright=False, shots=SITE_SHOTS, maxTime=6,
+                     footage={"fwd": 7, "right": 1, "up": 4, "lookFwd": 0, "lookRight": 1.5},
+                     obstacles=[{"shape": COLUMN, "fwd": 0.0, "rightW": 1, "right": 0.5}]),
+    "rearpost": dict(desc="reverses at 5 m/s into a concrete column that catches the rear-left quarter "
+                          "(ref 4: gouged rear quarter)",
+                     vel={"fwd": -5}, coast=True, upright=False, shots=SITE_SHOTS, maxTime=6,
+                     footage={"fwd": -2, "right": -7, "up": 4, "lookFwd": -4},
+                     obstacles=[{"shape": COLUMN, "fwdL": -1, "fwd": -2.5, "rightW": -1, "right": 0.35}]),
+})
+# Car-on-car: the player car parked, another car driven into it.
+SCENARIOS.update({
+    "tbone": dict(desc="parked; a pickup hits the right front door square-on at 11 m/s (ref 5: crushed door)",
+                  upright=False, shots=SITE_SHOTS, minTime=3, maxTime=6,
+                  footage={"fwd": 6, "right": 6, "up": 4, "lookFwd": 0, "lookRight": 1},
+                  strikers=[{"model": "pickup", "color": [0.85, 0.85, 0.82], "fwd": -0.2, "rightW": 1,
+                             "right": 4.2, "yaw": -90, "speed": 11}]),
+    "carswipe": dict(desc="parked; a pickup passes along the right side angled 7 deg in at 9 m/s "
+                          "(ref 3: car-on-car side scrape, paint transfer)",
+                     upright=False, shots=SITE_SHOTS, minTime=3, maxTime=6,
+                     footage={"fwd": -6, "right": 6, "up": 4, "lookFwd": 0, "lookRight": 1},
+                     strikers=[{"model": "pickup", "color": [0.08, 0.08, 0.09], "fwd": -7.5, "rightW": 1,
+                                "right": 1.3, "yaw": -8, "speed": 9}]),
+})
+REF_SCENARIOS = ["cornerscuff", "cornerpost", "wallscrape", "poledoor", "rearpost", "tbone", "carswipe"]
+
+# Test cars: model, config and one paint; matched to the reference photos.
+CARS = {
+    "etk800_blue": {"model": "etk800", "config": "vehicles/etk800/854_190_A.pc",
+                    "color": [0.03, 0.06, 0.16], "metallic": 0.7, "roughness": 0.3,
+                    "clearcoat": 1, "clearcoatRoughness": 0.03},
+    "etk800_grey": {"model": "etk800", "config": "vehicles/etk800/854_190_A.pc",
+                    "color": [0.16, 0.17, 0.18], "metallic": 0.8, "roughness": 0.35,
+                    "clearcoat": 1, "clearcoatRoughness": 0.03},
+    "etk800_silver": {"model": "etk800", "config": "vehicles/etk800/854_190_A.pc",
+                      "color": [0.62, 0.62, 0.60], "metallic": 0.85, "roughness": 0.35,
+                      "clearcoat": 1, "clearcoatRoughness": 0.03},
+}
+REFERENCE_DIR = os.path.join(BENCH_DIR, "reference")
+
+# The gallery: detector events fed straight to the painter on the car's right
+# side, front to back, light to heavy (fwd/up: m from the box center). Upper
+# row impacts (force in N), lower row slides (dist = drag length in m).
+GALLERY = [
+    {"kind": "i", "fwd": 1.45, "up": 0.05, "force": 2500, "ts": 3, "label": "impact 2.5 kN, glancing"},
+    {"kind": "i", "fwd": 0.75, "up": 0.10, "force": 7000, "ts": 4, "label": "impact 7 kN, glancing"},
+    {"kind": "i", "fwd": 0.0, "up": 0.10, "force": 13000, "ts": 0, "label": "impact 13 kN, square-on"},
+    {"kind": "i", "fwd": -0.8, "up": 0.10, "force": 21000, "ts": 5, "label": "impact 21 kN, glancing"},
+    {"kind": "s", "fwd": 1.2, "up": -0.22, "force": 1500, "dist": 0.25, "label": "slide light"},
+    {"kind": "s", "fwd": 0.25, "up": -0.22, "force": 6000, "dist": 0.9, "label": "slide medium"},
+    {"kind": "s", "fwd": -0.75, "up": -0.22, "force": 16000, "dist": 2.0, "label": "slide heavy"},
+    {"kind": "i", "fwd": -1.5, "up": 0.0, "force": 12000, "ts": 4, "ang": 45, "label": "impact 12 kN, 45 deg"},
+    {"kind": "s", "fwd": 1.95, "up": -0.05, "force": 6000, "dist": 0.9, "ang": 45, "label": "slide medium, 45 deg"},
+]
+
 # Photo angles in the car's own frame after it settles: az 0 = behind,
 # 90 = its left, 180 = front, 270 = right; elev = degrees above horizontal.
 SHOTS = [
@@ -219,6 +316,13 @@ def write_report(out_dir: str, s: dict, res: dict, scenario: dict) -> None:
     rej = {k: v for k, v in det.items() if k.startswith("rej") and v}
     if rej:
         L += ["Rejected contacts: " + ", ".join(f"{k[3:]} {int(v)}" for k, v in sorted(rej.items(), key=lambda kv: -kv[1])), ""]
+    st = (res.get("painter") or {}).get("stamp") or {}
+    L += ["Placement: " + ", ".join(f"{k} {int(st.get(k) or 0)}" for k in (
+              "stampsGapDeepened", "stampsSkippedGap", "stampsUnmeasured", "reaims", "reaimsHelped",
+              "marksRetracted"))
+          + f", lampSnapped {int(det.get('lampSnapped') or 0)}; overshoot front/<5/<10/<18/<25/hole cm "
+          + "/".join(str(int(st.get(k) or 0)) for k in ("gapFront", "gapUnder5", "gapUnder10", "gapUnder18",
+                                                          "gapUnder25", "gapHole")), ""]
     for label, key in (("Body materials", "byBodyMat"), ("Surfaces", "bySurfaceMat")):
         m = det.get(key) or {}
         if m:
@@ -285,8 +389,11 @@ def run_one(name: str, args, tuning: list[dict], home: dict, rep: int) -> dict:
     os.makedirs(user_abs, exist_ok=True)
     cfg = {
         "name": name, "home": home, "tuning": tuning,
-        "scenario": {k: v for k, v in sc.items() if k != "desc"},
-        "shots": [] if args.no_shots else SHOTS, "shotDir": user_rel,
+        "scenario": {k: v for k, v in sc.items() if k not in ("desc", "shots", "upright", "footage")},
+        "shots": [] if args.no_shots else sc.get("shots", SHOTS), "shotDir": user_rel,
+        "upright": sc.get("upright", True), "tod": args.tod,
+        "footage": None if args.no_shots or not args.footage or "footage" not in sc else
+        {"every": 0.2, "scale": 0.25, "max": 45, "cam": sc["footage"]},
         "shotScale": args.shot_scale, "optick": args.optick,
         "optickPath": os.path.join(user_abs, "capture.opt").replace("\\", "/"),
     }
@@ -322,6 +429,8 @@ def run_one(name: str, args, tuning: list[dict], home: dict, rep: int) -> dict:
     s = summarize(res, run_id, name, args.tag, tuning)
     write_report(out_dir, s, res, sc)
     append_index(s)
+    sheet = make_sheet(out_dir, f"{name} {args.tag}".strip())
+    make_footage(out_dir)
     if res.get("error"):
         print(f"  {name}: run error: {res['error']}")
     print(f"  {name}: {'settled' if s['settled'] else 'timed out'} in {s['seconds']} s"
@@ -330,6 +439,8 @@ def run_one(name: str, args, tuning: list[dict], home: dict, rep: int) -> dict:
           f"painter avg {s['painter_ms_avg']} / max {s['painter_ms_max']} ms | "
           f"frame p95 {s['frame_ms_p95']} ms | detector {s['detect_us_per_contact']} us/contact")
     print(f"  -> {os.path.relpath(out_dir, ROOT)}{os.sep}report.md")
+    if sheet:
+        print(f"  -> {os.path.relpath(sheet, ROOT)}")
     return s
 
 
@@ -341,16 +452,201 @@ def restore_defaults(tuning: list[dict]) -> None:
     print("  tuning overrides undone (module reloaded)")
 
 
+# ----------------------------------------------------------------- cars --
+
+def setup_car(name: str) -> None:
+    """Spawn a test car, give it the scratches skin, wait for the painter."""
+    car = CARS[name]
+    dev.lua("extensions.load('scratches_bench') return 'ok'")
+    dev.lua(f"return scratches_bench.spawnCar({lua_long_string(json.dumps(car))})")
+    wait_for(lambda: dev.lua("local v = getPlayerVehicle(0) return v and v:getJBeamFilename() or ''")
+             == car["model"], 60, f"{car['model']} to spawn")
+    time.sleep(2)
+    dev.lua("return scratches_bench.applySkin()")
+    time.sleep(4)  # setSkin respawns the car
+    wait_for(lambda: dev.lua("local v = getPlayerVehicle(0) return tostring(v ~= nil)") == "true",
+             60, "the car to respawn")
+    dev.lua("scratches_paint.kickSetup() return 'ok'")
+    wait_for(lambda: dev.lua("return tostring(scratches_paint.getStats().ready)") == "true",
+             60, "the painter to bind")
+    print(f"  car: {name} ready")
+
+
+def wait_for(pred, timeout: float, what: str) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            if pred():
+                return
+        except (ConnectionError, dev.DeployError):
+            pass
+        time.sleep(1)
+    raise dev.DeployError(f"timed out waiting for {what}")
+
+
+# ---------------------------------------------------------------- sheets --
+
+def make_sheet(out_dir: str, title: str) -> str | None:
+    """One image for review: the reference photos on top, the run's shots
+    below. Returns its path, or None without PIL or shots."""
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        return None
+    shots = sorted(n for n in os.listdir(out_dir) if n.startswith("shot_") and n.endswith(".jpg"))
+    if not shots:
+        return None
+    refs = sorted(os.path.join(REFERENCE_DIR, n) for n in os.listdir(REFERENCE_DIR)
+                  if n.lower().endswith((".png", ".jpg"))) if os.path.isdir(REFERENCE_DIR) else []
+    width, cols, pad = 2400, 3, 8
+    rows = []
+    if refs:
+        ims = [Image.open(p).convert("RGB") for p in refs]
+        h = 320
+        ims = [im.resize((max(1, int(im.width * h / im.height)), h)) for im in ims]
+        scale = min(1.0, (width - pad * (len(ims) + 1)) / sum(im.width for im in ims))
+        ims = [im.resize((max(1, int(im.width * scale)), max(1, int(h * scale)))) for im in ims]
+        rows.append(("reference photos", ims))
+    cw = (width - pad * (cols + 1)) // cols
+    tiles = []
+    for n in shots:
+        im = Image.open(os.path.join(out_dir, n)).convert("RGB")
+        im = im.resize((cw, int(im.height * cw / im.width)))
+        ImageDraw.Draw(im).text((10, 10), n[:-4], fill=(255, 255, 0))
+        tiles.append(im)
+    for i in range(0, len(tiles), cols):
+        rows.append(("in game" if i == 0 else "", tiles[i:i + cols]))
+    label_h = 26
+    total_h = pad + sum(label_h * bool(lbl) + max(im.height for im in ims) + pad for lbl, ims in rows) + 30
+    sheet = Image.new("RGB", (width, total_h), (24, 24, 24))
+    d = ImageDraw.Draw(sheet)
+    d.text((pad, 8), title, fill=(255, 255, 255))
+    y = 30
+    for lbl, ims in rows:
+        if lbl:
+            d.text((pad, y + 6), lbl, fill=(200, 200, 200))
+            y += label_h
+        x = pad
+        for im in ims:
+            sheet.paste(im, (x, y))
+            x += im.width + pad
+        y += max(im.height for im in ims) + pad
+    path = os.path.join(out_dir, "sheet.jpg")
+    sheet.save(path, quality=88)
+    return path
+
+
+def make_footage(out_dir: str) -> str | None:
+    """Tile the run's footage frames into footage.jpg (every other frame,
+    in order) for review."""
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        return None
+    frames = sorted(n for n in os.listdir(out_dir) if n.startswith("footage_") and n.endswith(".jpg"))
+    if not frames:
+        return None
+    frames = frames[::2][:24]
+    cols, tw = 4, 600
+    tiles = []
+    for n in frames:
+        im = Image.open(os.path.join(out_dir, n)).convert("RGB")
+        im = im.resize((tw, int(im.height * tw / im.width)))
+        ImageDraw.Draw(im).text((8, 8), n[8:-4], fill=(255, 255, 0))
+        tiles.append(im)
+    th = tiles[0].height
+    rows = (len(tiles) + cols - 1) // cols
+    sheet = Image.new("RGB", (cols * tw, rows * th), (24, 24, 24))
+    for i, im in enumerate(tiles):
+        sheet.paste(im, ((i % cols) * tw, (i // cols) * th))
+    path = os.path.join(out_dir, "footage.jpg")
+    sheet.save(path, quality=85)
+    return path
+
+
+# --------------------------------------------------------------- gallery --
+
+def shoot(out_dir: str, name: str, cam: tuple, look: tuple, scale: float = 1.0) -> str:
+    """Free camera at cam, aimed at look (both (fwd, right, up) m in the car's
+    frame from its box center); screenshot with the HUD hidden."""
+    dev.lua(f"""
+local veh = getPlayerVehicle(0)
+local cc = jsonDecode(scratches_bench.carCenter())
+local c = vec3(cc.x, cc.y, cc.z)
+local d = veh:getDirectionVector(); local fwd = vec3(d.x, d.y, 0):normalized()
+local up = vec3(0, 0, 1); local right = fwd:cross(up):normalized()
+local function at(f, r, u) return c + fwd * f + right * r + up * u end
+local cam, tgt = at({cam[0]}, {cam[1]}, {cam[2]}), at({look[0]}, {look[1]}, {look[2]})
+core_camera.setByName(0, 'free')
+core_camera.globalCameraFunction('free', 'setPosition', cam)
+core_camera.globalCameraFunction('free', 'setRotation', quatFromDir((tgt - cam):normalized(), up))
+ui_visibility.set(false)
+return 'ok'""")
+    time.sleep(1.0)
+    rel = f"bench/{name}"
+    dev.lua(f"createScreenshot2({{filename='{rel}', writeJPG=true, superSampling=1, rescaleFactor={scale}}}) "
+            "return 'ok'")
+    src = os.path.join(dev.user_dir(), "bench", name + ".jpg")
+    for _ in range(60):
+        if os.path.isfile(src):
+            break
+        time.sleep(0.25)
+    time.sleep(0.4)
+    dst = os.path.join(out_dir, name + ".jpg")
+    os.replace(src, dst)
+    return dst
+
+
+def cmd_gallery(args) -> int:
+    try:
+        if args.car:
+            setup_car(args.car)
+        ensure_bench()
+        home = homes().get(level_id())
+        if home:  # repaired, at rest, in the same spot every time
+            dev.lua(f"return scratches_bench.placeHome({lua_long_string(json.dumps(home))})")
+            time.sleep(2.5)
+        run_id = time.strftime("%Y%m%d-%H%M%S") + "_gallery" + (f"_{args.tag}" if args.tag else "")
+        out_dir = os.path.join(RUNS_DIR, run_id)
+        os.makedirs(out_dir, exist_ok=True)
+        # Fixed seed: the same brushes, jitter and tones every run.
+        dev.lua(f"if scenetree.tod then scenetree.tod.time = {args.tod} scenetree.tod.play = false end "
+                f"scratches_paint.clearStamps() scratches_paint.seedRandom({args.seed}) return 'ok'")
+        time.sleep(1.5)
+        items = [{k: v for k, v in it.items() if k != "label"} for it in GALLERY]
+        print("  " + dev.lua(f"return scratches_bench.gallery({lua_long_string(json.dumps(items))})"))
+        wait_for(lambda: dev.lua("local q = scratches_paint.getStats().queue "
+                                 "return tostring(q.stamps + q.jobs + (q.bake or 0) == 0)") == "true",
+                 60, "the painter to drain")
+        time.sleep(1.0)
+        shoot(out_dir, "shot_0_side", (0.0, 4.6, 0.35), (0.0, 0.0, 0.0), 0.5)
+        for i, it in enumerate(GALLERY, 1):
+            f, u = it["fwd"], it["up"]
+            shoot(out_dir, f"shot_{i}_{it['kind']}{i}", (f + 0.3, 1.5, u + 0.12), (f, 0.8, u), 0.5)
+        dev.lua("ui_visibility.set(true) core_camera.setByName(0, 'orbit') return 'ok'")
+        with open(os.path.join(out_dir, "labels.json"), "w", encoding="utf-8") as fh:
+            json.dump({f"shot_{i}": it["label"] for i, it in enumerate(GALLERY, 1)}, fh, indent=1)
+        sheet = make_sheet(out_dir, f"gallery {args.tag}".strip())
+        print(f"  -> {os.path.relpath(sheet or out_dir, ROOT)}")
+    except (ConnectionError, dev.DeployError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 # --------------------------------------------------------------- commands --
 
 def cmd_run(args) -> int:
-    names = list(SCENARIOS) if args.scenarios == ["all"] else args.scenarios
+    names = (list(SCENARIOS) if args.scenarios == ["all"]
+             else REF_SCENARIOS if args.scenarios == ["ref"] else args.scenarios)
     unknown = [n for n in names if n not in SCENARIOS]
     if unknown:
         print(f"error: unknown scenario(s) {', '.join(unknown)}; see `bench.py scenarios`", file=sys.stderr)
         return 1
     tuning = parse_tuning(args.set)
     try:
+        if args.car:
+            setup_car(args.car)
         ensure_bench()
         lvl = level_id()
         home = homes().get(lvl)
@@ -402,6 +698,15 @@ def cmd_scenarios(args) -> int:
     return 0
 
 
+def cmd_car(args) -> int:
+    try:
+        setup_car(args.name)
+    except (ConnectionError, dev.DeployError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_home(args) -> int:
     try:
         lvl = level_id()
@@ -437,6 +742,17 @@ def main() -> int:
     r.add_argument("--no-shots", action="store_true", help="skip screenshots")
     r.add_argument("--shot-scale", type=float, default=0.5, help="screenshot scale (default 0.5)")
     r.add_argument("--keep", action="store_true", help="leave --set overrides in place afterwards")
+    r.add_argument("--car", choices=sorted(CARS), help="spawn this test car first (see `bench.py car`)")
+    r.add_argument("--footage", action="store_true",
+                   help="grab crash frames from a fixed camera (adds screenshot cost to the frame timings)")
+    r.add_argument("--tod", type=float, default=0.1, help="time of day for the run (0.1 = late morning)")
+    g = sub.add_parser("gallery", help="paint a fixed set of marks (no physics) and photograph them")
+    g.add_argument("--tag", default="")
+    g.add_argument("--car", choices=sorted(CARS))
+    g.add_argument("--tod", type=float, default=0.1)
+    g.add_argument("--seed", type=int, default=1234, help="painter random seed (same marks every run)")
+    c = sub.add_parser("car", help="spawn a test car with the scratches skin")
+    c.add_argument("name", choices=sorted(CARS))
     ls = sub.add_parser("list", help="compare recent runs")
     ls.add_argument("-n", type=int, default=20)
     ls.add_argument("--scenario")
@@ -444,7 +760,8 @@ def main() -> int:
     h = sub.add_parser("home", help="show or save this level's home pose")
     h.add_argument("--save", action="store_true")
     args = p.parse_args()
-    return {"run": cmd_run, "list": cmd_list, "scenarios": cmd_scenarios, "home": cmd_home}[args.cmd](args)
+    return {"run": cmd_run, "list": cmd_list, "scenarios": cmd_scenarios, "home": cmd_home,
+            "car": cmd_car, "gallery": cmd_gallery}[args.cmd](args)
 
 
 if __name__ == "__main__":

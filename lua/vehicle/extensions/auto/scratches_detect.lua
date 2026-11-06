@@ -80,7 +80,15 @@ local nodeLastContactTime = {} -- nid -> simTime onNodeCollision last fired for 
 -- every contacting node was pure waste on the hottest path in the mod.
 -- Values: a body material name (paintable) or one of the REJ_* sentinels.
 local nodeClass = {}
-local REJ_NO_NODE, REJ_WHEEL, REJ_BODY_MAT, REJ_PART = 1, 2, 3, 4
+local REJ_NO_NODE, REJ_WHEEL, REJ_BODY_MAT, REJ_PART, LAMP = 1, 2, 3, 4, 5
+-- A lamp's contact belongs to the panel around it: a headlight raked by a post
+-- reported the impacts, the ray went through the lens and the marks landed on
+-- the hood edge behind it. Such a contact moves to the paintable body node
+-- nearest the lamp node at rest (within LAMP_SNAP - rest positions, so a crash
+-- can't change the choice; cached per lamp node until reset), or is dropped.
+local LAMP_PART_PATTERNS = { "headlight", "taillight", "foglight" }
+local LAMP_SNAP = 0.12   -- m
+local lampSnap  = {}     -- lamp node cid -> body node cid, or false
 
 -- Per-node slide stream. Each entry is a small table of contact-point samples
 -- collected while the node is in active slide contact. Flushed when the node
@@ -120,6 +128,7 @@ local stats = {
   rejBodyMat       = 0,
   rejSurfaceMat    = 0,
   rejPartExcluded  = 0,
+  lampSnapped      = 0,  -- lamp contacts moved onto the panel beside the lamp
   rejBelowThresh   = 0,
   rejNormalForce   = 0,
   rejNonFinite     = 0,
@@ -274,9 +283,14 @@ local function flushStream(id1)
     -- alongside impacts via pendingDetectEvents — flushed in updateGFX as
     -- one queueGameEngineLua call.
     stats.streamFallbacks = stats.streamFallbacks + 1
+    -- A slide of a few physics ticks (a bumper corner raked across a post)
+    -- still has a direction; past 1 m/s it rides along like an impact's, so
+    -- GE can drag the mark the way the panel slid.
     local p = s.points[1]
+    local dirOk = (p.sl or 0) > 1.0
     pendingDetectEvents[#pendingDetectEvents + 1] = {
-      p.x, p.y, p.z, p.nx, p.ny, p.nz, "s", p.f or 0,
+      p.x, p.y, p.z, p.nx, p.ny, p.nz, "s", p.f or 0, s.mat,
+      dirOk and p.sx or 0, dirOk and p.sy or 0, dirOk and p.sz or 0, dirOk and p.sl or 0,
     }
     return
   end
@@ -292,7 +306,12 @@ local function flushStream(id1)
   stats.streamsFlushed    = stats.streamsFlushed + 1
   stats.streamPointsTotal = stats.streamPointsTotal + n
 
-  pendingStreams[#pendingStreams + 1] = "{" .. table.concat(parts, ",") .. "}"
+  -- m: the body material's initial (M/P/G), f: the hardest the node pressed
+  -- during the slide - together they pick the scrape's depth and substrate.
+  local fmax = 0
+  for _, p in ipairs(s.points) do if (p.f or 0) > fmax then fmax = p.f end end
+  pendingStreams[#pendingStreams + 1] = "{" .. table.concat(parts, ",") ..
+    string.format(",m=%q,f=%.0f}", s.mat or "M", fmax)
 end
 
 -- NaN fails x == x; inf and absurd magnitudes fail the bound.
@@ -312,7 +331,29 @@ local function classifyNode(id1)
   for _, pat in ipairs(EXCLUDE_PART_PATTERNS) do
     if partLower:find(pat, 1, true) then return REJ_PART end
   end
+  for _, pat in ipairs(LAMP_PART_PATTERNS) do
+    if partLower:find(pat, 1, true) then return LAMP end
+  end
   return bodyName
+end
+
+-- The paintable body node nearest lamp node `lid` at rest (within LAMP_SNAP),
+-- or nil.
+local function findLampSnap(lid)
+  local lp = v.data.nodes[lid].pos
+  if not lp then return nil end
+  local best, bestD2 = nil, LAMP_SNAP * LAMP_SNAP
+  for cid, node in pairs(v.data.nodes) do
+    local c = nodeClass[cid]
+    if c == nil then c = classifyNode(cid); nodeClass[cid] = c end
+    local q = node.pos
+    if q and type(c) == "string" and c ~= "GLASS" then
+      local dx, dy, dz = q.x - lp.x, q.y - lp.y, q.z - lp.z
+      local d2 = dx * dx + dy * dy + dz * dz
+      if d2 < bestD2 then best, bestD2 = cid, d2 end
+    end
+  end
+  return best
 end
 
 -- ---- the filter ----
@@ -338,6 +379,18 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   if bodyName == REJ_BODY_MAT then stats.rejBodyMat = stats.rejBodyMat + 1; return end
   if bodyName == REJ_PART then stats.rejPartExcluded = stats.rejPartExcluded + 1; return end
   if bodyName == REJ_NO_NODE then stats.rejNoNode = stats.rejNoNode + 1; return end
+  if bodyName == LAMP then
+    local nid = lampSnap[id1]
+    if nid == nil then
+      nid = findLampSnap(id1) or false
+      lampSnap[id1] = nid
+    end
+    if not (nid and obj.getNodePosition) then stats.rejPartExcluded = stats.rejPartExcluded + 1; return end
+    local a, b = obj:getNodePosition(id1), obj:getNodePosition(nid)
+    pos = vec3(pos.x + b.x - a.x, pos.y + b.y - a.y, pos.z + b.z - a.z)
+    id1, bodyName = nid, nodeClass[nid]
+    stats.lampSnapped = stats.lampSnapped + 1
+  end
   local node = v.data.nodes[id1]
 
   -- surface material: materialId1 is what the node hit (the ground-model
@@ -438,8 +491,31 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
         -- (I) Pass normalForce so the GE synth camera can adapt distance to
         -- impact severity — heavy hits deform panels enough that a close
         -- camera plunges into the dent instead of grazing the outer edge.
+        -- The way the panel was moving along the surface it hit (its
+        -- velocity minus the normal part) orients the mark and its speed
+        -- sizes the abrasion. Only a real slide counts: a crumpling panel's
+        -- leftover sideways jitter would point streaks every which way.
+        local function along(vel)
+          local vn = vel.x * normal.x + vel.y * normal.y + vel.z * normal.z
+          local tx, ty, tz = vel.x - normal.x * vn, vel.y - normal.y * vn, vel.z - normal.z * vn
+          local tl = math.sqrt(tx * tx + ty * ty + tz * tz)
+          if finite(tl) and tl > math.max(1.0, 0.5 * math.abs(vn)) then return tx / tl, ty / tl, tz / tl, tl end
+          return nil
+        end
+        local tx, ty, tz, tl = along(nodeVel)
+        if not tx and obj.getVelocity then
+          -- By the time a crash contact reports, the node has mostly stopped;
+          -- the car's own motion along the surface still says which way the
+          -- panel was dragged (a corner raked past a post read as square-on).
+          -- Against an upright surface its vertical part is suspension
+          -- bounce, and drew vertical strokes.
+          local cv = obj:getVelocity()
+          if math.abs(normal.z) < 0.7 then cv = { x = cv.x, y = cv.y, z = 0 } end
+          tx, ty, tz, tl = along(cv)
+        end
+        if not tx then tx, ty, tz, tl = 0, 0, 0, 0 end
         pendingDetectEvents[#pendingDetectEvents + 1] = {
-          pos.x, pos.y, pos.z, normal.x, normal.y, normal.z, "i", normalForce,
+          pos.x, pos.y, pos.z, normal.x, normal.y, normal.z, "i", normalForce, bodyName:sub(1, 1), tx, ty, tz, tl,
         }
       end
       -- Fall through — slide branch can also fire on this tick.
@@ -465,19 +541,27 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
         stream = nil
       end
       if not stream then
-        stream = { startTime = now, lastTime = now, points = {} }
+        stream = { startTime = now, lastTime = now, points = {}, mat = bodyName:sub(1, 1) }
         nodeStreams[id1] = stream
       end
       stream.lastTime = now
       local pts  = stream.points
       local prev = pts[#pts]
       local px, py, pz = pos.x, pos.y, pos.z
+      -- Slip direction and speed (the node's velocity along the surface).
+      local sx, sy, sz, sl = 0, 0, 0, 0
+      if slipVec then
+        sl = math.sqrt(slipVec.x * slipVec.x + slipVec.y * slipVec.y + slipVec.z * slipVec.z)
+        if finite(sl) and sl > 1e-3 then sx, sy, sz = slipVec.x / sl, slipVec.y / sl, slipVec.z / sl else sl = 0 end
+      end
       if prev then
         local dx, dy, dz = px - prev.x, py - prev.y, pz - prev.z
         if dx*dx + dy*dy + dz*dz < STREAM_MIN_SPACING_SQ then
           -- Contact hasn't moved enough to add shape; keep the stream alive
-          -- (lastTime above) and remember the stronger force for the fallback.
+          -- (lastTime above) and remember the stronger force and the fastest
+          -- slip for the fallback.
           if normalForce > prev.f then prev.f = normalForce end
+          if sl > prev.sl then prev.sx, prev.sy, prev.sz, prev.sl = sx, sy, sz, sl end
           return
         end
       end
@@ -487,6 +571,7 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
         f  = normalForce,  -- (I) force per sample; drives the fallback's
                            --     synth-camera distance if the stream ends
                            --     up <STREAM_MIN_POINTS.
+        sx = sx, sy = sy, sz = sz, sl = sl,
       }
 
       -- Force-flush if the stream exceeds MAX_DURATION (camera coverage
@@ -517,8 +602,9 @@ local function flushDetectEvents()
   local parts = {}
   for i = 1, n do
     local e = pendingDetectEvents[i]
-    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%q,%.0f}",
-      e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8] or 0)
+    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%q,%.0f,%q,%.3f,%.3f,%.3f,%.2f}",
+      e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8] or 0, e[9] or "M", e[10] or 0, e[11] or 0, e[12] or 0,
+      e[13] or 0)
   end
   local streams = table.concat(pendingStreams, ",")
   pendingDetectEvents = {}
@@ -588,6 +674,31 @@ end
 -- Walks the stream table once per render frame; cheap because the table is
 -- empty whenever no node is in slide contact. Any stream whose last sample
 -- is older than STREAM_IDLE_TIMEOUT is flushed.
+-- Car-on-car contacts never reach onNodeCollision, so the painter finds them
+-- geometrically (scratches_paint car-on-car contact) and needs to know which
+-- of this car's nodes are paintable body. Sent once per load/reset.
+local bodyNodesSent = false
+local function sendBodyNodes()
+  if bodyNodesSent or not (obj and obj.queueGameEngineLua and v.data.nodes) then return end
+  if not buildSets() then return end
+  local ids, mats = {}, {}
+  for cid in pairs(v.data.nodes) do
+    local c = nodeClass[cid]
+    if c == nil then c = classifyNode(cid); nodeClass[cid] = c end
+    if type(c) == "string" and c ~= "GLASS" then
+      ids[#ids + 1] = cid
+      mats[#mats + 1] = c:sub(1, 1)   -- M(etal) / P(lastic), as in the event payload
+    end
+  end
+  bodyNodesSent = true
+  obj:queueGameEngineLua(string.format(
+    "if scratches_paint and scratches_paint.setBodyNodes then scratches_paint.setBodyNodes(%d, {%s}, %q) end",
+    obj:getId(), table.concat(ids, ","), table.concat(mats)))
+end
+
+-- The painter asks for the list again after it reloads.
+M.resendBodyNodes = function() bodyNodesSent = false end
+
 local function detectFrame(dt)
   if not (obj and obj.getSimTime) then return end
   -- Non-player vehicles (traffic, parked cars) do nothing at all. If the
@@ -599,6 +710,7 @@ local function detectFrame(dt)
     if #pendingStreams > 0 then pendingStreams = {} end
     return
   end
+  sendBodyNodes()
   local now = obj:getSimTime() or 0
   -- Idle-flush streams first so anything that ended this frame rides in the
   -- same GE call as the frame's impacts.
@@ -763,7 +875,7 @@ M.resetStats = function()
     byBodyMat = {}, bySurfaceMat = {},
     maxSlipVel = 0, maxPerpVel = 0, maxNormalForce = 0,
     rejNoNode = 0, rejWheel = 0, rejBodyMat = 0,
-    rejSurfaceMat = 0, rejPartExcluded = 0,
+    rejSurfaceMat = 0, rejPartExcluded = 0, lampSnapped = 0,
     rejBelowThresh = 0, rejNormalForce = 0, rejNonFinite = 0,
   }
   table.clear(nodeEventCount)
@@ -895,8 +1007,10 @@ local function onReset()
   table.clear(nodeImpactLast)
   table.clear(nodeLastContactTime)
   table.clear(nodeStreams)
+  table.clear(lampSnap)
   pendingDetectEvents = {}
   pendingStreams = {}
+  bodyNodesSent = false
   bootstrapPainter()
   -- Wipe baked decals on the GE side so the reset cleans up cosmetics too.
   -- pcall-guarded on GE because scratches_paint may not be loaded yet on a

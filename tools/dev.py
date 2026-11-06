@@ -61,7 +61,8 @@ WATCH_DIRS = package.INCLUDE_DIRS + ["tools/ingame"]
 # Engine globals the bench may touch, on top of the stdlib and GE lists in
 # package.py. Anything else is a local used above its declaration or a typo.
 BENCH_GLOBALS = {
-    "Engine", "FS", "core_camera", "createScreenshot2", "jsonDecode", "jsonEncode",
+    "Engine", "FS", "QuatF", "be", "core_camera", "core_vehicle_partmgmt", "core_vehicles",
+    "createObject", "createScreenshot2", "createVehiclePaint", "jsonDecode", "jsonEncode",
     "loadstring", "quat", "quatFromAxisAngle", "quatFromDir", "scratches_paint",
     "setExtensionUnloadMode", "settings", "ui_visibility",
 }

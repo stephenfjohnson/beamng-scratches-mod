@@ -107,17 +107,17 @@ def run_harness(luac: str) -> None:
 # the mod starts using a new engine global.
 LUA_STDLIB_GLOBALS = {
     "_G", "assert", "debug", "error", "ipairs", "math", "next", "os", "pairs",
-    "pcall", "print", "select", "string", "table", "tonumber", "tostring",
+    "pcall", "print", "select", "setmetatable", "string", "table", "tonumber", "tostring",
     "type", "unpack", "xpcall",
 }
 ENGINE_GLOBALS = {
     "lua/ge/": {
         "MatrixF", "Point2F", "Point4F", "vec3", "core_vehicle_manager", "dump",
         "dumps", "extensions", "getCameraProjMatrix", "getPlayerVehicle",
-        "getVehicleColor", "log", "scenetree", "ui_imgui",
+        "getVehicleColor", "log", "map", "scenetree", "ui_imgui",
     },
     "lua/vehicle/": {
-        "dump", "log", "obj", "particles", "playerInfo", "tableSize", "v",
+        "dump", "log", "mapmgr", "obj", "particles", "playerInfo", "tableSize", "v", "vec3",
     },
 }
 GLOBAL_RE = re.compile(r"\b(GETGLOBAL|SETGLOBAL)\b.*;\s*([A-Za-z_][A-Za-z0-9_]*)")
