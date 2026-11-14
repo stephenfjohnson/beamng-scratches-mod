@@ -1,6 +1,6 @@
 # Release roadmap
 
-> 2026-11-14: Milestones 1, 2 and 3 implemented for the narrow ETK 800 adapter.
+> 2026-11-14: Milestones 1–4 implemented for the narrow ETK 800 adapter.
 > Progressive mud/dirt/snow, real driving captures, lifecycle and bounded-work
 > measurements: [milestone 2 evidence](../../investigations/07-progressive-deposits.md).
 > Milestone 3 adds selective water washing and drying within the ETK scope.
