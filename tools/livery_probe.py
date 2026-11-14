@@ -27,6 +27,26 @@ for _, suffix in ipairs({'', '.skin.police', '.skin.dynamicTextures'}) do
     materials[name] = {activeLayers=mat:getField('activeLayers',0),stages=stages}
   end
 end
+local compat = scratches_paint.getCompatibility()
+local comparison
+if compat.adapter and compat.material then
+  local src = scenetree.findObject(compat.adapter)
+  local dst = scenetree.findObject(compat.material)
+  local differences = {}
+  local count = tonumber(src:getField('activeLayers',0))
+  local ignored = {name=true,mapTo=true,persistentId=true,parentGroup=true,
+    internalName=true,class=true,className=true,superClass=true,hidden=true,
+    locked=true,canSave=true,canSaveDynamicFields=true,activeLayers=true}
+  for field in pairs(src:getFields()) do
+    if not ignored[field] then
+      for st=0,count-1 do
+        local a,b=src:getField(field,st),dst:getField(field,st)
+        if a~=b then differences[#differences+1]={field=field,stage=st,source=a,clone=b} end
+      end
+    end
+  end
+  comparison={originalStages=count,activeStages=dst:getField('activeLayers',0),differences=differences}
+end
 local graphics = {}
 for _, k in ipairs({'GraphicDisplayResolutions','GraphicOverallQuality','GraphicAntialiasType',
   'GraphicLightingQuality','GraphicShaderQuality','GraphicTextureQuality','GraphicDynReflectionEnabled'}) do
@@ -34,7 +54,7 @@ for _, k in ipairs({'GraphicDisplayResolutions','GraphicOverallQuality','Graphic
 end
 return jsonEncode({vehicle=veh.JBeam, id=veh:getId(), map=getCurrentLevelIdentifier(),
   config=cfg.partConfigFilename, paints=cfg.paints, graphics=graphics,
-  compatibility=scratches_paint.getCompatibility(), materials=materials})
+  compatibility=compat, comparison=comparison, materials=materials})
 '''
 
 if __name__ == '__main__':

@@ -45,6 +45,9 @@ local function log(level, tag, msg)
 end
 
 -- ---- state ----
+local adapter = nil
+local adapterModule = nil
+local adapterReloaded = {}
 local api               = nil    -- editor_api_dynamicDecals module
 local ready             = false  -- decals projection bound, skin set, ready to bake
 local pendingSetup      = false  -- want setup but haven't succeeded yet
@@ -374,6 +377,7 @@ end
 -- ensureDesiredMaterialsBound() additively re-applies it until both sides
 -- have run (typically within 1-2 ticks).
 local function computeDesiredMaterials()
+  if adapter then return adapter.indices end
   if not api or not api.getShapeMaterialNames then return {} end
   if not scenetree or not scenetree.findObject then return {} end
   local ok, names = pcall(api.getShapeMaterialNames)
@@ -421,6 +425,7 @@ end
 -- still write to an unused dynamic canvas (harmless no-ops). Scratches read
 -- as color marks; no metal-glint. The seam is gone with it.
 local function restoreFactoryMR()
+  if adapter then return false end
   if not api or not api.getShapeMaterialNames then return false end
   if not scenetree or not scenetree.findObject then return false end
   local ok, names = pcall(api.getShapeMaterialNames)
@@ -518,8 +523,6 @@ end
 
 local function trySetup()
   if ready then return true end
-  if not ensureApiLoaded() then return false end
-
   local veh = getPlayerVehicle(0)
   if not veh then return false end
   local jbeam = veh.JBeam or veh.jbeam
@@ -527,7 +530,26 @@ local function trySetup()
   local vid = veh:getId()
   if vid == skippedVid then pendingSetup = false; return false end
 
-  if not ensureSkin(jbeam, vid) then
+  local part = currentPaintDesignPart()
+  if jbeam == "etk800" and (part == "" or part == "etk800_skin_police") then
+    if not adapterModule then adapterModule = dofile("/lua/ge/extensions/scratches/etkAdapter.lua") end
+    if not adapter then
+      local ok, result = pcall(adapterModule.create, veh, part)
+      if not ok then
+        log('E',logTag,"ETK adapter failed: " .. tostring(result))
+        pendingSetup=false; skippedVid=vid; return false
+      end
+      if not result then
+        pendingSetup=false
+        if adapterReloaded[vid] then skippedVid=vid; log('W',logTag,"ETK construction adapter unavailable; leaving original paint"); return false end
+        adapterReloaded[vid]=true
+        veh:reload()
+        return false
+      end
+      adapter = result
+    end
+    api = adapter.api
+  elseif not ensureApiLoaded() or not ensureSkin(jbeam, vid) then
     -- ensureSkin distinguishes transient from permanent failures internally and
     -- clears pendingSetup itself if the vehicle is unsupported. Just bail.
     return false
@@ -598,6 +620,7 @@ end
 -- Cost: 1 bake at vehicle spawn, once. Zero per-frame work. Re-runs after
 -- clearStamps to repaint baseColor (which clearBakedTextures wipes).
 M.addPaintFill = function()
+  if adapter then adapter:clear(); combineDirty=true; return end
   if not ready then log('W', logTag, "addPaintFill: not ready"); return end
   if not resolveDecalProjection() then return end
   local veh = getPlayerVehicle(0)
@@ -738,6 +761,15 @@ local function updateSurface(dt)
 end
 
 local function onUpdate(dtReal, dtSim, dtRaw)
+  if adapter and adapterModule.editorActive() then
+    adapter:detach(); adapter=nil; api=nil
+    ready=false; pendingSetup=false
+    local veh=getPlayerVehicle(0)
+    skippedVid=veh and veh:getId()
+    pendingStampInputs={}; M._dropQueuedJobs()
+    decalProjection=nil; apiApp=nil
+    return
+  end
   if ready then
     updateSurface(dtSim)
     local t0 = clockhp()
@@ -807,6 +839,10 @@ end
 
 -- ---- vehicle lifecycle ----
 local function onVehicleSwitched(oldId, newId, player)
+  if adapter then
+    adapter:detach()
+    adapter=nil; api=nil
+  end
   resetSurfaceState()
   -- Player switched cars. Tear down and re-setup against the new vehicle.
   ready = false
@@ -865,7 +901,8 @@ M.getCompatibility = function()
   local veh = getPlayerVehicle(0)
   local vid = veh and veh:getId()
   return {ready = ready, pending = pendingSetup, part = currentPaintDesignPart(),
-          owned = vid and ownedSkins[vid] ~= nil or false, skipped = vid == skippedVid}
+          owned = adapter ~= nil or (vid and ownedSkins[vid] ~= nil or false), skipped = vid == skippedVid,
+          adapter = adapter and adapter.sourceName or nil, material = adapter and adapter.material:getName() or nil}
 end
 
 -- ---- public probes ----
@@ -2163,7 +2200,7 @@ end
 M.clearStamps = function()
   resetSurfaceState()
   local veh = getPlayerVehicle(0)
-  if ready and (not veh or currentPaintDesignPart() ~= (veh.JBeam or veh.jbeam) .. "_skin_dynamicTextures") then
+  if ready and (not veh or currentPaintDesignPart() ~= (adapter and adapter.part or (veh.JBeam or veh.jbeam) .. "_skin_dynamicTextures")) then
     if veh then onVehicleSwitched(veh:getId(), veh:getId(), 0) end
     return
   end
@@ -3069,6 +3106,8 @@ local function onExtensionLoaded()
 end
 
 local function onExtensionUnloaded()
+  if adapterModule then adapterModule.disableAll() end
+  if adapter then adapter:detach(); adapter=nil end
   resetSurfaceState()
   ready = false
   api = nil
@@ -3090,6 +3129,10 @@ M.onExtensionUnloaded = onExtensionUnloaded
 M.onUpdate            = onUpdate
 M.onVehicleSwitched   = onVehicleSwitched
 M.onVehicleSpawned    = onVehicleSpawned
+M.onJbeamLoadingPhase2 = function(...)
+  if not adapterModule then adapterModule = dofile("/lua/ge/extensions/scratches/etkAdapter.lua") end
+  adapterModule.prepare(...)
+end
 M.onVehicleDestroyed  = function(vid) ownedSkins[vid] = nil end
 -- A reset can rebuild the car's materials; re-bind on the next composite.
 M.onVehicleResetted   = function(vid)

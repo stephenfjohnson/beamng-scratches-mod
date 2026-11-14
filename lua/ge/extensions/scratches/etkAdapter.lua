@@ -1,0 +1,168 @@
+-- Narrow ETK 800 runtime material adapter. Never writes source materials/config.
+local M = {}
+local skipFields = {name=true,mapTo=true,persistentId=true,parentGroup=true,
+  internalName=true,class=true,className=true,superClass=true,hidden=true,
+  locked=true,canSave=true,canSaveDynamicFields=true}
+local prepared = {}
+local rejected = {}
+local clones = {}
+
+function M.editorActive()
+  return (editor and editor.active) or (DecalShapeRenderApp and DecalShapeRenderApp.getActiveApp and DecalShapeRenderApp:getActiveApp()) or false
+end
+local function getUpvalue(fn,wanted)
+  for i=1,100 do
+    local name,value=debug.getupvalue(fn,i)
+    if not name then break end
+    if name==wanted then return value end
+  end
+  error("engine API changed: missing " .. wanted)
+end
+
+local function cloneMaterial(veh,part)
+  assert(veh.JBeam == "etk800" and (part == "" or part == "etk800_skin_police"))
+  local sourceName = part == "" and "etk800" or "etk800.skin.police"
+  local source = assert(scenetree.findObject(sourceName), "source material missing")
+  local count = tonumber(source:getField("activeLayers",0))
+  assert(count == (part == "" and 1 or 2), "unexpected stock material layout")
+  if part ~= "" then
+    assert(source:getField("baseColorMap",1) == "vehicles/etk800/etk800_skin_police_b.color.png", "non-stock police material")
+  end
+  local name = "scratches_etk800_" .. veh:getId() .. (part == "" and "_plain" or "_police")
+  local mat = scenetree.findObject(name) or createObject("Material")
+  local registered = mat:getName() == name
+  for field in pairs(source:getFields()) do
+    if not skipFields[field] then
+      for st=0,3 do mat:setField(field,st,source:getField(field,st)) end
+    end
+  end
+  mat:setField("name",0,name)
+  mat:setField("mapTo",0,name)
+  mat.canSave = false
+  clones[name] = {mat=mat,count=count}
+  local function set(f,v) mat:setField(f,count,tostring(v)) end
+  set("baseColorMap","@DynamicTextureBaseColor")
+  set("diffuseMapUseUV",1)
+  set("baseColorFactor","1 1 1 1")
+  set("instanceDiffuse",false)
+  set("colorPaletteMap","")
+  set("opacityMap","@DynamicTextureBaseColor")
+  set("opacityMapUseUV",1)
+  set("opacityFactor",1)
+  set("metallicMap","")
+  set("roughnessMap","")
+  set("metallicFactor",0)
+  set("roughnessFactor",0.65)
+  set("clearCoatFactor",0)
+  set("normalMap",source:getField("normalMap",0))
+  mat:setField("activeLayers",0,tostring(count))
+  if not registered then mat:registerObject(name) end
+  mat:flush(); mat:reload()
+  return {material=mat,source=source,sourceName=sourceName,stage=count,part=part}
+end
+
+function M.prepare(_,vid,vdata,_,cfg)
+  prepared[vid] = nil
+  rejected[vid] = nil
+  if vdata.model ~= "etk800" or M.editorActive() then return end
+  local part
+  local function walk(n)
+    if type(n)~="table" then return end
+    if n.id=="paint_design" then part=n.chosenPartName or "" end
+    for _,child in pairs(n.children or {}) do walk(child) end
+  end
+  walk(cfg.partsTree)
+  if part~="" and part~="etk800_skin_police" then return end
+  local veh=scenetree.findObjectById(vid)
+  for _,flex in pairs(vdata.flexbodies or {}) do
+    for _,override in pairs(flex.materialOverride or {}) do
+      if override[1] == "etk800" and not tostring(override[2]):match("^scratches_etk800_") then
+        rejected[vid] = "existing ETK body override; adapter skipped"
+        return
+      end
+    end
+  end
+  local ok,prep=pcall(cloneMaterial,veh,part)
+  if not ok then rejected[vid]=tostring(prep); return end
+  prepared[vid]=prep
+  for _,flex in pairs(vdata.flexbodies or {}) do
+    local overrides={}
+    for _,override in ipairs(flex.materialOverride or {}) do
+      if override[1] ~= "etk800" then overrides[#overrides+1]=override end
+    end
+    overrides[#overrides+1]={"etk800",prep.material:getName()}
+    flex.materialOverride=overrides
+  end
+end
+
+function M.create(veh,part)
+  assert(not M.editorActive(), "editor owns rendering; adapter skipped")
+  assert(not rejected[veh:getId()], rejected[veh:getId()])
+  local prep=prepared[veh:getId()]
+  if not prep or prep.part~=part then
+    -- A hot reload can adopt an already constructed private material without
+    -- respawning/repairing the car. No editor-owned design is eligible here.
+    local expected="scratches_etk800_" .. veh:getId() .. (part=="" and "_plain" or "_police")
+    local present=false
+    for _,name in pairs(veh:getMaterialNames()) do if name==expected then present=true end end
+    if not present then return nil end
+    prep=cloneMaterial(veh,part)
+    prepared[veh:getId()]=prep
+  end
+  local source, sourceName, count=prep.source,prep.sourceName,prep.stage
+  -- Execute the installed API into a private Lua table: no extension hooks,
+  -- editor layer stack or editor projection is shared. setup does bind the
+  -- private set to this eligible vehicle; no unowned design reaches this path.
+  local api = dofile("/lua/ge/extensions/editor/api/dynamicDecals.lua")
+  -- Engine sandbox forbids debug.setupvalue. Let this private API construct
+  -- its own projection; then customize its app table (getupvalue is supported).
+  assert(not M.editorActive(), "editor owns rendering")
+  api.updateVehicleMaterials = function() end -- no delayed heuristic may replace our exact indices
+  api.setup()
+  local projection = getUpvalue(api.bakeLayers,"decalProjection")
+  local app = getUpvalue(api.onUpdate_,"app")
+  local textureSet = app.textureSet
+  function app:onUpdate()
+    projection:setShape(veh:getDecalProjectionShape())
+    projection:setWorldTransform(veh:getRefNodeMatrix())
+    projection:setTransform(veh:getRefNodeMatrix():copy():setPosition(vec3(0,0,0)):inverse())
+    veh:setTextureSet("@DynamicTexture", textureSet)
+  end
+  function app:setTextureSet(_,set) veh:setTextureSet("@DynamicTexture",set) end
+  api.onVehicleSwitched = function() app:onUpdate() end
+  app:onUpdate()
+  local mat = prep.material
+  local name = mat:getName()
+  local indices = {}
+  for idx, materialName in pairs(api.getShapeMaterialNames()) do
+    if materialName == name then indices[#indices+1] = idx end
+  end
+  assert(#indices > 0,"ETK body material not in projection shape")
+  api.setMaterialIdx(indices[1])
+  for i=2,#indices do api.addMaterialIdx(indices[i]) end
+  projection:clearBakedTextures(); projection:flushDynamicTextures()
+  projection:combineTextures(textureSet)
+  mat:setField("activeLayers",0,tostring(count+1))
+  mat:flush(); mat:reload()
+  -- Material is selected at construction via the flexbody override.
+  local result = {api=api,projection=projection,material=mat,source=source,
+    sourceName=sourceName,stage=count,part=part,indices=indices,vid=veh:getId()}
+  function result:clear()
+    projection:clearBakedTextures(); projection:flushDynamicTextures()
+    projection:combineTextures(textureSet)
+  end
+  function result:detach()
+    -- Disable only our appended stage. Original channels in the clone remain
+    -- identical, even if its mesh instance outlives this extension.
+    mat:setField("activeLayers",0,tostring(count))
+    mat:flush(); mat:reload()
+  end
+  return result
+end
+function M.disableAll()
+  for _,c in pairs(clones) do
+    c.mat:setField("activeLayers",0,tostring(c.count))
+    c.mat:flush(); c.mat:reload()
+  end
+end
+return M
