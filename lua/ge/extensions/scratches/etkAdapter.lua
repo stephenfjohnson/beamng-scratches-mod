@@ -6,6 +6,7 @@ local skipFields = {name=true,mapTo=true,persistentId=true,parentGroup=true,
 local prepared = {}
 local rejected = {}
 local clones = {}
+local privateApi -- reuse the full-resolution damage target across attachments
 local soilTarget -- one reusable soil projection for this painter, not per vehicle
 
 function M.editorActive()
@@ -115,12 +116,13 @@ function M.create(veh,part)
   -- Execute the installed API into a private Lua table: no extension hooks,
   -- editor layer stack or editor projection is shared. setup does bind the
   -- private set to this eligible vehicle; no unowned design reaches this path.
-  local api = dofile("/lua/ge/extensions/editor/api/dynamicDecals.lua")
+  local api = privateApi or dofile("/lua/ge/extensions/editor/api/dynamicDecals.lua")
   -- Engine sandbox forbids debug.setupvalue. Let this private API construct
   -- its own projection; then customize its app table (getupvalue is supported).
   assert(not M.editorActive(), "editor owns rendering")
   api.updateVehicleMaterials = function() end -- no delayed heuristic may replace our exact indices
   api.setup()
+  privateApi = api
   local projection = getUpvalue(api.bakeLayers,"decalProjection")
   local app = getUpvalue(api.onUpdate_,"app")
   local textureSet = app.textureSet
@@ -140,6 +142,7 @@ function M.create(veh,part)
     if materialName == name then indices[#indices+1] = idx end
   end
   assert(#indices > 0,"ETK body material not in projection shape")
+  api.clearMaterialIdx()
   api.setMaterialIdx(indices[1])
   for i=2,#indices do api.addMaterialIdx(indices[i]) end
   projection:clearBakedTextures(); projection:flushDynamicTextures()

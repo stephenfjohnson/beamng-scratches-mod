@@ -680,6 +680,7 @@ M.getPaintSeedColor  = function() return PAINT_SEED_COLOR end
 -- Forward declarations so onUpdate can call them; the function bodies are
 -- defined further down (alongside stampAtLocal for flushPendingStamps;
 -- alongside the K probes for drawUI).
+local hasPendingBakeRef
 local flushPendingStampsRef
 local bakePendingRef
 local hasPendingWorkRef
@@ -814,7 +815,10 @@ local function onUpdate(dtReal, dtSim, dtRaw)
     -- skip), sync first so the projections don't use a stale pose.
     sinceFlush = sinceFlush + (dtReal or 0)
     local projected = false
-    if hasPendingWorkRef and hasPendingWorkRef() and sinceFlush >= FLUSH_INTERVAL then
+    -- Drain captured layers before another batch. A slow native projection
+    -- can exceed the interval; without backpressure it can starve baking.
+    if hasPendingWorkRef and hasPendingWorkRef() and sinceFlush >= FLUSH_INTERVAL
+      and not (hasPendingBakeRef and hasPendingBakeRef()) then
       sinceFlush = 0
       projected = true
       -- Project against the car's current (possibly deforming) shape.
@@ -1333,6 +1337,7 @@ local jobQueue               = {}
 -- projection batches, BAKE_LAYERS_PER_FRAME at a time, instead of piling onto
 -- the projection frame. Layers are car-local, so a short delay is harmless.
 local bakeQueue              = {}
+hasPendingBakeRef = function() return #bakeQueue > 0 end
 local BAKE_LAYERS_PER_FRAME  = 6
 local jobQueueVid            = nil  -- vehicle the queued jobs belong to
 local MAX_PROJECTS_PER_FRAME = 6    -- projection passes per flush: ~14 ms toll + ~1.4 ms each (tunable)

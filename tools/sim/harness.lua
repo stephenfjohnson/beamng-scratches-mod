@@ -339,6 +339,21 @@ check((counters.projectAndBakeFrames or 0) == 0,
   "no frame both projects and bakes (" .. (counters.projectAndBakeFrames or 0) .. ")")
 check((counters.maxBakeLayers or 0) <= 6, "bakes are chunked (max " .. (counters.maxBakeLayers or 0) .. " layers)")
 
+-- Slow frames must drain captured layers even when another projection is due.
+paint.setFlushInterval(0)
+for i=1,24 do
+  paint.stampAtLocal(vec3(i*0.3,0,0),vec3(0,0,1),{size=0.1},42)
+end
+frame(0.3)
+local waiting=paint.getStats().queue.bake
+local projectsBeforeDrain=counters.projects
+if waiting>0 then frame(0.3) end
+check(waiting>0, "slow-frame fixture captures layers")
+check(counters.projects==projectsBeforeDrain and paint.getStats().queue.bake<waiting,
+  "due projection cannot starve the bake queue")
+for _=1,80 do frame(0.3) end
+paint.setFlushInterval(0.2)
+
 -- 2b) A NaN contact is dropped on its own; the rest of the frame still ships.
 obj.simTime = obj.simTime + 0.5
 contact(10, 0/0, 0, 0.3, 0, 5000)

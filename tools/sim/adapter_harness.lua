@@ -36,7 +36,9 @@ editor={active=false}
 DecalShapeRenderApp=nil
 local realDofile=dofile
 local clears=0
+local damageAllocations=0
 local function engineAPI()
+  damageAllocations=damageAllocations+1
   local decalProjection={}
   function decalProjection:clearBakedTextures() clears=clears+1 end
   for _,f in ipairs({'flushDynamicTextures','combineTextures','setShape','setWorldTransform','setTransform'}) do decalProjection[f]=function() end end
@@ -49,6 +51,7 @@ local function engineAPI()
   api.getShapeMaterialNames=function() return {[5]='etk800',[7]='scratches_etk800_42_police',[8]='scratches_etk800_42_plain'} end
   api.setMaterialIdx=function(i) api.index=i end
   api.addMaterialIdx=function() end
+  api.clearMaterialIdx=function() api.index=nil end
   return api
 end
 dofile=function(path)
@@ -120,6 +123,8 @@ check(p.material:getField('baseColorFactor',2)=='0.15 0.15 0.15 1','light plain 
 check(p.material:getField('baseColorFactor',3)=='1 1 1 1','adaptive damage tone leaves soil alone')
 p:damageTone(0.025)
 check(p.material:getField('baseColorFactor',2)=='0.75 0.75 0.75 1','dark plain paint restores neutral response')
+check(damageAllocations==2,'one damage projection per adapter module, reused on switch')
+check(p.api==a.api,'same private API across supported attachments')
 check(soilAllocations==2,'one soil projection per adapter module, reused on switch')
 -- Simulate map teardown: stale userdata must never be called.
 objects[p.material:getName()]=nil
