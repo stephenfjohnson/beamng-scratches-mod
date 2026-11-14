@@ -50,6 +50,7 @@ local ready             = false  -- decals projection bound, skin set, ready to 
 local pendingSetup      = false  -- want setup but haven't succeeded yet
 local setupAttemptTimer = 0      -- seconds since last attempt
 local SETUP_RETRY       = 1.0    -- seconds between retry attempts
+local ownedSkins        = {}     -- only skins selected by this extension instance
 local lastSkinJBeam     = nil    -- last vehicle jbeam we successfully set skin on
 
 -- Material-binding stabilization state. BeamNG's setVehicleMaterialJob runs
@@ -321,9 +322,7 @@ local function ensureSkin(jbeam, vid)
     skippedVid   = vid
     return false
   end
-  -- Already swapped this vehicle on an earlier tick — nothing to do. (Also
-  -- avoids re-calling setSkin, which respawns the vehicle.)
-  if lastSkinJBeam == jbeam then return true end
+  -- Always inspect the slot: same-model part changes may add a livery.
 
   -- (2.3) Inspect the paint_design slot before claiming it. BeamNG gives a
   -- vehicle exactly one skin slot and setSkin() overwrites it outright, so
@@ -337,13 +336,14 @@ local function ensureSkin(jbeam, vid)
   if prevPart == nil then
     return false  -- config not readable yet; transient, retry next tick
   end
-  if prevPart == skinPart then
-    -- Our skin is already in the slot (persisted from a prior session).
+  if prevPart == skinPart and ownedSkins[vid] == jbeam then
+    -- Only a skin we selected in this extension instance is ours to write.
     log('I', logTag, "dynamicTextures skin already active on " .. jbeam)
     lastSkinJBeam = jbeam
     return true
   end
   if prevPart ~= "" then
+    ownedSkins[vid] = nil
     log('W', logTag, "vehicle '" .. jbeam .. "' has livery '" .. tostring(prevPart) ..
       "' in the paint_design slot — SKIPPING to preserve it. No scratches on " ..
       "this car (livery+scratches compositing is a planned future feature).")
@@ -353,6 +353,7 @@ local function ensureSkin(jbeam, vid)
   end
 
   -- Slot is empty: safe to claim it for the dynamic-decals canvas.
+  ownedSkins[vid] = jbeam
   extensions.core_vehicle_partmgmt.setSkin("dynamicTextures")
   log('I', logTag, "set skin 'dynamicTextures' on vehicle " .. jbeam)
   lastSkinJBeam = jbeam
@@ -536,6 +537,8 @@ local function trySetup()
   -- first time M.toggleUI is called. Idempotent.
   if not ui_imgui then extensions.load("ui_imgui") end
 
+  -- Refresh only after the preservation check; the callback binds textures.
+  if api and api.onVehicleSwitched then api.onVehicleSwitched() end
   -- Initialize the API
   api.setup()
   if not api.ready then
@@ -831,9 +834,7 @@ local function onVehicleSwitched(oldId, newId, player)
   decalProjection = nil
   spawnAabbCache.vid = nil
   spawnAabbCache.box = nil
-  -- The API has its own onVehicleSwitched that refreshes the projection shape;
-  -- forward it.
-  if api and api.onVehicleSwitched then api.onVehicleSwitched() end
+  -- Defer the API refresh until trySetup has accepted the new paint design.
 end
 
 local function onVehicleSpawned(vid)
@@ -849,12 +850,22 @@ local function onVehicleSpawned(vid)
     resetSurfaceState()
     spawnAabbCache.vid = nil
     spawnAabbCache.box = nil
-    if ready then combineDirty = true; rebindDirty = true end
+    -- Part changes can introduce a livery without changing the vehicle id.
+    -- Re-run the safeguard before any seed, bake, clear or texture binding.
+    onVehicleSwitched(vid, vid, 0)
   end
   if not ready then
     pendingSetup = true
     setupAttemptTimer = SETUP_RETRY  -- attempt immediately
   end
+end
+
+-- Read-only compatibility probe: does not initialize or modify the canvas.
+M.getCompatibility = function()
+  local veh = getPlayerVehicle(0)
+  local vid = veh and veh:getId()
+  return {ready = ready, pending = pendingSetup, part = currentPaintDesignPart(),
+          owned = vid and ownedSkins[vid] ~= nil or false, skipped = vid == skippedVid}
 end
 
 -- ---- public probes ----
@@ -2151,6 +2162,11 @@ end
 -- immediately. No history, no dedup.
 M.clearStamps = function()
   resetSurfaceState()
+  local veh = getPlayerVehicle(0)
+  if ready and (not veh or currentPaintDesignPart() ~= (veh.JBeam or veh.jbeam) .. "_skin_dynamicTextures") then
+    if veh then onVehicleSwitched(veh:getId(), veh:getId(), 0) end
+    return
+  end
   if not ready then log('W', logTag, "clearStamps: not ready"); return end
   if not resolveDecalProjection() then return end
   -- (2.1) Diagnostic: how many layers are about to be wiped. On a vehicle
@@ -3074,6 +3090,7 @@ M.onExtensionUnloaded = onExtensionUnloaded
 M.onUpdate            = onUpdate
 M.onVehicleSwitched   = onVehicleSwitched
 M.onVehicleSpawned    = onVehicleSpawned
+M.onVehicleDestroyed  = function(vid) ownedSkins[vid] = nil end
 -- A reset can rebuild the car's materials; re-bind on the next composite.
 M.onVehicleResetted   = function(vid)
   local veh = getPlayerVehicle(0)

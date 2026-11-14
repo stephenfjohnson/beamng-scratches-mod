@@ -547,6 +547,33 @@ paint.ingestSurface(playerVid,{{"snow",100,0,0,0,0,1}},false,true)
 paint.onVehicleSwitched(playerVid,playerVid+1,0)
 check(paint.getSurfaceState().snow == 0, "switch clears surface state")
 
+-- Paint design changes on the same vehicle must revoke canvas access.
+for i=1,4 do frame() end
+partConfig.partsTree.children[1].chosenPartName = "pickup_skin_police"
+paint.onVehicleSpawned(playerVid)
+local beforeClear, beforeBake = counters.clears, counters.bakes
+for i=1,4 do frame() end
+paint.clearStamps()
+check(partConfig.partsTree.children[1].chosenPartName == "pickup_skin_police", "stock livery survives same-id respawn")
+check(not paint.getCompatibility().ready, "livery revokes painter readiness")
+check(counters.clears == beforeClear and counters.bakes == beforeBake, "skipped livery never clears or seeds")
+partConfig.partsTree.children[1].chosenPartName = "pickup_skin_dynamicTextures"
+paint.onVehicleSpawned(playerVid)
+for i=1,4 do frame() end
+check(not paint.getCompatibility().ready, "unowned dynamic livery is skipped")
+partConfig.partsTree.children[1].chosenPartName = ""
+paint.onVehicleSpawned(playerVid)
+for i=1,4 do frame() end
+check(paint.getCompatibility().ready, "removing livery re-enables plain paint")
+paint.onVehicleSpawned(playerVid)
+for i=1,4 do frame() end
+check(paint.getCompatibility().ready, "owned dynamic skin survives respawn")
+
+paint.onVehicleDestroyed(playerVid)
+paint.onVehicleSpawned(playerVid)
+for i=1,4 do frame() end
+check(not paint.getCompatibility().ready, "reused id cannot claim an old dynamic skin")
+
 print(string.format("%d passed, %d failed  (projects=%d bakes=%d layers=%d composites=%d)",
   passes, failures, counters.projects, counters.bakes, counters.bakeLayers, counters.combines))
 os.exit(failures == 0 and 0 or 1)

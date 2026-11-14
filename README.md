@@ -25,6 +25,19 @@ scratches together. Liveried vehicles remain unsupported. See the
 
 This is a development build, not a validated public release.
 
+## Milestone 1 investigation branch
+
+Livery compositing remains **incomplete**. Stock liveries and pre-existing
+Dynamic Textures designs are skipped to preserve them. Same-car part changes
+now re-check this safeguard. Start a plain-paint test with an empty Paint Design;
+the mod selects Dynamic Textures itself. After a Lua reload, an existing Dynamic
+Textures design is skipped too. Only remove it yourself if it contains no artwork
+you need. Concurrent livery-editor use is unsupported.
+
+See [engine findings, exact compatibility scope and genuine screenshots](investigations/05-livery-preservation.md).
+The investigation ran on 0.40.5.0 build 302427 / Vulkan; this is not broad renderer
+certification or proof of exact original PBR paint fidelity.
+
 ## Start here
 
 - [Examples and troubleshooting](docs/examples.md)

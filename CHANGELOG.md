@@ -1,5 +1,15 @@
 # Changelog
 
+## Unmerged milestone 1 investigation — 2026-11-14
+
+- Preserve stock liveries on same-id part changes; guard destructive clear.
+- Skip unowned Dynamic Textures designs, including after extension reload.
+- Add read-only compatibility/material probe and seven regression checks (172 total).
+- Record 0.40.5.0 build 302427 Vulkan ETK/plain/police/reset/switch and unicycle evidence.
+- Generic compositing and exact paint-material fidelity remain incomplete.
+  See [investigation](investigations/05-livery-preservation.md); no milestone 2 work.
+
+
 ## Unreleased
 
 - Experimental bounded mud/dirt/snow contact deposits, using tinted haze brushes.

@@ -1,5 +1,11 @@
 # Release roadmap
 
+> 2026-11-14: Milestone 1 investigation delivered on its feature branch;
+> **incomplete, not ready to merge**. Safeguards hardened; generic composition
+> and exact paint-material preservation remain unresolved.
+> [Evidence and supported scope](../../investigations/05-livery-preservation.md).
+> Do not start milestone 2.
+
 ## Release readiness update — 2026-11-14
 
 Status: development preview; not ready for a broad public release.

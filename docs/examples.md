@@ -73,3 +73,26 @@ values, but visible dirt remains until reset. Shallow puddles may be missed.
 For bug reports, include game build, renderer, vehicle/configuration, map,
 reproduction steps, installed version/commit and the panel's Copy debug report.
 Include before/after images when reporting appearance problems.
+
+## Milestone 1 preservation checks
+
+Use an empty Paint Design for scratches. Do not preselect Dynamic Textures:
+an existing design may hold editor artwork and is now skipped. After hot reload,
+a previously mod-selected design is also skipped because ownership cannot be
+proven. Do not remove a design you want to keep. Unload the scratches extension
+before using the Dynamic Decals editor on an owned car.
+
+Read-only status and material evidence (running game with MCP):
+
+```powershell
+python tools/dev.py lua "return jsonEncode(scratches_paint.getCompatibility())"
+python tools/livery_probe.py --output bench/livery-status.json
+```
+
+For a stock livery, expect `ready=false`, `skipped=true`, and its original part
+name. Reset or attempt Clear stamps: the livery should remain. Switch to a
+plain car: expect `owned=true`, `ready=true` after setup. Switch to an unsupported
+vehicle such as unicycle: expect `ready=false`. Do not bypass the safeguard to
+force marks onto a livery.
+
+[Recorded build, config, screenshots and limitations](../investigations/05-livery-preservation.md).

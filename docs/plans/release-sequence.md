@@ -1,5 +1,11 @@
 # Sequential release threads
 
+> 2026-11-14: Milestone 1 investigation delivered on its feature branch;
+> **incomplete, not ready to merge**. Safeguards hardened; generic composition
+> and exact paint-material preservation remain unresolved.
+> [Evidence and supported scope](../../investigations/05-livery-preservation.md).
+> Do not start milestone 2.
+
 Run one feature thread at a time. Each starts from the latest merged baseline,
 owns a focused branch, implements and tests, updates documentation/examples,
 then merges only when its acceptance criteria pass. A blocked feature stays

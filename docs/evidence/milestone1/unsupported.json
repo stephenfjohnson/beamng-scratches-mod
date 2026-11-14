@@ -1,0 +1,60 @@
+{
+  "graphics": {
+    "GraphicDisplayResolutions": "3840 2160",
+    "GraphicLightingQuality": "Ultra",
+    "GraphicDynReflectionEnabled": true,
+    "GraphicTextureQuality": "Normal",
+    "GraphicShaderQuality": "High",
+    "GraphicOverallQuality": "Custom",
+    "GraphicAntialiasType": "smaa"
+  },
+  "paints": [
+    {
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 1,
+      "clearcoat": 1,
+      "metallic": 1,
+      "clearcoatRoughness": 1
+    },
+    {
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 1,
+      "clearcoat": 1,
+      "metallic": 1,
+      "clearcoatRoughness": 1
+    },
+    {
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 1,
+      "clearcoat": 1,
+      "metallic": 1,
+      "clearcoatRoughness": 1
+    }
+  ],
+  "vehicle": "unicycle",
+  "materials": {},
+  "compatibility": {
+    "skipped": true,
+    "owned": false,
+    "pending": false,
+    "ready": false
+  },
+  "config": "vehicles/unicycle/character.pc",
+  "map": "gridmap_v2",
+  "id": 35453
+}
