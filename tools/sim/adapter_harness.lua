@@ -55,6 +55,19 @@ dofile=function(path)
   if path:find('editor/api/dynamicDecals') then return engineAPI() end
   return realDofile(path)
 end
+Point2I=function() return {} end
+local soilAllocations=0
+DecalProjection=function()
+  soilAllocations=soilAllocations+1
+  local p={}
+  for _,f in ipairs({'flushDynamicTextures','combineTextures','setShape','setWorldTransform','setTransform','bakeLayers','clearMaterialIdx','setMaterialIdx','addMaterialIdx'}) do p[f]=function() end end
+  local hasShape=false
+  p.setShape=function() hasShape=true end
+  p.setMaterialIdx=function() assert(hasShape,'native API needs shape before material selection') end
+  p.getTextureSet=function() return {} end
+  p.clearBakedTextures=function() clears=clears+1 end
+  return p
+end
 local adapter=realDofile('lua/ge/extensions/scratches/etkAdapter.lua')
 local cfg={partsTree={id='paint_design',chosenPartName='etk800_skin_police'}}
 local data={model='etk800',flexbodies={{materialOverride={{'wheel','custom-wheel'}}},{}}}
@@ -63,11 +76,22 @@ check(cfg.partsTree.chosenPartName=='etk800_skin_police','configured livery unto
 check(data.flexbodies[1].materialOverride[1][2]=='custom-wheel','unrelated override retained')
 local a=adapter.create(veh,'etk800_skin_police')
 check(a.api.index==7,'bind exact clone index, not base material')
-check(a.material:getField('activeLayers',0)=='3','damage stage enabled')
+check(a.material:getField('activeLayers',0)=='4','separate damage and soil stages enabled')
 for _,f in ipairs({'metallicFactor','roughnessFactor','normalMap','colorPaletteMap','detailNormalMap','clearCoatRoughnessFactor'}) do
   check(a.material:getField(f,0)==a.source:getField(f,0) and a.material:getField(f,1)==a.source:getField(f,1),'preserve '..f)
 end
-local before=clears;a:clear();check(clears==before+1,'clear private projection')
+local beforeSoil=clears
+a:clearSoil();check(clears==beforeSoil+1,'washing clears soil target only')
+local original=a.source:getField('clearCoatFactor',0)
+a:appearance(1,0.5)
+check(a.material:getField('opacityFactor',3)=='0.5','washing fades only soil stage')
+check(a.material:getField('opacityFactor',2)=='1','damage opacity unchanged')
+check(a.source:getField('clearCoatFactor',0)==original,'wetness never writes shared source')
+a:appearance(0,1)
+check(a.material:getField('clearCoatFactor',0)==original,'drying restores exact original string')
+a:appearance(1,0.25);a:detach()
+check(a.material:getField('clearCoatFactor',0)==original,'detach restores wet clone')
+local before=clears;a:clear();check(clears==before+2,'clear both private projections')
 a:detach();check(a.material:getField('activeLayers',0)=='2','detach original stages only')
 check(a.source:getField('activeLayers',0)=='2','source material never modified')
 local reload=realDofile('lua/ge/extensions/scratches/etkAdapter.lua')
@@ -86,6 +110,7 @@ local plain={model='etk800',flexbodies={{}}};adapter.prepare(nil,42,plain,nil,cf
 local p=adapter.create(veh,'')
 check(p.sourceName=='etk800_main','plain uses current PBR material, not legacy etk800')
 check(p.api.index==8,'plain clone projected')
+check(soilAllocations==2,'one soil projection per adapter module, reused on switch')
 -- Simulate map teardown: stale userdata must never be called.
 objects[p.material:getName()]=nil
 p.material.setField=function() error('deleted material called') end

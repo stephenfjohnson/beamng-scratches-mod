@@ -1,5 +1,17 @@
 # Changelog
 
+## Milestone 3: selective washing and drying — 2026-11-14
+
+- Split ETK soil into a reusable 1024x512 target above the lasting damage stage.
+- Fade soil from real sampled body immersion; clear only fully washed soil,
+  reopen deposit allowance, and restore cloned clearcoat values after drying.
+- Preserve original maps/Police design, per-vehicle clones and editor isolation.
+- Fix native projection initialization order and transient soil preview leaking
+  into the damage target, both discovered during live validation.
+- Add real mud/dirt/snow wash captures and reproducible engine probes; 212 mock
+  checks plus syntax/global/brush preflight. No stable release or milestone 4.
+- [Evidence, bounds and limitations](investigations/08-water-washing.md).
+
 ## Milestone 2: progressive deposits â€” 2026-11-14
 
 - Admit rolling tire contacts by vehicle speed, prioritize wheels over body

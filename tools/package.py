@@ -112,7 +112,7 @@ LUA_STDLIB_GLOBALS = {
 }
 ENGINE_GLOBALS = {
     "lua/ge/": {
-        "dofile", "createObject", "DecalShapeRenderApp", "editor", "MatrixF", "Point2F", "Point4F", "vec3", "core_vehicle_manager", "dump",
+        "dofile", "createObject", "DecalShapeRenderApp", "DecalProjection", "Point2I", "editor", "MatrixF", "Point2F", "Point4F", "vec3", "core_vehicle_manager", "dump",
         "dumps", "extensions", "getCameraProjMatrix", "getPlayerVehicle",
         "getVehicleColor", "log", "scenetree", "ui_imgui",
     },

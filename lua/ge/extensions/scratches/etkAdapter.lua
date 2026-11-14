@@ -6,6 +6,7 @@ local skipFields = {name=true,mapTo=true,persistentId=true,parentGroup=true,
 local prepared = {}
 local rejected = {}
 local clones = {}
+local soilTarget -- one reusable soil projection for this painter, not per vehicle
 
 function M.editorActive()
   return (editor and editor.active) or (DecalShapeRenderApp and DecalShapeRenderApp.getActiveApp and DecalShapeRenderApp:getActiveApp()) or false
@@ -142,12 +143,62 @@ function M.create(veh,part)
   for i=2,#indices do api.addMaterialIdx(indices[i]) end
   projection:clearBakedTextures(); projection:flushDynamicTextures()
   projection:combineTextures(textureSet)
-  mat:setField("activeLayers",0,tostring(count+1))
+  -- Separate, bounded 1024x512 soil target; damage remains in its original set.
+  soilTarget = soilTarget or DecalProjection("", Point2I(1024,512), 1, indices[1])
+  local soil = soilTarget
+  local soilSet = soil:getTextureSet()
+  local function syncSoil()
+    soil:setShape(veh:getDecalProjectionShape())
+    soil:setWorldTransform(veh:getRefNodeMatrix())
+    soil:setTransform(veh:getRefNodeMatrix():copy():setPosition(vec3(0,0,0)):inverse())
+    veh:setTextureSet("@ScratchesSoil",soilSet)
+  end
+  syncSoil()
+  soil:clearMaterialIdx(); soil:setMaterialIdx(indices[1])
+  for i=2,#indices do soil:addMaterialIdx(indices[i]) end
+  soil:clearBakedTextures(); soil:flushDynamicTextures(); soil:combineTextures(soilSet)
+  for f in pairs(mat:getFields()) do mat:setField(f,3,mat:getField(f,2)) end
+  mat:setField("baseColorMap",3,"@ScratchesSoilBaseColor")
+  mat:setField("opacityMap",3,"@ScratchesSoilBaseColor")
+  mat:setField("activeLayers",0,tostring(count+2))
   mat:flush(); mat:reload()
   -- Material is selected at construction via the flexbody override.
   local result = {api=api,projection=projection,material=mat,source=source,
     sourceName=sourceName,stage=count,part=part,indices=indices,vid=veh:getId()}
+  local originalWet = {}
+  for st=0,count-1 do
+    originalWet[st]={}
+    for _,f in ipairs({"clearCoatFactor","clearCoatRoughnessFactor"}) do
+      originalWet[st][f]=source:getField(f,st)
+    end
+  end
+  local wetBucket, soilBucket = 0, 20
+  function result:bakeSoil(layers)
+    syncSoil()
+    soil:bakeLayers(layers,veh.JBeam)
+    soil:combineTextures(soilSet)
+  end
+  function result:clearSoil()
+    soil:clearBakedTextures(); soil:flushDynamicTextures(); soil:combineTextures(soilSet)
+  end
+  function result:appearance(wet, remaining)
+    local w,s = math.floor(wet*10+0.5), math.floor(remaining*20+0.5)
+    if w==wetBucket and s==soilBucket then return end
+    wetBucket,soilBucket=w,s
+    for st=0,count-1 do
+      for _,f in ipairs({"clearCoatFactor","clearCoatRoughnessFactor"}) do
+        local original=originalWet[st][f]
+        local value=tonumber(original) or (f=="clearCoatFactor" and 0 or 0.1)
+        local target=f=="clearCoatFactor" and 1 or 0.025
+        mat:setField(f,st,w==0 and original or tostring(value+(target-value)*w/10))
+      end
+    end
+    mat:setField("roughnessFactor",3,tostring(0.65-0.45*w/10))
+    mat:setField("opacityFactor",3,tostring(s/20))
+    mat:flush(); mat:reload()
+  end
   function result:clear()
+    self:clearSoil(); self:appearance(0,1)
     projection:clearBakedTextures(); projection:flushDynamicTextures()
     projection:combineTextures(textureSet)
   end
@@ -157,6 +208,11 @@ function M.create(veh,part)
     -- identical, even if its mesh instance outlives this extension.
     local live = scenetree.findObject(materialName)
     if live then
+      for st=0,count-1 do
+        for _,f in ipairs({"clearCoatFactor","clearCoatRoughnessFactor"}) do
+          live:setField(f,st,originalWet[st][f])
+        end
+      end
       live:setField("activeLayers",0,tostring(count))
       live:flush(); live:reload()
     end

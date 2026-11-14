@@ -1,9 +1,11 @@
 # Sequential release threads
 
-> 2026-11-14: Milestones 1 and 2 implemented for the narrow ETK 800 adapter.
+> 2026-11-14: Milestones 1, 2 and 3 implemented for the narrow ETK 800 adapter.
 > Progressive mud/dirt/snow, actual driving captures and measured bounds:
 > [milestone 2 evidence](../../investigations/07-progressive-deposits.md).
-> Stop after milestone 2. Water visuals remain milestone 3; no stable release.
+> Milestone 3 adds selective water washing and drying within the ETK scope.
+> [Implementation and live evidence](../../investigations/08-water-washing.md).
+> Stop after milestone 3; no milestone 4 or stable release.
 
 Run one feature thread at a time. Each starts from the latest merged baseline,
 owns a focused branch, implements and tests, updates documentation/examples,
@@ -19,7 +21,8 @@ explicitly incomplete; a passing mock suite does not establish visual success.
    [Acceptance evidence](../../investigations/07-progressive-deposits.md). Improve wheel-to-panel placement and
    accumulation while driving. Replace tinted scratch placeholders with suitable
    soil coverage. Validate each surface, caps, reset and scratch coexistence.
-3. **Water, washing and wet appearance.** Separate removable soil from lasting
+3. **Water, washing and wet appearance: implemented for the scoped ETK adapter.**
+   [Acceptance evidence](../../investigations/08-water-washing.md). Separate removable soil from lasting
    scratches. Show wetting/drying and cleaning without wiping damage or producing
    paint seams. Validate deep/shallow water behavior and lifecycle changes.
 4. **Scratch and impact visual polish.** Incorporate relevant prior realism work

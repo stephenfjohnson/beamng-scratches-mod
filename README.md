@@ -9,6 +9,23 @@ corner gets a chip cluster.
 It is purely cosmetic. It does **not** change BeamNG's soft-body deformation;
 it paints texture damage on top of whatever the physics already did.
 
+## Milestone 3: water, washing and drying
+
+On the supported ETK 800 main body (empty Paint Design or stock Police), water
+progressively removes mud, dirt and snow while baked scratches remain. A separate
+bounded soil texture sits above the original paint/livery and lasting damage.
+Wet clearcoat dries back to its exact original values in about 20 simulated seconds.
+
+Enter water that reaches the body and stay immersed to clean; wheel-only puddles
+may do nothing. Full body immersion takes about eight simulated seconds for a full
+soil cycle. Stationary immersion works, pause freezes progress, and a fully washed
+car can collect fresh soil. This is uniform cosmetic fading, not a waterline mask;
+partial washing also attenuates new deposits until that soil cycle is fully removed.
+Reset, switch, reload and editor suspension still discard all cosmetic marks.
+
+[Engine captures, reproducible probes, measured costs and limitations](investigations/08-water-washing.md).
+No stable release or milestone 4 work is included.
+
 ## Milestone 2: progressive surface deposits
 
 Driving over real MUD, DIRT or SNOW collision materials adds overlapping soil
@@ -28,8 +45,8 @@ resource measurements and limits](investigations/07-progressive-deposits.md).
 This is a cosmetic coverage approximation, not volumetric snow or simulated
 spray. Projection/bake spikes remain: the rolling cap run peaked at 27.3 ms
 painter CPU time. Broad performance/vehicle certification remains future work.
-Water still updates internal exposure values only: **no visible washing or wet
-gloss**. Reset clears soil and scratches together. Milestone 3 has not started.
+Milestone 3 adds selective visual washing and wetness for this ETK scope.
+Reset clears soil and scratches together.
 
 This is a development build, not a stable public release. See
 [compatibility](docs/compatibility.md) and [driving examples](docs/examples.md).
@@ -457,8 +474,8 @@ BeamNG, and confirm a [clean install](#players--packaged-mod) works.
   scene after use for existing mesh references; long-session resource cost is unmeasured.
 - **ETK damage opacity follows its red color channel.** Dark deposits/marks can
   look weak; the added stage uses fixed roughness and no metallic response.
-  The original untouched paint retains its PBR channels. This milestone does
-  not improve deposit art, wet gloss, washing or per-scratch metal glint.
+  The original paint retains its PBR channels; wetness temporarily changes only
+  cloned clearcoat factors. Per-scratch metal glint remains deferred.
 - **Scratches have no metal glint** — metallic and roughness are served from
   static factory maps instead of the dynamic canvas (the fix that removed the
   paint seam), so scratch decals read as colour marks only. Base gloss is

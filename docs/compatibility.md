@@ -24,5 +24,10 @@ measurements](../investigations/07-progressive-deposits.md).
 Reset/switch/reload/editor suspension discard cosmetics. Three coalesced samples
 per quarter second and 96 deposit attempts bound added work, but measured
 projection/bake spikes remain. There is no GPU/memory or broad FPS certification.
-Soil and scratches still share the final baked canvas; water cannot visually
-remove soil or add gloss. Those effects remain milestone 3.
+Milestone 3 adds a separate 1024x512 soil target and wet/dry clone clearcoat.
+Water fades soil without clearing the damage target. Full washing reopens the
+96-attempt allowance; partial washing attenuates the entire current soil cycle.
+This is not a spatial waterline or spray simulation. Original fields return on
+drying; unsupported designs remain skipped. [Water evidence and exact test
+methods](../investigations/08-water-washing.md) include a controlled real water
+volume, not an unassisted drive through a stock pool. D3D12 is the tested renderer.

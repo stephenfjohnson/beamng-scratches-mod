@@ -370,11 +370,13 @@ local function flushSurface(now)
     end
   end
   local wet, supported = false, type(obj.inWater) == "function"
+  local submerged = 0
   if supported then
     for _, id in ipairs(waterNodes or {}) do
       local ok, value = pcall(obj.inWater, obj, id)
       if not ok then supported = false; break end
       wet = wet or value == true
+      if value == true then submerged=submerged+1 end
     end
   end
   local parts = {}
@@ -392,8 +394,8 @@ local function flushSurface(now)
   end
   surfacePending = {}
   obj:queueGameEngineLua(string.format(
-    "if scratches_paint and scratches_paint.ingestSurface then scratches_paint.ingestSurface(%d,{%s},%s,%s) end",
-    obj:getId(), table.concat(parts,","), tostring(wet), tostring(supported)))
+    "if scratches_paint and scratches_paint.ingestSurface then scratches_paint.ingestSurface(%d,{%s},%s,%s,%.3f) end",
+    obj:getId(), table.concat(parts,","), tostring(wet), tostring(supported),submerged/math.max(1,#(waterNodes or {}))))
 end
 
 -- ---- the filter ----

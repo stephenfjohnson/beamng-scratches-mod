@@ -1,0 +1,73 @@
+7174.35037|E|Crashreport| *** For context, this is the current GELUA callstack (which may or may NOT have called the buggy C++ code):
+7174.35164|I|GELua.print| file not found: mcp_run_lua: No error
+7174.35619|E|GELua.main_static_crashrpt|
+=============== Stack Traceback >> START >>
+(1) main chunk of line at line 1
+(2) method C function 'setMaterialIdx'
+(3) Lua function 'M' at file '/lua/ge/extensions/scratches/etkAdapter.lua:149' (best guess)
+  veh = userdata: (...)
+  part = string[18]: "etk800_skin_police"
+  prep = table: 0x0264144f7c80  {sourceName:etk800.skin.police, source:userdata: (...), stage:2, part:etk800_skin_police, material:userdata: (...)}
+  source = userdata: (...)
+  sourceName = string[18]: "etk800.skin.police"
+  count = number: 2
+  api = table: 0x02641d753478  {addBrushStrokeLayer:function: 0x02640184aa18, setEnableBrushStroke:function: 0x0264019f1830, isDecalGradientColorEnabled:function: 0x02641483db68, blendModesMap:table: 0x026401a2c698, setBlendMode:function: 0x0264018f96a0, getShapePath:function: 0x0263d53d9108, setDecalUv:function: 0x02640181e800, drawMaskTextures:function: 0x026401820b10, getMetallicIntensity:function: 0x0264019b0238, ready:true, addDecal:function: 0x0264141f2d60, addMaskDecal:function: 0x0263790e2da8, onVehicleSwitched:function: 0x026401a3ad50, setSdfEnabled:function: 0x026401a365c0, setGradientColorBottomRight:function: 0x026401a007b0, exportLayerMask:function: 0x0264018ea988, getMirrorDebug:function: 0x02640183d638, addMaterialIdx:function: 0x02640197ada0 (more...)}
+  projection = userdata: (...)
+  app = table: 0x0264019864a0  {getCameraM:function: 0x02640199add8, onUpdate:function: 0x0264019b8158, textureSet:userdata: (...), getProjM:function: 0x026401c17c40, setTextureSet:function: 0x0264019b8a18}
+  textureSet = userdata: (...)
+  mat = userdata: (...)
+  name = string[29]: "scratches_etk800_40860_police"
+  indices = table: 0x026401d59aa8  {1:7}
+  soil = userdata: (...)
+(4) global C function 'pcall'
+(5) Lua upvalue 'trySetup' at line 541 of chunk 'lua/ge/extensions/scratches/paint.lua'
+  veh = userdata: (...)
+  jbeam = string[6]: "etk800"
+  vid = number: 40860
+  part = string[18]: "etk800_skin_police"
+(6) Lua field 'onExtensionLoaded' at line 3158 of chunk 'lua/ge/extensions/scratches/paint.lua'
+(7) Lua upvalue 'processLoadedFreshList' at line 608 of chunk 'lua/common/extensions.lua'
+  modulesToUnload = table: 0x026409c84910  {}
+  modulesToInit = table: 0x0264097f81f0  {}
+  (for generator) = C function: builtin#6
+  (for state) = table: 0x026378507d50  {1:false}
+  (for control) = number: 1
+  i = number: 1
+  moduleName = string[15]: "scratches_paint"
+  m = table: 0x026409c2aec0  {__extensionPath__:scratches/paint, setLayerBudget:function: 0x0264237f6830, testStampAt:function: 0x0264237f8c08, buildDebugReport:function: 0x026400ffb468, recordFullDump:function: 0x0263d685bce8, kickSetup:function: 0x026414cbf800, stampStream:function: 0x0264237f50e0, deepProbe:function: 0x0264237f89e8, dumpLastDecal:function: 0x026417676a40, clearStamps:function: 0x026402091980, recordDetectStats:function: 0x026413dc0340, __manuallyLoaded__:true, dumpPaintStats:function: 0x0263d6b15ab8, getLastFrameMs:function: 0x0264237f6610, getCompatibility:function: 0x0264176ed6c8, addPaintFill:function: 0x026409d3f548, testStamp:function: 0x0264176cabc8, setAggregateCap:function: 0x0264237f76c8, probeCursor:function: 0x0264176a5758 (more...)}
+  t0 = number: 7146.95
+  res = boolean: true
+(8) Lua upvalue 'loadExt' at line 650 of chunk 'lua/common/extensions.lua'
+(9) Lua field 'reload' at line 924 of chunk 'lua/common/extensions.lua'
+  extPath = string[15]: "scratches_paint"
+(10) main chunk of file 'mcp_run_lua' at line 1
+(11) global C function 'pcall'
+(12) Lua function '?' at line 19 of chunk 'lua/ge/extensions/mcp/tools/system.lua'
+  args = table: 0x0264143481b8  {code:extensions.reload('scratches_paint') return 'ok'}
+  code = string[48]: "extensions.reload('scratches_paint') return 'ok'"
+  chunk = Lua function '?' (defined at line 0 of chunk @mcp_run_lua)
+  err = nil
+(13) global C function 'pcall'
+(14) Lua upvalue 'dispatch' at line 77 of chunk 'lua/ge/extensions/mcp/server.lua'
+  rpc = table: 0x02641431c3a0  {params:table: 0x02641433a388, method:tools/call, id:1, jsonrpc:2.0}
+  m = string[10]: "tools/call"
+  p = table: 0x02641433a388  {arguments:table: 0x0264143481b8, name:run_lua}
+  fn = Lua function '?' (defined at line 14 of chunk lua/ge/extensions/mcp/tools/system.lua)
+(15) Lua upvalue 'handleRpc' at line 109 of chunk 'lua/ge/extensions/mcp/server.lua'
+  bodyText = string[157]: "{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/call\", \"params\": {\"name\": \"run_lua\", \"arguments\": {\"code\": \"extensions.reload('scratches_paint') return 'ok'\"}}}"
+  ok = boolean: true
+  msg = table: 0x02641431c3a0  {params:table: 0x02641433a388, method:tools/call, id:1, jsonrpc:2.0}
+  (*temporary) = Lua function 'jsonEncode' (defined at line 355 of chunk @lua/common/utils.lua)
+  (*temporary) = number: 1.29867e-311
+(16) Lua local 'func' at line 150 of chunk 'lua/ge/extensions/mcp/server.lua'
+  dtReal = number: 0.0110551
+  (for generator) = C function: builtin#6
+  (for state) = table: 0x02641437a180  {1:table: 0x02641436c348}
+  (for control) = number: 1
+  _ = number: 1
+  req = table: 0x02641436c348  {path:/mcp, body:{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "run_lua", "arguments": {"code": "extensions.reload('scratches_paint') return 'ok'"}}}, id:282, method:POST}
+(17) Lua field 'hook' at line 846 of chunk 'lua/common/extensions.lua'
+  funcName = string[8]: "onUpdate"
+  funcList = table: 0x026401c0af00  {1:function: 0x02637839f5d0, 2:function: 0x02637839f5d0, 3:function: 0x02637839f5d0, 4:function: 0x02637839f5d0, 5:function: 0x02637839f5d0, 6:function: 0x02637839f5d0, 7:function: 0x02637839f5d0, 8:function: 0x02637839f5d0, 9:function: 0x02637839f5d0, 10:function: 0x02637839f5d0, 11:function: 0x02637839f5d0, 12:function: 0x02637839f5d0, 13:function: 0x02637839f5d0, 14:function: 0x02637839f5d0, 15:function: 0x02637839f5d0, 16:function: 0x02637839f5d0, 17:function: 0x02637839f5d0, 18:function: 0x02637839f5d0, 19:function: 0x02637839f5d0, 20:function: 0x02637839f5d0, 21:function: 0x02637839f5d0, 22:function: 0x02637839f5d0, 23:function: 0x02637839f5d0, 24:function: 0x02637839f5d0, 25:function: 0x02637839f5d0 (more...)}
+  (for generator) = C function: builtin#6
+  (for state) = table: 0x026401c0af00  {1:function: 0x02637839f5d0, 2:function: 0x02637839f5d0, 3:function: 0x02637839f5d0, 4:function: 0x02637839f5d0, 5:function: 0x02637839f5d0, 6:function: 0x02637839f5d0, 7:function: 0x02637839f5d0, 8:function: 0x02637839f5d0, 9:function: 0x02637839f5d0, 10:function: 0x02637839f5d0, 11:function: 0x02637839f5d0, 12:function: 0x02637839f5d0, 13:function: 0x02637839f5d0, 14:function: 0x02637839f5d0, 15:function: 0x02637839f5d0, 16:function: 0x02637839f5d0, 17:function: 0x02637839f5d0, 18:function: 0x02637839f5d0, 19:function: 0x02637839f5d0, 20:fun

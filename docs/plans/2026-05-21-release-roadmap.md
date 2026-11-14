@@ -1,9 +1,11 @@
 # Release roadmap
 
-> 2026-11-14: Milestones 1 and 2 implemented for the narrow ETK 800 adapter.
+> 2026-11-14: Milestones 1, 2 and 3 implemented for the narrow ETK 800 adapter.
 > Progressive mud/dirt/snow, real driving captures, lifecycle and bounded-work
 > measurements: [milestone 2 evidence](../../investigations/07-progressive-deposits.md).
-> Stop after milestone 2. Water visuals remain milestone 3; no stable release.
+> Milestone 3 adds selective water washing and drying within the ETK scope.
+> [Implementation and live evidence](../../investigations/08-water-washing.md).
+> Stop after milestone 3; no milestone 4 or stable release.
 
 
 ## Release readiness update — 2026-11-14
@@ -11,8 +13,9 @@
 Status: development preview; not ready for a broad public release.
 
 Integrated surface cosmetics prototype (mud/dirt/snow color deposits and internal
-water exposure state). Current preflight passes: 205 mock checks, Lua syntax/global
-checks and brush sidecars. Water does not visually wash or add wet gloss.
+water exposure state), now extended with separate ETK soil composition and
+wet/dry appearance. Current preflight: 212 mock checks, Lua syntax/global
+checks and brush sidecars. See investigation 08 for water validation and limits.
 See [milestone 2](../../investigations/07-progressive-deposits.md) for current
 soil scope, real captures and engine checks.
 

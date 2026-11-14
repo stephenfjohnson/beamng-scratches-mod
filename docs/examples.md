@@ -64,8 +64,12 @@ python tools/dev.py lua "return jsonEncode(scratches_paint.getSurfaceState())"
 Expected keys include `mud`, `dirt`, `snow`, `wetness`, `deposits` and
 `waterSupported`. `lastSample` reports the last accepted contact kind, wheel
 flag and approximate local panel target; it is not a rendered-pixel measurement. `visualCleaningSupported` and `visualWetnessSupported` are
-currently false. Entering sufficiently deep water can reduce internal exposure
-values, but visible dirt remains until reset. Shallow puddles may be missed.
+true only with the scoped ETK adapter. `waterFraction` reports sampled body
+immersion; `soilRemaining` is the current soil-cycle opacity (returns to 1 for
+a fresh empty cycle after full washing). These counters do not prove rendering.
+See the [water examples and real captures](../investigations/08-water-washing.md).
+Stay in body-deep water to wash, then leave it and wait about 20 simulated
+seconds to dry. Wheel-only puddles may be missed; pausing freezes progress.
 
 ## Compatibility evidence
 
@@ -82,8 +86,8 @@ D3D12 mud/dirt/snow driving evidence for the same narrow ETK adapter.
 | Custom ETK body material override | Adapter rejected; conflicting-override mock check passes |
 | Vehicle without dynamicTextures part | Unsupported; painter remains not ready |
 | Traffic and parked vehicles | Not painted; player vehicle only |
-| Mud/dirt/snow | Mock checks pass; terrain rendering validation pending |
-| Water | State tracking only; no visual washing or wet gloss |
+| Mud/dirt/snow | Actual terrain deposition and water-removal captures in investigations 07/08 |
+| Water | Separate soil fading and drying on scoped ETK; whole-body approximation |
 | Mod vehicles / multiplayer | Not validated; no compatibility guarantee |
 
 ## Troubleshooting
@@ -94,7 +98,7 @@ D3D12 mud/dirt/snow driving evidence for the same narrow ETK adapter.
 | Painter ready, contacts counted, nothing visible | Check renderer/shader errors and the vanilla Dynamic Decals editor; see README known issues |
 | Changes do not load | Remove duplicate ZIP/unpacked installations, restart; check active user folder |
 | Terrain does not dirty the car | Collision material, slip threshold, deposit cap and approximate wheel projection |
-| Water does not clean the car | Visual cleaning is not implemented |
+| Water does not clean the car | Check supported ETK design, body immersion and pause; allow eight simulated seconds at full immersion |
 | Stutters when scraping | Record a bench run; lower projection budget in the debug panel and compare; no guaranteed FPS target yet |
 
 For bug reports, include game build, renderer, vehicle/configuration, map,

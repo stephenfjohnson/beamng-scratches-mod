@@ -22,6 +22,7 @@ def main():
     assert c.get('adapter') and c['ready'], 'ETK adapter not ready'
     assert not evidence['comparison']['differences'], 'Original material fields differ'
     count = evidence['comparison']['originalStages']
+    active = int(evidence['comparison']['activeStages'])
     mat = json.dumps(c['material'])
     dev.lua('scratches_paint.clearStamps(); local v=getPlayerVehicle(0); local c=v:getWorldBox():getCenter(); '
             'local f=v:getDirectionVector(); local up=vec3(0,0,1); local left=up:cross(f):normalized(); '
@@ -29,7 +30,7 @@ def main():
             'core_camera.globalCameraFunction("free","setPosition",p); '
             'core_camera.globalCameraFunction("free","setRotation",quatFromDir((c-p):normalized(),up)); return true')
     try:
-        for label, layers in [('original-stages', count), ('clean-overlay', count+1)]:
+        for label, layers in [('original-stages', count), ('clean-overlay', active)]:
             dev.lua(f'local m=scenetree.findObject({mat});m:setField("activeLayers",0,"{layers}");m:flush();m:reload();return true')
             time.sleep(1)
             basename = f'/screenshots/scratches-compare-{time.time_ns()}-{label}'
@@ -46,7 +47,7 @@ def main():
             else:
                 raise RuntimeError('screenshot was not written')
     finally:
-        dev.lua(f'local m=scenetree.findObject({mat});m:setField("activeLayers",0,"{count+1}");m:flush();m:reload();return true')
+        dev.lua(f'local m=scenetree.findObject({mat});m:setField("activeLayers",0,"{active}");m:flush();m:reload();return true')
     out.with_suffix('.json').write_text(json.dumps(evidence, indent=2)+'\n', encoding='utf-8')
     print('Original stages equal source; both comparison captures saved.')
 

@@ -739,29 +739,44 @@ end
 -- decals. Never clear the scratch canvas to simulate washing.
 local surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false}
 local surfaceWaterAge = 1
+local soilRemaining, waterFraction = 1, 0
 local surfaceSpots = {}
 local function resetSurfaceState()
   surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false}
   surfaceSpots, surfaceWaterAge = {}, 1
+  soilRemaining, waterFraction = 1, 0
 end
 M.getSurfaceState = function()
   local out = {}
   for k,v in pairs(surfaceState) do out[k] = v end
-  out.visualCleaningSupported = false
-  out.visualWetnessSupported = false
+  out.soilRemaining = soilRemaining
+  out.waterFraction = waterFraction
+  out.visualCleaningSupported = adapter ~= nil
+  out.visualWetnessSupported = adapter ~= nil
   return out
 end
 local function updateSurface(dt)
   dt = math.max(0, math.min(0.25, tonumber(dt) or 0))
   surfaceWaterAge = surfaceWaterAge + dt
   if surfaceWaterAge <= 0.5 then
-    surfaceState.wetness = math.min(1, surfaceState.wetness + dt * 0.8)
+    surfaceState.wetness = math.min(1, surfaceState.wetness + dt * 0.8 * waterFraction)
+    if adapter and surfaceState.deposits > 0 then
+      soilRemaining = math.max(0,soilRemaining-dt*waterFraction/8)
+      if soilRemaining == 0 then
+        adapter:clearSoil()
+        surfaceSpots = {}
+        surfaceState.deposits = 0
+        soilRemaining = 1
+      end
+    end
     for _, k in ipairs({"mud","dirt","snow"}) do
       surfaceState[k] = math.max(0, surfaceState[k] - dt * 0.15)
     end
   else
+    waterFraction = 0
     surfaceState.wetness = math.max(0, surfaceState.wetness - dt / 20)
   end
+  if adapter then adapter:appearance(surfaceState.wetness,soilRemaining) end
 end
 
 local function onUpdate(dtReal, dtSim, dtRaw)
@@ -770,6 +785,7 @@ local function onUpdate(dtReal, dtSim, dtRaw)
   end
   if adapter and adapterModule.editorActive() then
     adapter:detach(); adapter=nil; api=nil
+    resetSurfaceState()
     ready=false; pendingSetup=false; editorPaused=true
     local veh=getPlayerVehicle(0)
     skippedVid=veh and veh:getId()
@@ -778,8 +794,8 @@ local function onUpdate(dtReal, dtSim, dtRaw)
     return
   end
   if ready then
-    updateSurface(dtSim)
     local t0 = clockhp()
+    updateSurface(dtSim)
     stampStats.framesTicked = stampStats.framesTicked + 1
     sinceCombine       = sinceCombine + (dtReal or 0)
     framesSinceCombine = framesSinceCombine + 1
@@ -1402,6 +1418,7 @@ local function enqueueStamp(localPos, localNormal, opts, vid)
   pendingStampInputs[#pendingStampInputs + 1] = {
     localPos    = localPos,
     localNormal = localNormal,
+    soil        = opts.soil,
     brush       = brush,
     alpha       = opts.alphaTex or "/art/dynamicDecals/textures/_one.png",
     r = r, g = g, b = b, a = a,
@@ -1799,7 +1816,7 @@ local function runClusterJob(cluster, projM, bakeList)
         skipped = skipped + 1
       else
         decalData.uid       = nextLayerUid()
-        decalData.name      = "scratch"
+        decalData.name      = s.soil and "soil" or "scratch"
         decalData.enabled   = true
         decalData.locked    = false
         decalData.parentUid = nil
@@ -1897,6 +1914,9 @@ local function flushPendingStamps()
     end
   end
 
+  -- Capturing soil on the shared camera leaves a working preview in the
+  -- damage projection. Flush only that transient preview, never baked damage.
+  if adapter then decalProjection:flushDynamicTextures() end
   stampStats.projectsIssued = stampStats.projectsIssued + run
   stampStats.clustersTotal  = stampStats.clustersTotal + clusters
   if run < n then stampStats.framesDeferred = stampStats.framesDeferred + 1 end
@@ -1919,7 +1939,17 @@ local function bakePending()
   for i = k + 1, n do bakeQueue[i - k] = bakeQueue[i] end
   for i = n - k + 1, n do bakeQueue[i] = nil end
   local tb = clockhp()
-  decalProjection:bakeLayers(chunk, veh.JBeam or veh.jbeam)
+  if adapter then
+    local damage,soil = {},{}
+    for _,layer in ipairs(chunk) do
+      local target=layer.name=="soil" and soil or damage
+      target[#target+1]=layer
+    end
+    if #damage>0 then decalProjection:bakeLayers(damage,veh.JBeam or veh.jbeam) end
+    if #soil>0 then adapter:bakeSoil(soil) end
+  else
+    decalProjection:bakeLayers(chunk, veh.JBeam or veh.jbeam)
+  end
   perfAdd(tb, "bakeMsTotal", "bakeMsMax", "bakeCalls")
   perfStats.bakeLayersTotal = perfStats.bakeLayersTotal + k
   M._lastDecal = chunk[k]
@@ -2051,11 +2081,11 @@ end
 
 -- Contact positions are a conservative splash proxy, not a fluid simulation.
 -- Existing projection/hull aiming and all scheduler budgets remain in use.
-M.ingestSurface = function(vid, samples, wet, supported)
+M.ingestSurface = function(vid, samples, wet, supported, fraction)
   local veh = getPlayerVehicle(0)
   if not ready or not veh or veh:getId() ~= vid then return end
   surfaceState.waterSupported = supported == true
-  if wet == true and supported == true then surfaceWaterAge = 0; return end
+  if wet == true and supported == true then surfaceWaterAge = 0; waterFraction=math.max(0,math.min(1,tonumber(fraction) or 1)); return end
   local colors = {mud={0.62,0.36,0.16}, dirt={0.68,0.53,0.33}, snow={0.88,0.92,0.96}}
   local inv = veh:getRefNodeMatrix():fullInverse()
   local rot = inv:copy(); rot:setColumn(3,vec3(0,0,0))
@@ -2094,7 +2124,7 @@ M.ingestSurface = function(vid, samples, wet, supported)
         surfaceSpots[key] = (surfaceSpots[key] or 0)+1
         surfaceState.deposits = surfaceState.deposits+1
         enqueueStamp(p, normal, {
-          r=c[1],g=c[2],b=c[3],a=0.95,scale=0.65,skipMetal=true,noJitter=true,
+          soil=true,r=c[1],g=c[2],b=c[3],a=0.95,scale=0.65,skipMetal=true,noJitter=true,
           colorTex="/art/dynamicDecals/textures/soil_"..e[1].."_coverage.png",rot=(surfaceState.deposits%4)*math.pi/2},vid)
       end
     end
