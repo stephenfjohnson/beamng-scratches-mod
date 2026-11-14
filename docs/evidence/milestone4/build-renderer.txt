@@ -1,0 +1,16 @@
+
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:1:  0.00613|D|logging| -- Log started - v 0.40.5.0 - x64 - build 302427 - 2026-11-14 15:42:08 -0700 -----
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:125:  2.62212|D|gfx|  - name:NVIDIA GeForce RTX 3090 (D3D12), outputName:\\.\DISPLAY1, gfx:D3D12, gpu:NVIDIA GeForce RTX 3090
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:127:  2.62215|D|gfx| Attempting to create GFX device 0: NVIDIA GeForce RTX 3090 (D3D12) [with output \\.\DISPLAY1]
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:130:  2.94514|I|d3d12| runtime D3D12SDKVersion 619 (requested 619) from E:\SteamLibrary\steamapps\common\BeamNG.drive\Bin64\D3D12\D3D12Core.dll
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:131:  2.94521|I|d3d12| bindless enabled (resourceBindingTier2=true sm60=true)
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:132:  2.94523|I|d3d12| GPU-driven multi-draw enabled (-nogfxgpudriven=false)
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:133:  2.94524|I|d3d12| bindless cbv array enabled (resourceBindingTier3=true)
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:134:  2.94526|I|d3d12| bindless primitive cbv array enabled (materialCbvArray=true)
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:135:  2.94527|I|d3d12| indirect draw constants: enabled=true commandStride=52 prefixBytes=20 requiredRootDwords=5
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:136:  2.94529|I|d3d12| shaderFloat16 enabled (native16BitOps=true sm62=true)
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:137:  2.94533|I|d3d12| memory segments: local budget 23557 MB, non local budget 104026 MB
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:138:  2.94535|I|d3d12| GPU upload heap (ReBAR) not supported: volatile ring budget 128 MB
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:139:  3.03843|W|d3d12| swap chain init: hwnd client extent 3818x2104 differs from target extent 1280x720, using client extent
+C:\Users\sforr\AppData\Local\BeamNG\BeamNG.drive\current\beamng.log:140:  3.03849|D|d3d12| GFXd3d12WindowTarget::init begin: size=3818x2104 vsync=false usesSwapChain=true
+

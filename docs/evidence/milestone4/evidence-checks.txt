@@ -1,0 +1,8 @@
+accepted-plain-dark material/capture/queue checks passed
+tone-plain-light material/capture/queue checks passed
+accepted-police-dark-roof material/capture/queue checks passed
+accepted-police-light material/capture/queue checks passed
+impact-police material/capture/queue checks passed
+accepted-water wash/pause/dry/re-deposition checks passed
+persistence wash/pause/dry/re-deposition checks passed
+Inspect PNGs separately for scratch visibility and persistence.

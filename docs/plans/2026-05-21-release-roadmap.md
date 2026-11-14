@@ -5,7 +5,8 @@
 > measurements: [milestone 2 evidence](../../investigations/07-progressive-deposits.md).
 > Milestone 3 adds selective water washing and drying within the ETK scope.
 > [Implementation and live evidence](../../investigations/08-water-washing.md).
-> Stop after milestone 3; no milestone 4 or stable release.
+> Milestone 4 polish: [scope and evidence](../../investigations/09-scratch-impact-polish.md).
+> This thread stops after milestone 4; milestone 5 and stable release are not authorized.
 
 
 ## Release readiness update — 2026-11-14
@@ -14,7 +15,7 @@ Status: development preview; not ready for a broad public release.
 
 Integrated surface cosmetics prototype (mud/dirt/snow color deposits and internal
 water exposure state), now extended with separate ETK soil composition and
-wet/dry appearance. Current preflight: 212 mock checks, Lua syntax/global
+wet/dry appearance. Current preflight: 222 mock checks, Lua syntax/global
 checks and brush sidecars. See investigation 08 for water validation and limits.
 See [milestone 2](../../investigations/07-progressive-deposits.md) for current
 soil scope, real captures and engine checks.

@@ -6,13 +6,13 @@ flood its engine. Captures use the same car; no cosmetic reset is performed.
 import time,json,argparse
 from pathlib import Path
 import dev,soil_probe,livery_probe
-ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--output',default='docs/evidence/milestone3');ap.add_argument('--redirty-x',type=float);a=ap.parse_args()
+ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--output',default='docs/evidence/milestone3');ap.add_argument('--redirty-x',type=float);ap.add_argument('--left',action='store_true',help='photograph left side for scratch persistence');a=ap.parse_args()
 out=Path(a.output);out.mkdir(parents=True,exist_ok=True)
 def lua(s):return dev.lua(s)
 def state():return {'state':soil_probe.state(),'config':json.loads(lua(livery_probe.LUA))}
 def snap(name):
     lua('simTimeAuthority.pause(true);return true')
-    result[name]=state();soil_probe.shot(out/(name+'.png'))
+    result[name]=state();soil_probe.shot(out/(name+'.png'), side=-1 if a.left else 1)
     lua('simTimeAuthority.pause(false);return true')
 result={}
 previous=json.loads(lua('return jsonEncode(settings.getValue("fpsLimitBackgroundEnabled"))'))

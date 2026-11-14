@@ -5,8 +5,8 @@ import dev
 import livery_probe
 
 def lua(s): return dev.lua(s)
-def shot(path):
-    lua('local v=getPlayerVehicle(0);local c=v:getWorldBox():getCenter();local p=c+v:getDirectionVector():cross(vec3(0,0,1))*5+vec3(0,0,1);core_camera.setByName(0,"free");core_camera.globalCameraFunction("free","setPosition",p);core_camera.globalCameraFunction("free","setRotation",quatFromDir((c-p):normalized(),vec3(0,0,1)));return true')
+def shot(path, side=1):
+    lua('local v=getPlayerVehicle(0);local c=v:getWorldBox():getCenter();local p=c+v:getDirectionVector():cross(vec3(0,0,1))*'+str(5*side)+'+vec3(0,0,1);core_camera.setByName(0,"free");core_camera.globalCameraFunction("free","setPosition",p);core_camera.globalCameraFunction("free","setRotation",quatFromDir((c-p):normalized(),vec3(0,0,1)));return true')
     time.sleep(.3)
     name='/screenshots/m2-'+str(time.time_ns())
     lua('createScreenshot2({filename='+json.dumps(name)+',writeJPG=false,rescaleFactor=0.5});return true')

@@ -1,6 +1,17 @@
 # Changelog
 
-## Milestone 3: selective washing and drying � 2026-11-14
+## Milestone 4: scratch and impact polish — 2026-11-14
+
+- Select depth-colored brush generation from prior realism work, with ten new
+  seeded assets, smaller impacts/gouges, narrower slide bands and reduced haze.
+- Prevent immediate brush repeats per family; reduce positional jitter to 8 mm.
+- Mute only the private ETK damage stage diffuse response; preserve original
+  PBR/livery, soil color, selective washing and bounded scheduler.
+- Add matched engine captures and reproducible capture/configuration helper.
+- 222 mock checks plus Lua syntax/global and brush sidecar preflight.
+- [Evidence and tradeoffs](investigations/09-scratch-impact-polish.md). No stable release.
+
+## Milestone 3: selective washing and drying — 2026-11-14
 
 - Split ETK soil into a reusable 1024x512 target above the lasting damage stage.
 - Fade soil from real sampled body immersion; clear only fully washed soil,

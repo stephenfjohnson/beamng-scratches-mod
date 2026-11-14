@@ -148,3 +148,43 @@ and Paint Design unchanged. It does not compare two separate stock vehicles;
 lighting/cloud movement and HUD may differ between captures.
 
 [Full evidence, tested approaches and limits](../investigations/06-etk-material-adapter.md).
+
+## Scratch/impact polish (milestone 4)
+
+With the supported ETK selected and the game/MCP running on Gridmap v2:
+
+```powershell
+python tools/dev.py deploy
+python tools/damage_probe.py plain-dark --skin plain
+python tools/bench.py run sideslide --tag polish-plain-dark
+python tools/damage_probe.py plain-dark
+# Configure light plain, or Police (add --light for light primary paints):
+python tools/damage_probe.py police-light --skin police --light
+python tools/bench.py run roofdrop --tag polish-police-light
+python tools/damage_probe.py police-light-roof
+```
+
+The configuration command changes the current vehicle's Paint Design and all
+three paints; it does not save a configuration. The bench performs real physics
+and uprights the car without repairing it for photography. The capture helper
+pauses simulation, holds one camera, records damage/original-two-stage/reset
+images and raw material comparisons, then resumes. `original-stages` hides
+cosmetics on the same deformed car; it is not an untouched stock-car comparison.
+It clears cosmetics at the end. Output: `docs/evidence/milestone4/<label>/`.
+
+See [milestone 4 evidence](../investigations/09-scratch-impact-polish.md) for exact
+build/settings, the retained opacity limitation and rejected mask experiments.
+
+For scratch-through-wash regression, keep the sideslide damage (do not run the
+clearing capture helper), then use real assisted mud rolling and the left camera:
+
+```powershell
+python tools/bench.py run sideslide --tag persistence
+python tools/damage_soil_fixture.py
+python tools/water_probe.py --output docs/evidence/milestone4/persistence --left --redirty-x -313
+python tools/check_damage_evidence.py
+```
+
+The fixture moves the current damaged car to Gridmap's mud strip without reset;
+the water probe relocates/restores the real water volume. These are developer
+test fixtures, not a natural stock-pool driving demonstration.

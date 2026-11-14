@@ -28,7 +28,7 @@ def matched(label):
         for name,layers in [('damaged',4),('original-stages',2)]:
             lua(f'local m=scenetree.findObject({mat});m:setField("activeLayers",0,"{layers}");m:flush();m:reload();return true');time.sleep(.5);capture(folder/(name+'.png'))
     finally:lua(f'local m=scenetree.findObject({mat});m:setField("activeLayers",0,"4");m:flush();m:reload();return true')
-    e['sourceSHA256']={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in Path('lua').rglob('*.lua')}
+    e['sourceSHA256']={str(p):hashlib.sha256((Path(dev.mount_dir())/p).read_bytes()).hexdigest() for p in Path('lua').rglob('*.lua')}
     e['state']=json.loads(lua('return jsonEncode({stats=scratches_paint.getStats(),surface=scratches_paint.getSurfaceState(),pos=getPlayerVehicle(0):getPosition(),camera=getCameraPosition()})'))
     (folder/'state.json').write_text(json.dumps(e,indent=2)+'\n')
     lua('scratches_paint.clearStamps();return true');time.sleep(.5);capture(folder/'reset.png')
@@ -41,4 +41,6 @@ if __name__=='__main__':
     import argparse
     p=argparse.ArgumentParser();p.add_argument('label');p.add_argument('--skin',choices=['plain','police']);p.add_argument('--light',action='store_true');a=p.parse_args()
     if a.skin:configure('' if a.skin=='plain' else 'police',a.light)
-    else:matched(a.label)
+    else:
+        try:matched(a.label)
+        finally:lua('simTimeAuthority.pause(false);return true')

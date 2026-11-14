@@ -9,6 +9,20 @@ corner gets a chip cluster.
 It is purely cosmetic. It does **not** change BeamNG's soft-body deformation;
 it paints texture damage on top of whatever the physics already did.
 
+## Milestone 4: scratch and impact polish
+
+Smaller, irregular depth-colored scuffs, chips and gouges replace the bright
+single-tone brush marks. Four scrape/chip variants avoid immediate family
+repeats; narrower bands and sub-centimeter jitter keep marks closer to contact.
+The private ETK damage stage mutes diffuse color without darkening washable soil.
+Original PBR/livery stages and editor isolation remain intact.
+
+[Matched engine captures, rejected experiments, measured costs and limitations](investigations/09-scratch-impact-polish.md).
+Light-paint scuffs are deliberately subtle; this is cosmetic color/roughness
+approximation, not physical paint-layer fracture or per-mark metal shading.
+Support remains ETK 800 main body, empty Paint Design or stock Police. No stable
+release, generic compatibility, or milestone 5 certification is claimed.
+
 ## Milestone 3: water, washing and drying
 
 On the supported ETK 800 main body (empty Paint Design or stock Police), water
@@ -24,7 +38,7 @@ partial washing also attenuates new deposits until that soil cycle is fully remo
 Reset, switch, reload and editor suspension still discard all cosmetic marks.
 
 [Engine captures, reproducible probes, measured costs and limitations](investigations/08-water-washing.md).
-No stable release or milestone 4 work is included.
+Milestone 3 evidence predates the milestone 4 polish described above.
 
 ## Milestone 2: progressive surface deposits
 

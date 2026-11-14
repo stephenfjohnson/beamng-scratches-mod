@@ -1,0 +1,107 @@
+[
+  {
+    "case": "accepted-plain-dark",
+    "run": "20261114-162635_sideslide_m4-accepted-plain-dark",
+    "peakMs": 62.29680000024,
+    "averageMs": 18.893727142845716,
+    "projectPeakMs": 44.440800000302,
+    "layers": 301,
+    "projects": 79,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "dropped": 0
+  },
+  {
+    "case": "accepted-plain-light",
+    "run": "20261114-162713_sideslide_m4-accepted-plain-light",
+    "peakMs": 1098.0617999999,
+    "averageMs": 40.46890088495929,
+    "projectPeakMs": 1097.6326999998,
+    "layers": 309,
+    "projects": 91,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "dropped": 0
+  },
+  {
+    "case": "accepted-police-dark-roof",
+    "run": "20261114-162741_roofdrop_m4-accepted-police-dark",
+    "peakMs": 54.043099999944,
+    "averageMs": 1.4033387795362204,
+    "projectPeakMs": 29.502599999887,
+    "layers": 51,
+    "projects": 19,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "dropped": 0
+  },
+  {
+    "case": "accepted-police-light",
+    "run": "20261114-162810_sideslide_m4-accepted-police-light",
+    "peakMs": 55.443799999921,
+    "averageMs": 21.71826456689921,
+    "projectPeakMs": 40.434000000005,
+    "layers": 291,
+    "projects": 86,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "dropped": 0
+  },
+  {
+    "case": "tone-plain-light",
+    "run": "20261114-163021_sideslide_m4-tone-plain-light",
+    "peakMs": 60.855199999878,
+    "averageMs": 17.508557446786526,
+    "projectPeakMs": 46.861299999819,
+    "layers": 289,
+    "projects": 83,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "dropped": 0
+  },
+  {
+    "case": "impact-police",
+    "run": "20261114-163046_nosedive_m4-impact-police",
+    "peakMs": 50.655600000027,
+    "averageMs": 2.006155972704778,
+    "projectPeakMs": 28.957399999854,
+    "layers": 56,
+    "projects": 16,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "dropped": 0
+  },
+  {
+    "case": "persistence",
+    "run": "20261114-163117_sideslide_m4-persistence",
+    "peakMs": 57.969500000127,
+    "averageMs": 18.62104788732324,
+    "projectPeakMs": 41.690200000176,
+    "layers": 304,
+    "projects": 87,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "dropped": 0
+  }
+]

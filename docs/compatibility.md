@@ -31,3 +31,11 @@ This is not a spatial waterline or spray simulation. Original fields return on
 drying; unsupported designs remain skipped. [Water evidence and exact test
 methods](../investigations/08-water-washing.md) include a controlled real water
 volume, not an unassisted drive through a stock pool. D3D12 is the tested renderer.
+
+Milestone 4 retains this boundary. Matched light/dark plain and Police captures,
+real slides/roof impacts, resets and water regression are recorded in
+[investigation 09](../investigations/09-scratch-impact-polish.md). Other body types
+are not newly certified. The damage stage uses fixed roughness (0.65), no metallic
+response and muted diffuse color; depth-colored brushes approximate exposed
+layers. Color-derived coverage remains; very dark details and light-paint scuffs
+can be weak. Soil has its original color factor and a separate washable target.

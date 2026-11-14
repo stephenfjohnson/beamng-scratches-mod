@@ -5,7 +5,8 @@
 > [milestone 2 evidence](../../investigations/07-progressive-deposits.md).
 > Milestone 3 adds selective water washing and drying within the ETK scope.
 > [Implementation and live evidence](../../investigations/08-water-washing.md).
-> Stop after milestone 3; no milestone 4 or stable release.
+> Milestone 4 polish: [scope and evidence](../../investigations/09-scratch-impact-polish.md).
+> This thread stops after milestone 4; milestone 5 and stable release are not authorized.
 
 Run one feature thread at a time. Each starts from the latest merged baseline,
 owns a focused branch, implements and tests, updates documentation/examples,
@@ -25,7 +26,8 @@ explicitly incomplete; a passing mock suite does not establish visual success.
    [Acceptance evidence](../../investigations/08-water-washing.md). Separate removable soil from lasting
    scratches. Show wetting/drying and cleaning without wiping damage or producing
    paint seams. Validate deep/shallow water behavior and lifecycle changes.
-4. **Scratch and impact visual polish.** Incorporate relevant prior realism work
+4. **Scratch and impact visual polish: implemented for the scoped ETK adapter.**
+   [Evidence and limitations](../../investigations/09-scratch-impact-polish.md). Incorporate relevant prior realism work
    after review; improve opacity, material response, scale and placement. Capture
    matched before/after examples on light and dark paint and several body types.
 5. **Performance and compatibility.** Repeated baseline/stress runs, traffic,
