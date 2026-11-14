@@ -6,7 +6,7 @@
 > Milestone 3 adds selective water washing and drying within the ETK scope.
 > [Implementation and live evidence](../../investigations/08-water-washing.md).
 > Milestone 4 polish: [scope and evidence](../../investigations/09-scratch-impact-polish.md).
-> This thread stops after milestone 4; milestone 5 and stable release are not authorized.
+> Milestone 5 is authorized and in progress; milestone 6/public release is outside this run.
 
 Run one feature thread at a time. Each starts from the latest merged baseline,
 owns a focused branch, implements and tests, updates documentation/examples,
