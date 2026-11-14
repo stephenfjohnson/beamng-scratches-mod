@@ -1,5 +1,16 @@
 # Changelog
 
+## Milestone 5: performance investigation (acceptance pending)
+
+- Reuse the private full-resolution ETK damage projection across attachments;
+  rebind shape before clearing/selecting exact private material indices.
+- Prevent long projection frames from starving the captured-layer bake queue.
+- Add repeated warm/process-cold physics runs, per-frame queue/timing records,
+  lifecycle snapshots and a static frame-tail report.
+- 226 mock checks pass; the new starvation test fails on the prior baseline.
+- Native stall root cause and release readiness remain unresolved.
+  [Acceptance/evidence](investigations/10-performance-compatibility.md).
+
 ## Milestone 4: scratch and impact polish — 2026-11-14
 
 - Select depth-colored brush generation from prior realism work, with ten new

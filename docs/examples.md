@@ -188,3 +188,36 @@ python tools/check_damage_evidence.py
 The fixture moves the current damaged car to Gridmap's mud strip without reset;
 the water probe relocates/restores the real water volume. These are developer
 test fixtures, not a natural stock-pool driving demonstration.
+
+
+## Milestone 5 reproducible performance investigation
+
+Use a disposable driving session: these commands reset/reposition the player car;
+`--restart` restarts BeamNG. Select ETK 800 Rennspecht 8R, plain or stock Police.
+Close the editor. Development helpers require Python, Lua 5.1 tools on PATH and
+BeamNG MCP enabled. They are excluded from the install ZIP.
+
+```powershell
+python tools/dev.py deploy
+# Three warm repeats, same real-physics launch, no screenshot timing overhead:
+python tools/bench.py run sideslide roofdrop --repeat 3 --no-shots --tag enabled
+python tools/bench.py run sideslide roofdrop --repeat 3 --no-shots --tag disabled --set detect.setPaintEnabled=false
+# Separate fresh processes, retaining shader caches (use a new label each time):
+python tools/perf_probe.py --label local-d3d12-cold --restart --rounds 3
+python tools/perf_probe.py --label local-d3d12-disabled --restart --rounds 3 --disabled
+python tools/perf_probe.py --label local-vulkan-cold --restart --renderer vk --rounds 3
+# Diagnostic budget comparison; does not make a single native call preemptible:
+python tools/perf_probe.py --label local-one-project --budget 1 --rounds 3
+python tools/perf_lifecycle.py --label local-lifecycle --cycles 10
+python tools/perf_report.py
+```
+
+`perf_probe` saves settings, source hashes, engine startup lines, raw frame arrays,
+CSV and reports under `docs/evidence/milestone5/<label>`. Painting-disabled means
+submission is disabled; the detector and adapter remain loaded. This is not a
+clean uninstall baseline. `baseline` is four seconds of coasting, not scraping.
+Process-cold is not shader-cache-cold. Settings and exact configuration must be
+compared before interpreting results. Frame metrics include the whole game;
+native CPU-call timers can include GPU waits and do not measure GPU execution.
+
+See [acceptance gates and evidence](../investigations/10-performance-compatibility.md).

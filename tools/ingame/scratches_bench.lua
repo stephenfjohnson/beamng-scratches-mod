@@ -253,6 +253,11 @@ local function step(dtReal)
     sample(veh)
     local sc = cfg.scenario
     if run.phase == 'run' then
+      if sc.sustainVelocity then
+        -- Assisted stress fixture: retain gravity/vertical motion, inject no contacts.
+        local v = run.launchVel
+        veh:applyClusterVelocityScaleAdd(veh:getRefNodeId(), 0, v.x, v.y, veh:getVelocity().z)
+      end
       local speed = run.frames.speed[#run.frames.speed]
       run.still = (speed < (sc.settleSpeed or 0.3)) and (run.still + dtReal) or 0
       local settled = sc.settle ~= false and run.t >= (sc.minTime or 1) and run.still >= (sc.settleTime or 1.0)

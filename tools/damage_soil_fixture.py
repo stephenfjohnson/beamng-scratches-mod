@@ -1,8 +1,8 @@
 """Move an already scratched ETK to real mud and roll it without resetting damage."""
-import time,json
+import time,json,argparse
 from pathlib import Path
 import dev,soil_probe,livery_probe
-out=Path('docs/evidence/milestone4/persistence');out.mkdir(parents=True,exist_ok=True)
+parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--output',type=Path,default=Path('docs/evidence/milestone4/persistence'));out=parser.parse_args().output;out.mkdir(parents=True,exist_ok=True)
 lua=dev.lua
 previous=json.loads(lua('return jsonEncode(settings.getValue("fpsLimitBackgroundEnabled"))'))
 try:

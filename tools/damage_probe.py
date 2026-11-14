@@ -39,7 +39,7 @@ def configure(skin,light):
     lua('local cfg=core_vehicle_partmgmt.getConfig();for _,p in ipairs(cfg.paints) do p.baseColor={'+f'{value},{value},{value},1.2'+'} end;core_vehicle_partmgmt.setConfigPaints(cfg.paints,true);return true');time.sleep(3)
 if __name__=='__main__':
     import argparse
-    p=argparse.ArgumentParser();p.add_argument('label');p.add_argument('--skin',choices=['plain','police']);p.add_argument('--light',action='store_true');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('label');p.add_argument('--output',type=Path,default=OUT);p.add_argument('--skin',choices=['plain','police']);p.add_argument('--light',action='store_true');a=p.parse_args();OUT=a.output;OUT.mkdir(parents=True,exist_ok=True)
     if a.skin:configure('' if a.skin=='plain' else 'police',a.light)
     else:
         try:matched(a.label)

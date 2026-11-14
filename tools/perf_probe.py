@@ -36,7 +36,7 @@ def main():
             log=Path(dev.user_dir())/'beamng.log'
             (root/f'engine-{i+1}.txt').write_text('\n'.join(l for l in log.read_text(errors='replace').splitlines() if any(k in l for k in ['Log started','name:NVIDIA','Attempting to create GFX','shader cache','Shader compilation'])))
             sets=['detect.setPaintEnabled='+str(not a.disabled).lower()]
-            if a.budget: sets+=['paint.setProjectionBudget='+str(a.budget)]
+            sets+=['paint.setProjectionBudget='+str(a.budget or 6)]
             args=SimpleNamespace(tag=a.label,repeat=a.rounds,no_shots=True,shot_scale=.5,optick=False)
             for scenario in ['sideslide','roofdrop','baseline']:
                 row=bench.run_one(scenario,args,bench.parse_tuning(sets),bench.homes()['gridmap_v2'],i+1)
@@ -47,5 +47,5 @@ def main():
                 rows.append(row)
                 (root/'summary.json').write_text(json.dumps(rows,indent=2))
     finally:
-        dev.lua('local v=getPlayerVehicle(0);if v then v:queueLuaCommand("if scratches_detect then scratches_detect.setPaintEnabled(true) end") end;return true')
+        dev.lua('scratches_paint.setProjectionBudget(6);local v=getPlayerVehicle(0);if v then v:queueLuaCommand("if scratches_detect then scratches_detect.setPaintEnabled(true) end") end;return true')
 if __name__=='__main__':main()

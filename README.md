@@ -9,6 +9,19 @@ corner gets a chip cluster.
 It is purely cosmetic. It does **not** change BeamNG's soft-body deformation;
 it paints texture damage on top of whatever the physics already did.
 
+## Milestone 5: performance investigation (release blocked)
+
+The private ETK damage projection is reused across vehicle attachments, and
+captured layers now drain before another projection batch. Texture resolution,
+brushes, original paint/livery and separate washable soil are retained.
+
+Repeated engine tests reproduced a **652 ms native projection call** on the
+milestone 4 baseline. These changes do not establish that intermittent native
+stalls are fixed. Stable release remains blocked pending repeated validation;
+there is no all-hardware FPS guarantee. See the [acceptance gates and measured
+evidence](investigations/10-performance-compatibility.md) and
+[reproducible performance commands](docs/examples.md#milestone-5-reproducible-performance-investigation).
+
 ## Milestone 4: scratch and impact polish
 
 Smaller, irregular depth-colored scuffs, chips and gouges replace the bright

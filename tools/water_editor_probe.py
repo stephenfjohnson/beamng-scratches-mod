@@ -1,7 +1,8 @@
 """Test an empty editor stack; refuses to replace existing user artwork."""
-import time,json
+import time,json,argparse
 from pathlib import Path
 import dev
+parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--output',type=Path,default=Path('docs/evidence/milestone3/editor-artwork.json'));out=parser.parse_args().output;out.parent.mkdir(parents=True,exist_ok=True)
 r={}
 def lua(s):return dev.lua(s)
 created=False
@@ -17,5 +18,5 @@ try:
 finally:
  if created: lua('editor_api_dynamicDecals.clearLayerStack();return true')
  lua('editor.setEditorActive(false);return true')
- Path('docs/evidence/milestone3/editor-artwork.json').write_text(json.dumps(r,indent=2))
+ out.write_text(json.dumps(r,indent=2))
 print('editor layers preserved')
