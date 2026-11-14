@@ -85,6 +85,8 @@ for _,f in ipairs({'metallicFactor','roughnessFactor','normalMap','colorPaletteM
 end
 local beforeSoil=clears
 a:clearSoil();check(clears==beforeSoil+1,'washing clears soil target only')
+a:damageTone(0.9)
+check(a.material:getField('baseColorFactor',2)=='0.75 0.75 0.75 1','Police mixed paint keeps neutral damage factor')
 local original=a.source:getField('clearCoatFactor',0)
 a:appearance(1,0.5)
 check(a.material:getField('opacityFactor',3)=='0.5','washing fades only soil stage')
@@ -113,6 +115,11 @@ local plain={model='etk800',flexbodies={{}}};adapter.prepare(nil,42,plain,nil,cf
 local p=adapter.create(veh,'')
 check(p.sourceName=='etk800_main','plain uses current PBR material, not legacy etk800')
 check(p.api.index==8,'plain clone projected')
+p:damageTone(0.75)
+check(p.material:getField('baseColorFactor',2)=='0.15 0.15 0.15 1','light plain paint uses dark coating response')
+check(p.material:getField('baseColorFactor',3)=='1 1 1 1','adaptive damage tone leaves soil alone')
+p:damageTone(0.025)
+check(p.material:getField('baseColorFactor',2)=='0.75 0.75 0.75 1','dark plain paint restores neutral response')
 check(soilAllocations==2,'one soil projection per adapter module, reused on switch')
 -- Simulate map teardown: stale userdata must never be called.
 objects[p.material:getName()]=nil

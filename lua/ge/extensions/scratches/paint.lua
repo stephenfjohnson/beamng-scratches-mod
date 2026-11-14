@@ -624,7 +624,11 @@ end
 -- Cost: 1 bake at vehicle spawn, once. Zero per-frame work. Re-runs after
 -- clearStamps to repaint baseColor (which clearBakedTextures wipes).
 M.addPaintFill = function()
-  if adapter then adapter:clear(); combineDirty=true; return end
+  if adapter then
+    local r,g,b=parseVehicleColor(getVehicleColor and getVehicleColor() or nil)
+    adapter:damageTone(r and (0.2126*r+0.7152*g+0.0722*b) or nil)
+    adapter:clear(); combineDirty=true; return
+  end
   if not ready then log('W', logTag, "addPaintFill: not ready"); return end
   if not resolveDecalProjection() then return end
   local veh = getPlayerVehicle(0)

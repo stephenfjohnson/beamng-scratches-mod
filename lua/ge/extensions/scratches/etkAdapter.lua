@@ -199,6 +199,15 @@ function M.create(veh,part)
     mat:setField("opacityFactor",3,tostring(s/20))
     mat:flush(); mat:reload()
   end
+  function result:damageTone(luminance)
+    -- Plain light paint needs darker exposed coating. Police contains both
+    -- light and dark texels, so keep its neutral compromise. Setup/reset only.
+    local factor = self.part == "" and luminance and luminance >= 0.5 and 0.15 or 0.75
+    local value = string.format("%.2f %.2f %.2f 1",factor,factor,factor)
+    if mat:getField("baseColorFactor",count) ~= value then
+      mat:setField("baseColorFactor",count,value); mat:flush(); mat:reload()
+    end
+  end
   function result:clear()
     self:clearSoil(); self:appearance(0,1)
     projection:clearBakedTextures(); projection:flushDynamicTextures()
