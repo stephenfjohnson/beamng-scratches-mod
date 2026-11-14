@@ -44,7 +44,8 @@ local function cloneMaterial(veh,part)
   local function set(f,v) mat:setField(f,count,tostring(v)) end
   set("baseColorMap","@DynamicTextureBaseColor")
   set("diffuseMapUseUV",1)
-  set("baseColorFactor","1 1 1 1")
+  -- Keep coverage from the authored brush, but mute its diffuse response.
+  set("baseColorFactor","0.75 0.75 0.75 1")
   set("instanceDiffuse",false)
   set("colorPaletteMap","")
   set("opacityMap","@DynamicTextureBaseColor")
@@ -159,6 +160,7 @@ function M.create(veh,part)
   soil:clearBakedTextures(); soil:flushDynamicTextures(); soil:combineTextures(soilSet)
   for f in pairs(mat:getFields()) do mat:setField(f,3,mat:getField(f,2)) end
   mat:setField("baseColorMap",3,"@ScratchesSoilBaseColor")
+  mat:setField("baseColorFactor",3,"1 1 1 1")
   mat:setField("opacityMap",3,"@ScratchesSoilBaseColor")
   mat:setField("activeLayers",0,tostring(count+2))
   mat:flush(); mat:reload()

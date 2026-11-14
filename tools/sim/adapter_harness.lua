@@ -77,6 +77,9 @@ check(data.flexbodies[1].materialOverride[1][2]=='custom-wheel','unrelated overr
 local a=adapter.create(veh,'etk800_skin_police')
 check(a.api.index==7,'bind exact clone index, not base material')
 check(a.material:getField('activeLayers',0)=='4','separate damage and soil stages enabled')
+check(a.material:getField('baseColorFactor',2)=='0.75 0.75 0.75 1','damage diffuse muted independently of coverage')
+check(a.material:getField('baseColorFactor',3)=='1 1 1 1','soil retains original color response')
+check(a.material:getField('opacityMap',2)=='@DynamicTextureBaseColor','damage uses proven empty-transparent color mask')
 for _,f in ipairs({'metallicFactor','roughnessFactor','normalMap','colorPaletteMap','detailNormalMap','clearCoatRoughnessFactor'}) do
   check(a.material:getField(f,0)==a.source:getField(f,0) and a.material:getField(f,1)==a.source:getField(f,1),'preserve '..f)
 end

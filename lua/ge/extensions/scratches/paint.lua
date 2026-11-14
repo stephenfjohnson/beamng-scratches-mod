@@ -94,8 +94,8 @@ local AGGREGATE_PER_FRAME_CAP = 160 -- stamps held per flush batch; further enqu
 local CLUSTER_RADIUS         = 0.65
 
 -- ---- variation: brush recency avoidance ----
--- Ring buffer of recently picked brushes. pickBrush() re-rolls once if it lands
--- on a recent pick. Cheap fix for "two identical chip_cluster brushes adjacent".
+-- Bounded family history plus a short diagnostic ring. A family never picks
+-- its immediately preceding brush, even across intervening haze picks.
 local recentBrushes    = {}
 local RECENT_BRUSH_MAX = 3
 
