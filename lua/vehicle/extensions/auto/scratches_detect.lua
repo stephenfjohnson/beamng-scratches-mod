@@ -327,14 +327,26 @@ local function resetSurface()
 end
 local function surfaceContact(id, pos, normal, speed, force, material)
   if not paintEnabled or not finite(speed) or not finite(force)
-      or speed < 0.5 or force < 10 then return end
+      or force < 10 then return end
   local kind = surfaceKinds[nameById[material]]
-  if not kind or surfacePending[kind] then return end
+  if not kind then return end
   local node = v.data.nodes and v.data.nodes[id]
   if not node or (not node.wheelID and type(classifyNode(id)) ~= "string") then return end
+  local pending = surfacePending[kind]
+  -- Rotate preference over the four standard wheels; retain the first
+  -- available wheel as fallback. Body contacts must not starve tire samples.
+  local preferredWheel = math.floor(surfaceLast*4)%4
+  if pending and (node.wheelID == nil or (pending[7] == 1 and
+      (pending[9] == preferredWheel or node.wheelID ~= preferredWheel))) then return end
+  -- Vehicle translation admits rolling tires even when contact slip is zero.
+  -- Require motion for wheels: stationary wheelspin is not driving buildup.
+  if node.wheelID ~= nil then
+    local velocity = obj:getVelocity()
+    if not velocity or velocity:length() < 0.75 then return end
+  elseif speed < 0.5 then return end
   if not (finite(pos.x) and finite(pos.y) and finite(pos.z)
       and finite(normal.x) and finite(normal.y) and finite(normal.z)) then return end
-  surfacePending[kind] = {pos.x,pos.y,pos.z,normal.x,normal.y,normal.z}
+  surfacePending[kind] = {pos.x,pos.y,pos.z,normal.x,normal.y,normal.z,node.wheelID ~= nil and 1 or 0,id,node.wheelID}
 end
 local function flushSurface(now)
   if not enabled or not paintEnabled then resetSurface(); return end
@@ -369,7 +381,13 @@ local function flushSurface(now)
   for _, kind in ipairs({"mud", "dirt", "snow"}) do
     local e = surfacePending[kind]
     if e and not wet then
-      parts[#parts+1] = string.format("{%q,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f}",kind,unpack(e))
+      -- Refresh the emitting node at send time: queued world contacts trail
+      -- a moving vehicle by up to a quarter second otherwise.
+      if e[7] == 1 then
+        local p = obj:getNodePosition(e[8]) + obj:getPosition()
+        e[1],e[2],e[3] = p.x,p.y,p.z
+      end
+      parts[#parts+1] = string.format("{%q,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d}",kind,unpack(e,1,7))
     end
   end
   surfacePending = {}

@@ -31,11 +31,29 @@ Use the same vehicle, renderer, build, settings and scenario for comparisons.
 
 ## Experimental terrain checks
 
-On terrain whose collision material is MUD, DIRT or SNOW, try wheelspin or body
-sliding. The prototype requires slip, so simply driving slowly may do nothing.
-It uses tinted haze marks, with a lifetime limit of 96 deposit attempts per
-reset. Wheel contact placement is approximate and is not verified splash spray.
-Do not infer compatibility from a map's visual terrain name.
+Drive above 0.75 m/s over actual MUD, DIRT or SNOW collision terrain. Ordinary
+rolling now works; stationary wheelspin does not. Mud clumps, finer dirt and
+snow patches progressively overlap near the wheels and lower side panels.
+Expect the stock livery to remain underneath. Reset clears all cosmetics.
+
+Try Gridmap v2 ground-model strips for mud/dirt, and the snowy hillside of
+Automation Test Track. Roadside snow artwork may sit over asphalt, rock or
+vegetation: collision material, not appearance, determines deposition.
+
+For repeatable developer runs with MCP and a supported ETK already selected:
+
+```powershell
+# Gridmap v2; these commands reposition and drive the current car
+python tools/soil_probe.py mud --x -313
+python tools/soil_probe.py dirt --x -350 --seconds 5
+# Load Automation Test Track first
+python tools/soil_probe.py snow --x -500 --y 900 --z 270 --seconds 5
+```
+
+[Early/late images and measured limits](../investigations/07-progressive-deposits.md).
+There are 96 deposit attempts per reset, up to 12 per kind per local cell.
+The surface packet and job queues remain bounded. A cap is not a frame-time
+guarantee: projection/bake spikes are still observable.
 
 To inspect state while the game is running with MCP:
 
@@ -44,11 +62,15 @@ python tools/dev.py lua "return jsonEncode(scratches_paint.getSurfaceState())"
 ```
 
 Expected keys include `mud`, `dirt`, `snow`, `wetness`, `deposits` and
-`waterSupported`. `visualCleaningSupported` and `visualWetnessSupported` are
+`waterSupported`. `lastSample` reports the last accepted contact kind, wheel
+flag and approximate local panel target; it is not a rendered-pixel measurement. `visualCleaningSupported` and `visualWetnessSupported` are
 currently false. Entering sufficiently deep water can reduce internal exposure
 values, but visible dirt remains until reset. Shallow puddles may be missed.
 
 ## Compatibility evidence
+
+[Current supported matrix and limits](compatibility.md). Milestone 2 adds real
+D3D12 mud/dirt/snow driving evidence for the same narrow ETK adapter.
 
 | Configuration | Evidence / expected behavior |
 | --- | --- |

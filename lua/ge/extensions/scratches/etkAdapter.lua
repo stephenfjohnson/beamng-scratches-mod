@@ -151,18 +151,26 @@ function M.create(veh,part)
     projection:clearBakedTextures(); projection:flushDynamicTextures()
     projection:combineTextures(textureSet)
   end
+  local materialName = mat:getName()
   function result:detach()
     -- Disable only our appended stage. Original channels in the clone remain
     -- identical, even if its mesh instance outlives this extension.
-    mat:setField("activeLayers",0,tostring(count))
-    mat:flush(); mat:reload()
+    local live = scenetree.findObject(materialName)
+    if live then
+      live:setField("activeLayers",0,tostring(count))
+      live:flush(); live:reload()
+    end
   end
   return result
 end
 function M.disableAll()
-  for _,c in pairs(clones) do
-    c.mat:setField("activeLayers",0,tostring(c.count))
-    c.mat:flush(); c.mat:reload()
+  for name,c in pairs(clones) do
+    -- Level teardown may delete scene materials before extension unload.
+    local live = scenetree.findObject(name)
+    if live then
+      live:setField("activeLayers",0,tostring(c.count))
+      live:flush(); live:reload()
+    end
   end
 end
 return M

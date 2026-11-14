@@ -1,10 +1,9 @@
 # Sequential release threads
 
-> 2026-11-14: Milestone 1 implemented and validated for the narrow ETK 800
-> main-body adapter: empty Paint Design and stock Police. Original material
-> stages are retained beneath damage; other designs remain safely skipped.
-> [Supported scope and live evidence](../../investigations/06-etk-material-adapter.md).
-> Generic livery support remains deferred. Stop here; milestone 2 has not started.
+> 2026-11-14: Milestones 1 and 2 implemented for the narrow ETK 800 adapter.
+> Progressive mud/dirt/snow, actual driving captures and measured bounds:
+> [milestone 2 evidence](../../investigations/07-progressive-deposits.md).
+> Stop after milestone 2. Water visuals remain milestone 3; no stable release.
 
 Run one feature thread at a time. Each starts from the latest merged baseline,
 owns a focused branch, implements and tests, updates documentation/examples,
@@ -16,7 +15,8 @@ explicitly incomplete; a passing mock suite does not establish visual success.
    material properties and liveries; keep the current skip safeguard until a
    verified replacement exists. Validate plain paint and a stock livery,
    reset, switching and unsupported vehicles. Record supported scope precisely.
-2. **Mud, dirt and snow deposition.** Improve wheel-to-panel placement and
+2. **Mud, dirt and snow deposition: implemented for the scoped ETK adapter.**
+   [Acceptance evidence](../../investigations/07-progressive-deposits.md). Improve wheel-to-panel placement and
    accumulation while driving. Replace tinted scratch placeholders with suitable
    soil coverage. Validate each surface, caps, reset and scratch coexistence.
 3. **Water, washing and wet appearance.** Separate removable soil from lasting

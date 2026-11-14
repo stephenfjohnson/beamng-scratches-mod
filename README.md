@@ -9,21 +9,30 @@ corner gets a chip cluster.
 It is purely cosmetic. It does **not** change BeamNG's soft-body deformation;
 it paints texture damage on top of whatever the physics already did.
 
-## Experimental surface deposits
+## Milestone 2: progressive surface deposits
 
-This development build also projects translucent mud, dirt and snow marks from
-recognized terrain contacts. It reuses tinted haze brushes; this is an initial
-prototype, not a finished splatter or snow coating system. Tire slip or body
-contact is required, so ordinary rolling may not leave marks. Deposits are capped
-at 96 attempts per reset and share the scratch rendering budget. Placement and
-appearance still need in-game validation on each surface.
+Driving over real MUD, DIRT or SNOW collision materials adds overlapping soil
+patches around the wheels and lower side panels. Rolling tires work without
+wheelspin; stationary wheelspin adds nothing. Dedicated mud clumps, fine dirt
+coverage and soft snow patches replace the tinted scratch-haze placeholders.
+Deposits stop at 96 attempts per reset and share the bounded scratch scheduler.
 
-Water detection updates internal wetness and washing/drying values, but **does
-not yet show wet gloss or visually wash off dirt**. Reset clears soil and
-scratches together. Livery support is limited to the ETK 800 adapter below. See the
-[implementation and validation handoff](investigations/04-surface-cosmetics.md).
+Validated on the isolated ETK 800 main-body adapter, stock Police and plain
+paint, BeamNG 0.40.5.0 build 302427 / D3D12. Gridmap v2 supplied mud/dirt;
+Automation Test Track supplied snow. [Actual captures, exact configuration,
+resource measurements and limits](investigations/07-progressive-deposits.md).
 
-This is a development build, not a validated public release.
+![Dirt buildup over preserved Police lettering](docs/evidence/milestone2/dirt-capped.png)
+![Snow buildup on plain ETK paint](docs/evidence/milestone2/snow-plain-stationary.png)
+
+This is a cosmetic coverage approximation, not volumetric snow or simulated
+spray. Projection/bake spikes remain: the rolling cap run peaked at 27.3 ms
+painter CPU time. Broad performance/vehicle certification remains future work.
+Water still updates internal exposure values only: **no visible washing or wet
+gloss**. Reset clears soil and scratches together. Milestone 3 has not started.
+
+This is a development build, not a stable public release. See
+[compatibility](docs/compatibility.md) and [driving examples](docs/examples.md).
 
 ## Milestone 1: ETK 800 paint and police livery
 
@@ -68,7 +77,8 @@ There is no stable release download yet; build the experimental ZIP below.
 The mod is two Lua extensions, an ETK material helper, and brush art. It targets a recent version of
 BeamNG.drive that includes the **Dynamic Decals** system. Development began on
 0.38; the repository records a later 0.39.4 audit. The ETK adapter was tested
-on 0.40.5.0 build 302427 with Vulkan; other builds/renderers are unverified.
+on 0.40.5.0 build 302427 with Vulkan (milestone 1) and D3D12 (milestone 2);
+other builds/renderers are unverified.
 
 ### Players — packaged mod
 

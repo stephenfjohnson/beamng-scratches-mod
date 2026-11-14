@@ -1,5 +1,19 @@
 # Changelog
 
+## Milestone 2: progressive deposits — 2026-11-14
+
+- Admit rolling tire contacts by vehicle speed, prioritize wheels over body
+  contacts, refresh queued node positions, and project onto lower side panels.
+- Add distinct deterministic mud, dirt and snow coverage masks, progressive
+  overlap, and bounded lifetime/cell limits. Keep the private ETK adapter.
+- Validate real mud/dirt/snow driving, stationary behavior, 96-deposit cap,
+  scratch/Police coexistence, plain paint, reset and switching.
+- Fix adapter cleanup after map teardown deletes cloned scene materials.
+- Record D3D12 build/config, real screenshots and measured CPU/resource limits;
+  205 mock checks plus syntax/global/brush preflight pass.
+- No visual washing, wet gloss, broad performance certification or stable release.
+- [Evidence and reproducible examples](investigations/07-progressive-deposits.md).
+
 ## Milestone 1: narrow ETK material adapter — 2026-11-14
 
 - Preserve ETK 800 empty Paint Design and stock Police main-body materials under

@@ -1,0 +1,7 @@
+packaging 29 file(s) from C:\Users\sforr\.t3\worktrees\beamng-scratches-mod\t3-1b078186-04c7be87de76ccbd
+  luac -p: 3 file(s) OK
+  lua globals: OK
+  harness: 205 passed, 0 failed  (projects=113 bakes=45 layers=160 composites=53)
+  brush sidecars: OK
+wrote C:\Users\sforr\.t3\worktrees\beamng-scratches-mod\t3-1b078186-04c7be87de76ccbd\dist\scratches_mod.zip (526.4 KB)
+  zip root entries: art, lua

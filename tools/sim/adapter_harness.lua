@@ -86,5 +86,10 @@ local plain={model='etk800',flexbodies={{}}};adapter.prepare(nil,42,plain,nil,cf
 local p=adapter.create(veh,'')
 check(p.sourceName=='etk800_main','plain uses current PBR material, not legacy etk800')
 check(p.api.index==8,'plain clone projected')
+-- Simulate map teardown: stale userdata must never be called.
+objects[p.material:getName()]=nil
+p.material.setField=function() error('deleted material called') end
+check(pcall(function() p:detach() end),'detach tolerates deleted scene material')
+check(pcall(adapter.disableAll),'unload tolerates deleted scene material')
 dofile=realDofile
 return n

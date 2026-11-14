@@ -233,6 +233,9 @@ check(idleCombines == 0, "idle frames run no composite (" .. idleCombines .. " i
 -- --------------------------------------------------- load the vehicle side ----
 local queuedGE = {}
 obj = {
+  getNodePosition = function() return vec3(0,0,0.3) end,
+  getPosition = function() return vec3(100,0,0) end,
+  getVelocity = function() return vec3(0,5,0) end,
   simTime = 0,
   getSimTime = function(self) return self.simTime end,
   getId = function() return playerVid end,
@@ -497,6 +500,23 @@ local function surfaceTick(wet)
   obj.simTime = obj.simTime + 0.26
   detect.updateGFX(0.26); runGE(); frame(0.26)
 end
+-- Resting wheels (even with slip) must not produce deposits; zero-slip
+-- translation must. This catches the old slip-only rolling gate.
+local movingVelocity = obj.getVelocity
+obj.getVelocity = function() return vec3(0,0,0) end
+soil(30,18); surfaceTick(false)
+check(paint.getSurfaceState().deposits == 0, "stationary tire slip adds no soil")
+obj.getVelocity = movingVelocity
+_G.onNodeCollision(30,vec3(100,0,0.3),vec3(0,0,1),vec3(0,5,0),0,
+  vec3(0,0,0),0,0,300,0.01,18,METAL)
+surfaceTick(false)
+check(paint.getSurfaceState().deposits == 1, "rolling without slip adds soil")
+check(paint.getSurfaceState().lastSample.wheel == 1, "rolling packet retains wheel identity")
+paint.clearStamps()
+soil(10,18); soil(30,18); surfaceTick(false)
+check(paint.getSurfaceState().lastSample.wheel == 1,
+  "wheel sample takes priority over earlier body contact")
+paint.clearStamps()
 local scratchBeforeSoil = paint.getStats().stamp.streamsBaked
 for i=1,1000 do soil(30,18) end -- tire MUD, no body scratch
 surfaceTick(false)

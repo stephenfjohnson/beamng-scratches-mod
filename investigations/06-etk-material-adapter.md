@@ -1,5 +1,8 @@
 # Milestone 1: implemented ETK material adapter (2026-11-14)
 
+> Historical handoff/evidence. Current progressive-soil behavior and validation:
+> [milestone 2](07-progressive-deposits.md).
+
 The scoped acceptance checks pass for the ETK 800 main body with empty Paint
 Design or stock Police (`etk800_skin_police`). This is a narrow development
 adapter, **not generic livery support**. It supersedes the incomplete checkpoint

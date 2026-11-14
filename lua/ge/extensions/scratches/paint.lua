@@ -2056,7 +2056,7 @@ M.ingestSurface = function(vid, samples, wet, supported)
   if not ready or not veh or veh:getId() ~= vid then return end
   surfaceState.waterSupported = supported == true
   if wet == true and supported == true then surfaceWaterAge = 0; return end
-  local colors = {mud={0.20,0.12,0.05}, dirt={0.42,0.31,0.18}, snow={0.88,0.92,0.96}}
+  local colors = {mud={0.62,0.36,0.16}, dirt={0.68,0.53,0.33}, snow={0.88,0.92,0.96}}
   local inv = veh:getRefNodeMatrix():fullInverse()
   local rot = inv:copy(); rot:setColumn(3,vec3(0,0,0))
   for i=1,math.min(3, type(samples) == "table" and #samples or 0) do
@@ -2070,14 +2070,32 @@ M.ingestSurface = function(vid, samples, wet, supported)
     if valid then
       surfaceState[e[1]] = math.min(1, surfaceState[e[1]] + 0.025)
       local p = inv:mulP3F(vec3(e[2],e[3],e[4]))
+      local normal = rot:mulP3F(vec3(e[5],e[6],e[7]))
+      if e[8] == 1 then
+        local box = getSpawnAabb()
+        if box then
+          local lo, hi = box.minExtents, box.maxExtents
+          local side = p.x >= (lo.x+hi.x)*0.5 and 1 or -1
+          -- Lift wheel-ground samples onto the lower exterior flank, with
+          -- bounded deterministic spread; never aim upward through the floor.
+          local phase = surfaceState.deposits % 8
+          p.x = side > 0 and hi.x or lo.x
+          local inward = p.y > (lo.y+hi.y)*0.5 and -0.65 or 0.65
+          p.y = math.max(lo.y+0.3, math.min(hi.y-0.3,
+            p.y + inward + (phase%4-1.5)*0.24))
+          p.z = lo.z + (hi.z-lo.z)*(0.38 + math.floor(phase/4)*0.10)
+          normal = vec3(side,0,0)
+        end
+      end
+      surfaceState.lastSample = {kind=e[1],wheel=e[8],x=p.x,y=p.y,z=p.z}
       local key = e[1]..":"..math.floor(p.x*3)..":"..math.floor(p.y*3)..":"..math.floor(p.z*3)
-      if surfaceState.deposits < 96 and (surfaceSpots[key] or 0) < 3
+      if surfaceState.deposits < 96 and (surfaceSpots[key] or 0) < 12
           and surfaceWaterAge > 0.5 then
         surfaceSpots[key] = (surfaceSpots[key] or 0)+1
         surfaceState.deposits = surfaceState.deposits+1
-        enqueueStamp(p, rot:mulP3F(vec3(e[5],e[6],e[7])), {
-          r=c[1],g=c[2],b=c[3],a=0.22,scale=0.28,skipMetal=true,noJitter=true,
-          colorTex="/art/dynamicDecals/textures/scr_haze_01.png",rot=0},vid)
+        enqueueStamp(p, normal, {
+          r=c[1],g=c[2],b=c[3],a=0.95,scale=0.65,skipMetal=true,noJitter=true,
+          colorTex="/art/dynamicDecals/textures/soil_"..e[1].."_coverage.png",rot=(surfaceState.deposits%4)*math.pi/2},vid)
       end
     end
   end

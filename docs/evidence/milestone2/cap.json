@@ -1,0 +1,702 @@
+[
+  {
+    "surface": {
+      "waterSupported": true,
+      "visualWetnessSupported": false,
+      "wetness": 0,
+      "dirt": 0.5,
+      "snow": 0,
+      "lastSample": {
+        "x": 1.3399999141693,
+        "y": 0.17015625,
+        "z": 0.29819997549057,
+        "kind": "dirt",
+        "wheel": 1
+      },
+      "deposits": 20,
+      "visualCleaningSupported": false,
+      "mud": 0
+    },
+    "velocity": {
+      "x": 0.0008529996267,
+      "y": 1.766471386,
+      "z": 0.01399099827
+    },
+    "pos": {
+      "x": -349.9845276,
+      "y": -355.516571,
+      "z": 100.0315247
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 9347,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "config": {
+        "aggregateCap": 160,
+        "projBudget": 6,
+        "clusterRadius": 0.65,
+        "fullRateCombine": false,
+        "layerBudget": 24,
+        "flushInterval": 0.2
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 21,
+        "rebinds": 1,
+        "jobsDropped": 0,
+        "framesDeferred": 0,
+        "streamsBaked": 0,
+        "aggregateDropped": 0,
+        "streamsMerged": 0,
+        "jobsFailed": 0,
+        "framesFlushed": 20,
+        "clustersTotal": 20,
+        "foreignDropped": 0,
+        "projectsIssued": 20,
+        "streamSubstrokesTotal": 0,
+        "framesTicked": 551,
+        "bakesIssued": 20,
+        "stampsEnqueued": 20,
+        "spotsSkipped": 0,
+        "stampsAttempted": 20
+      },
+      "perf": {
+        "flushMsTotal": 497.01929999998,
+        "combineMsMax": 0.65699999998969,
+        "framesOver1ms": 40,
+        "framesOver4ms": 40,
+        "msMax": 27.305800000022,
+        "projectMsTotal": 491.69119999993,
+        "bakeMsTotal": 116.52579999998,
+        "flushMsMax": 27.281399999993,
+        "projectCalls": 20,
+        "msTotal": 618.63130000017,
+        "bakeLayersTotal": 20,
+        "bakeCalls": 20,
+        "projectMsMax": 27.014399999985,
+        "layerMsTotal": 1.2913999997863,
+        "bakeMsMax": 6.4315999999849,
+        "combineMsTotal": 1.8841000000975,
+        "lastMs": 0.0047999999992498,
+        "frames": 551,
+        "layerCalls": 20
+      }
+    }
+  },
+  {
+    "surface": {
+      "waterSupported": true,
+      "visualWetnessSupported": false,
+      "wetness": 0,
+      "dirt": 1,
+      "snow": 0,
+      "lastSample": {
+        "x": 1.3399999141693,
+        "y": 0.16899658203125,
+        "z": 0.43719997406006,
+        "kind": "dirt",
+        "wheel": 1
+      },
+      "deposits": 40,
+      "visualCleaningSupported": false,
+      "mud": 0
+    },
+    "velocity": {
+      "x": 0.001776874065,
+      "y": 1.771297693,
+      "z": 0.01034950558
+    },
+    "pos": {
+      "x": -349.9647827,
+      "y": -345.9378967,
+      "z": 100.0274811
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 16826,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "config": {
+        "aggregateCap": 160,
+        "projBudget": 6,
+        "clusterRadius": 0.65,
+        "fullRateCombine": false,
+        "layerBudget": 24,
+        "flushInterval": 0.2
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 41,
+        "rebinds": 1,
+        "jobsDropped": 0,
+        "framesDeferred": 0,
+        "streamsBaked": 0,
+        "aggregateDropped": 0,
+        "streamsMerged": 0,
+        "jobsFailed": 0,
+        "framesFlushed": 40,
+        "clustersTotal": 40,
+        "foreignDropped": 0,
+        "projectsIssued": 40,
+        "streamSubstrokesTotal": 0,
+        "framesTicked": 1098,
+        "bakesIssued": 40,
+        "stampsEnqueued": 40,
+        "spotsSkipped": 0,
+        "stampsAttempted": 40
+      },
+      "perf": {
+        "flushMsTotal": 988.04980000006,
+        "combineMsMax": 0.65699999998969,
+        "framesOver1ms": 80,
+        "framesOver4ms": 80,
+        "msMax": 27.305800000022,
+        "projectMsTotal": 977.37899999959,
+        "bakeMsTotal": 239.01250000006,
+        "flushMsMax": 27.281399999993,
+        "projectCalls": 40,
+        "msTotal": 1236.9942999999,
+        "bakeLayersTotal": 40,
+        "bakeCalls": 40,
+        "projectMsMax": 27.014399999985,
+        "layerMsTotal": 2.853599999753,
+        "bakeMsMax": 8.1504000000336,
+        "combineMsTotal": 3.1915000000708,
+        "lastMs": 0.0046000000111235,
+        "frames": 1098,
+        "layerCalls": 40
+      }
+    }
+  },
+  {
+    "surface": {
+      "waterSupported": true,
+      "visualWetnessSupported": false,
+      "wetness": 0,
+      "dirt": 1,
+      "snow": 0,
+      "lastSample": {
+        "x": -0.67999994754791,
+        "y": 0.943125,
+        "z": 0.43719997406006,
+        "kind": "dirt",
+        "wheel": 1
+      },
+      "deposits": 61,
+      "visualCleaningSupported": false,
+      "mud": 0
+    },
+    "velocity": {
+      "x": 0.008493277244,
+      "y": 1.767886281,
+      "z": -0.006771667395
+    },
+    "pos": {
+      "x": -349.9259644,
+      "y": -336.3291321,
+      "z": 100.019104
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 24269,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "config": {
+        "aggregateCap": 160,
+        "projBudget": 6,
+        "clusterRadius": 0.65,
+        "fullRateCombine": false,
+        "layerBudget": 24,
+        "flushInterval": 0.2
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 62,
+        "rebinds": 1,
+        "jobsDropped": 0,
+        "framesDeferred": 0,
+        "streamsBaked": 0,
+        "aggregateDropped": 0,
+        "streamsMerged": 0,
+        "jobsFailed": 0,
+        "framesFlushed": 61,
+        "clustersTotal": 61,
+        "foreignDropped": 0,
+        "projectsIssued": 61,
+        "streamSubstrokesTotal": 0,
+        "framesTicked": 1651,
+        "bakesIssued": 61,
+        "stampsEnqueued": 61,
+        "spotsSkipped": 0,
+        "stampsAttempted": 61
+      },
+      "perf": {
+        "flushMsTotal": 1502.8753,
+        "combineMsMax": 0.65699999998969,
+        "framesOver1ms": 122,
+        "framesOver4ms": 122,
+        "msMax": 27.305800000022,
+        "projectMsTotal": 1487.2961999996,
+        "bakeMsTotal": 361.35500000023,
+        "flushMsMax": 27.281399999993,
+        "projectCalls": 61,
+        "msTotal": 1878.6178999986,
+        "bakeLayersTotal": 61,
+        "bakeCalls": 61,
+        "projectMsMax": 27.014399999985,
+        "layerMsTotal": 4.0508999999247,
+        "bakeMsMax": 8.1504000000336,
+        "combineMsTotal": 4.3937000002643,
+        "lastMs": 0.0049999999873762,
+        "frames": 1651,
+        "layerCalls": 61
+      }
+    }
+  },
+  {
+    "surface": {
+      "waterSupported": true,
+      "visualWetnessSupported": false,
+      "wetness": 0,
+      "dirt": 1,
+      "snow": 0,
+      "lastSample": {
+        "x": 1.3399999141693,
+        "y": 0.95609497070313,
+        "z": 0.29819997549057,
+        "kind": "dirt",
+        "wheel": 1
+      },
+      "deposits": 81,
+      "visualCleaningSupported": false,
+      "mud": 0
+    },
+    "velocity": {
+      "x": 0.01674217172,
+      "y": 1.754577756,
+      "z": 0.01538750157
+    },
+    "pos": {
+      "x": -349.8818665,
+      "y": -326.7020569,
+      "z": 100.0291138
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 32048,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "config": {
+        "aggregateCap": 160,
+        "projBudget": 6,
+        "clusterRadius": 0.65,
+        "fullRateCombine": false,
+        "layerBudget": 24,
+        "flushInterval": 0.2
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 82,
+        "rebinds": 1,
+        "jobsDropped": 0,
+        "framesDeferred": 0,
+        "streamsBaked": 0,
+        "aggregateDropped": 0,
+        "streamsMerged": 0,
+        "jobsFailed": 0,
+        "framesFlushed": 81,
+        "clustersTotal": 81,
+        "foreignDropped": 0,
+        "projectsIssued": 81,
+        "streamSubstrokesTotal": 0,
+        "framesTicked": 2205,
+        "bakesIssued": 81,
+        "stampsEnqueued": 81,
+        "spotsSkipped": 0,
+        "stampsAttempted": 81
+      },
+      "perf": {
+        "flushMsTotal": 1990.1363999998,
+        "combineMsMax": 0.65699999998969,
+        "framesOver1ms": 162,
+        "framesOver4ms": 162,
+        "msMax": 27.305800000022,
+        "projectMsTotal": 1969.6633999994,
+        "bakeMsTotal": 483.45800000016,
+        "flushMsMax": 27.281399999993,
+        "projectCalls": 81,
+        "msTotal": 2492.3842999981,
+        "bakeLayersTotal": 81,
+        "bakeCalls": 81,
+        "projectMsMax": 27.014399999985,
+        "layerMsTotal": 5.3015000000869,
+        "bakeMsMax": 10.494300000005,
+        "combineMsTotal": 5.5422000003773,
+        "lastMs": 0.0041999999780273,
+        "frames": 2205,
+        "layerCalls": 81
+      }
+    }
+  },
+  {
+    "surface": {
+      "waterSupported": true,
+      "visualWetnessSupported": false,
+      "wetness": 0,
+      "dirt": 1,
+      "snow": 0,
+      "lastSample": {
+        "x": -0.67999994754791,
+        "y": -0.57727905273437,
+        "z": 0.29819997549057,
+        "kind": "dirt",
+        "wheel": 1
+      },
+      "deposits": 96,
+      "visualCleaningSupported": false,
+      "mud": 0
+    },
+    "velocity": {
+      "x": 0.008341005072,
+      "y": 1.754863143,
+      "z": 0.004402962513
+    },
+    "pos": {
+      "x": -349.8320312,
+      "y": -317.1257324,
+      "z": 100.0308533
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 39631,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "config": {
+        "aggregateCap": 160,
+        "projBudget": 6,
+        "clusterRadius": 0.65,
+        "fullRateCombine": false,
+        "layerBudget": 24,
+        "flushInterval": 0.2
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 97,
+        "rebinds": 1,
+        "jobsDropped": 0,
+        "framesDeferred": 0,
+        "streamsBaked": 0,
+        "aggregateDropped": 0,
+        "streamsMerged": 0,
+        "jobsFailed": 0,
+        "framesFlushed": 96,
+        "clustersTotal": 96,
+        "foreignDropped": 0,
+        "projectsIssued": 96,
+        "streamSubstrokesTotal": 0,
+        "framesTicked": 2764,
+        "bakesIssued": 96,
+        "stampsEnqueued": 96,
+        "spotsSkipped": 0,
+        "stampsAttempted": 96
+      },
+      "perf": {
+        "flushMsTotal": 2356.1558999997,
+        "combineMsMax": 0.65699999998969,
+        "framesOver1ms": 192,
+        "framesOver4ms": 192,
+        "msMax": 27.305800000022,
+        "projectMsTotal": 2331.7765999994,
+        "bakeMsTotal": 572.69870000033,
+        "flushMsMax": 27.281399999993,
+        "projectCalls": 96,
+        "msTotal": 2951.6871999982,
+        "bakeLayersTotal": 96,
+        "bakeCalls": 96,
+        "projectMsMax": 27.014399999985,
+        "layerMsTotal": 6.3782000001993,
+        "bakeMsMax": 10.494300000005,
+        "combineMsTotal": 6.5252000004534,
+        "lastMs": 0.0041999999780273,
+        "frames": 2764,
+        "layerCalls": 96
+      }
+    }
+  },
+  {
+    "surface": {
+      "waterSupported": true,
+      "visualWetnessSupported": false,
+      "wetness": 0,
+      "dirt": 1,
+      "snow": 0,
+      "lastSample": {
+        "x": 1.3399999141693,
+        "y": -0.56317993164062,
+        "z": 0.29819997549057,
+        "kind": "dirt",
+        "wheel": 1
+      },
+      "deposits": 96,
+      "visualCleaningSupported": false,
+      "mud": 0
+    },
+    "velocity": {
+      "x": 0.004225682002,
+      "y": 1.740687966,
+      "z": -0.004523988348
+    },
+    "pos": {
+      "x": -349.7739258,
+      "y": -307.4404602,
+      "z": 100.0309677
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 47827,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "config": {
+        "aggregateCap": 160,
+        "projBudget": 6,
+        "clusterRadius": 0.65,
+        "fullRateCombine": false,
+        "layerBudget": 24,
+        "flushInterval": 0.2
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 97,
+        "rebinds": 1,
+        "jobsDropped": 0,
+        "framesDeferred": 0,
+        "streamsBaked": 0,
+        "aggregateDropped": 0,
+        "streamsMerged": 0,
+        "jobsFailed": 0,
+        "framesFlushed": 96,
+        "clustersTotal": 96,
+        "foreignDropped": 0,
+        "projectsIssued": 96,
+        "streamSubstrokesTotal": 0,
+        "framesTicked": 3347,
+        "bakesIssued": 96,
+        "stampsEnqueued": 96,
+        "spotsSkipped": 0,
+        "stampsAttempted": 96
+      },
+      "perf": {
+        "flushMsTotal": 2356.1558999997,
+        "combineMsMax": 0.65699999998969,
+        "framesOver1ms": 192,
+        "framesOver4ms": 192,
+        "msMax": 27.305800000022,
+        "projectMsTotal": 2331.7765999994,
+        "bakeMsTotal": 572.69870000033,
+        "flushMsMax": 27.281399999993,
+        "projectCalls": 96,
+        "msTotal": 2954.2438999989,
+        "bakeLayersTotal": 96,
+        "bakeCalls": 96,
+        "projectMsMax": 27.014399999985,
+        "layerMsTotal": 6.3782000001993,
+        "bakeMsMax": 10.494300000005,
+        "combineMsTotal": 6.5252000004534,
+        "lastMs": 0.0042000000348708,
+        "frames": 3347,
+        "layerCalls": 96
+      }
+    }
+  },
+  {
+    "surface": {
+      "waterSupported": true,
+      "visualWetnessSupported": false,
+      "wetness": 0,
+      "dirt": 1,
+      "snow": 0,
+      "lastSample": {
+        "x": 1.3399999141693,
+        "y": 0.57096313476562,
+        "z": 0.29819997549057,
+        "kind": "dirt",
+        "wheel": 1
+      },
+      "deposits": 96,
+      "visualCleaningSupported": false,
+      "mud": 0
+    },
+    "velocity": {
+      "x": 0.0002472591004,
+      "y": -0.000437030074,
+      "z": 0.0001550111483
+    },
+    "pos": {
+      "x": -349.769928,
+      "y": -306.9349365,
+      "z": 100.0267334
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 50748,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "config": {
+        "aggregateCap": 160,
+        "projBudget": 6,
+        "clusterRadius": 0.65,
+        "fullRateCombine": false,
+        "layerBudget": 24,
+        "flushInterval": 0.2
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 97,
+        "rebinds": 1,
+        "jobsDropped": 0,
+        "framesDeferred": 0,
+        "streamsBaked": 0,
+        "aggregateDropped": 0,
+        "streamsMerged": 0,
+        "jobsFailed": 0,
+        "framesFlushed": 96,
+        "clustersTotal": 96,
+        "foreignDropped": 0,
+        "projectsIssued": 96,
+        "streamSubstrokesTotal": 0,
+        "framesTicked": 3563,
+        "bakesIssued": 96,
+        "stampsEnqueued": 96,
+        "spotsSkipped": 0,
+        "stampsAttempted": 96
+      },
+      "perf": {
+        "flushMsTotal": 2356.1558999997,
+        "combineMsMax": 0.65699999998969,
+        "framesOver1ms": 192,
+        "framesOver4ms": 192,
+        "msMax": 27.305800000022,
+        "projectMsTotal": 2331.7765999994,
+        "bakeMsTotal": 572.69870000033,
+        "flushMsMax": 27.281399999993,
+        "projectCalls": 96,
+        "msTotal": 2955.1915999995,
+        "bakeLayersTotal": 96,
+        "bakeCalls": 96,
+        "projectMsMax": 27.014399999985,
+        "layerMsTotal": 6.3782000001993,
+        "bakeMsMax": 10.494300000005,
+        "combineMsTotal": 6.5252000004534,
+        "lastMs": 0.0038000000017746,
+        "frames": 3563,
+        "layerCalls": 96
+      }
+    }
+  }
+]

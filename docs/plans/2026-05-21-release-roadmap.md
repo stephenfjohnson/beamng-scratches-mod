@@ -1,21 +1,22 @@
 # Release roadmap
 
-> 2026-11-14: Milestone 1 implemented and validated for the narrow ETK 800
-> main-body adapter: empty Paint Design and stock Police. Original material
-> stages are retained beneath damage; other designs remain safely skipped.
-> [Supported scope and live evidence](../../investigations/06-etk-material-adapter.md).
-> Generic livery support remains deferred. Stop here; milestone 2 has not started.
+> 2026-11-14: Milestones 1 and 2 implemented for the narrow ETK 800 adapter.
+> Progressive mud/dirt/snow, real driving captures, lifecycle and bounded-work
+> measurements: [milestone 2 evidence](../../investigations/07-progressive-deposits.md).
+> Stop after milestone 2. Water visuals remain milestone 3; no stable release.
+
 
 ## Release readiness update — 2026-11-14
 
 Status: development preview; not ready for a broad public release.
 
 Integrated surface cosmetics prototype (mud/dirt/snow color deposits and internal
-water exposure state). Current preflight passes: 192 mock checks, Lua syntax/global
+water exposure state). Current preflight passes: 205 mock checks, Lua syntax/global
 checks and brush sidecars. Water does not visually wash or add wet gloss.
-See `investigations/04-surface-cosmetics.md` for exact scope and engine checks.
+See [milestone 2](../../investigations/07-progressive-deposits.md) for current
+soil scope, real captures and engine checks.
 
-Live regression: ETK 800, Gridmap v2, active Dynamic Textures skin, scripted
+Earlier scratch-only regression (historical): ETK 800, Gridmap v2, active Dynamic Textures skin, scripted
 sideslide. 90 impacts, 114 streams, 89 projections, zero dropped jobs. Painter
 peak 62.285 ms; whole-frame p95 41.006 ms. These are one-machine, one-run
 observations, not a baseline comparison or a performance guarantee. Five
@@ -34,8 +35,8 @@ liveries are skipped. Other plain vehicles use Dynamic Textures. Applies to the
 player vehicle only and does not change physics.
 
 Development preview: experimental mud, dirt and snow contact deposits are also
-included. They require sufficient contact slip, use placeholder tinted brushes,
-and have not yet been visually validated. Visible washing and wet gloss are not
+included. They now admit rolling tires and use dedicated coverage masks; real
+ETK/Police and plain-paint driving is recorded in milestone 2. Visible washing and wet gloss are not
 included. Do not promote these as finished release features.
 
 ### Gates before public download
@@ -43,7 +44,7 @@ included. Do not promote these as finished release features.
 - [x] Preserve the ETK 800 stock Police livery and plain main-body paint beneath
   scratches. Narrow adapter verified; generic support remains deferred and
   unsupported designs remain skipped.
-- [ ] Validate terrain deposits on real mud, dirt and snow, including rolling
+- [x] Validate terrain deposits on real mud, dirt and snow, including rolling
   versus wheelspin and body contact; improve wheel-to-panel splash placement.
 - [ ] Implement separately removable soil for visual washing without erasing
   scratches; validate wet gloss without reintroducing paint seams.

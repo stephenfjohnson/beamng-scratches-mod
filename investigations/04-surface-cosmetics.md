@@ -1,5 +1,8 @@
 # Surface cosmetics implementation and engine validation handoff
 
+> Historical handoff/evidence. Current progressive-soil behavior and validation:
+> [milestone 2](07-progressive-deposits.md).
+
 ## Implemented scope
 
 Mud, dirt and snow contacts add translucent color deposits through the existing
