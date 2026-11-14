@@ -1,6 +1,24 @@
 # Changelog
 
-## Unmerged milestone 1 investigation — 2026-11-14
+## Milestone 1: narrow ETK material adapter — 2026-11-14
+
+- Preserve ETK 800 empty Paint Design and stock Police main-body materials under
+  scratches, including original normal/detail, palette, metallic, roughness and
+  clearcoat channels. Keep Paint Design unchanged; use per-vehicle clones.
+- Use a private Dynamic Decals API/projection; clearing does not wipe editor
+  layers. Suspend for editor ownership and resume cleanly after closure.
+- Validate plain/police scratches, clean/reset, switching two ETKs and unicycle,
+  vehicle/extension reload, editor layers and unsupported designs in game.
+- Correct plain material selection to current `etk800_main` PBR material.
+- Add matched captures and material comparison tools, 20 adapter regressions
+  (192 total mock checks), exact configuration and instructional examples.
+- Initial activation can reload the car once. Generic liveries, extra-material
+  damage and broad renderer/version support remain deferred. Dark-mark opacity
+  is color-dependent; disabled clones remain for existing mesh references. No milestone
+  2 work, deposit art changes, wet gloss or visual washing.
+- [Implementation, real screenshots and limitations](investigations/06-etk-material-adapter.md).
+
+## Earlier milestone 1 investigation checkpoint — 2026-11-14
 
 - Preserve stock liveries on same-id part changes; guard destructive clear.
 - Skip unowned Dynamic Textures designs, including after extension reload.
@@ -22,4 +40,4 @@
   contribution instructions and a sequential release plan.
 
 Existing scratches, impact chips, diagnostic controls and reset behavior remain.
-Liveried vehicles are still intentionally skipped. No stable release is tagged.
+Other liveried vehicles remain intentionally skipped. No stable release is tagged.

@@ -48,6 +48,7 @@ end
 local adapter = nil
 local adapterModule = nil
 local adapterReloaded = {}
+local editorPaused = false
 local api               = nil    -- editor_api_dynamicDecals module
 local ready             = false  -- decals projection bound, skin set, ready to bake
 local pendingSetup      = false  -- want setup but haven't succeeded yet
@@ -533,6 +534,9 @@ local function trySetup()
   local part = currentPaintDesignPart()
   if jbeam == "etk800" and (part == "" or part == "etk800_skin_police") then
     if not adapterModule then adapterModule = dofile("/lua/ge/extensions/scratches/etkAdapter.lua") end
+    if adapterModule.editorActive() then
+      editorPaused=true; pendingSetup=false; skippedVid=vid; return false
+    end
     if not adapter then
       local ok, result = pcall(adapterModule.create, veh, part)
       if not ok then
@@ -761,9 +765,12 @@ local function updateSurface(dt)
 end
 
 local function onUpdate(dtReal, dtSim, dtRaw)
+  if editorPaused and adapterModule and not adapterModule.editorActive() then
+    editorPaused=false; skippedVid=nil; pendingSetup=true; setupAttemptTimer=SETUP_RETRY
+  end
   if adapter and adapterModule.editorActive() then
     adapter:detach(); adapter=nil; api=nil
-    ready=false; pendingSetup=false
+    ready=false; pendingSetup=false; editorPaused=true
     local veh=getPlayerVehicle(0)
     skippedVid=veh and veh:getId()
     pendingStampInputs={}; M._dropQueuedJobs()
@@ -926,6 +933,7 @@ M.dumpState = function()
 end
 
 M.kickSetup = function()
+  skippedVid = nil
   ready = false
   pendingSetup = true
   setupAttemptTimer = SETUP_RETRY

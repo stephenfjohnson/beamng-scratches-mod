@@ -1,8 +1,9 @@
 # Milestone 1: preservation investigation (2026-11-14)
 
-**Incomplete; no generic livery compositing shipped. Do not merge as a completed
-milestone or start milestone 2.** This branch fixes preservation gaps and records
-an engine-backed investigation. The skip safeguard remains enabled.
+**Historical investigation checkpoint (a3a8f03).** Its incomplete status below
+was superseded by the [implemented ETK adapter and validation](06-etk-material-adapter.md).
+Generic compositing remains deferred; unsupported designs still use the safeguard.
+This document records what was known before the adapter experiments.
 
 ## Source and overlap review
 

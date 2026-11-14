@@ -21,10 +21,10 @@ end
 
 local function cloneMaterial(veh,part)
   assert(veh.JBeam == "etk800" and (part == "" or part == "etk800_skin_police"))
-  local sourceName = part == "" and "etk800" or "etk800.skin.police"
+  local sourceName = part == "" and "etk800_main" or "etk800.skin.police"
   local source = assert(scenetree.findObject(sourceName), "source material missing")
   local count = tonumber(source:getField("activeLayers",0))
-  assert(count == (part == "" and 1 or 2), "unexpected stock material layout")
+  assert(count == 2 and tonumber(source:getField("version",0)) == 1.5, "unexpected stock material layout")
   if part ~= "" then
     assert(source:getField("baseColorMap",1) == "vehicles/etk800/etk800_skin_police_b.color.png", "non-stock police material")
   end

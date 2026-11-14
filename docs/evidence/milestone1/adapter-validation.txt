@@ -1,0 +1,15 @@
+Milestone 1 final validation, 2026-11-14
+python tools/package.py:
+  luac -p: 3 file(s) OK
+  lua globals: OK
+  harness: 192 passed, 0 failed (projects=111 bakes=43 layers=158 composites=49)
+  brush sidecars: OK
+  zip root entries: art, lua
+Python compile: tools/livery_probe.py, tools/etk_compare.py OK
+Documentation local link targets: OK
+All adapter JSON original-stage comparisons: zero differences
+Final police sideslide: 104 impacts, 99 streams, 86 projections; screenshot inspected
+Following reset baseline: 0 impacts, 0 streams, 0 projections; clean screenshot inspected
+Game cleanup: removed only test editor layer FE4C-5D92 and test ETK 37498.
+Player ETK 33168 remains ready with stock Police design and clean private canvas.
+See investigations/06-etk-material-adapter.md for scope and live evidence.

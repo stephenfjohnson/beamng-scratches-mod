@@ -1,10 +1,10 @@
 # Sequential release threads
 
-> 2026-11-14: Milestone 1 investigation delivered on its feature branch;
-> **incomplete, not ready to merge**. Safeguards hardened; generic composition
-> and exact paint-material preservation remain unresolved.
-> [Evidence and supported scope](../../investigations/05-livery-preservation.md).
-> Do not start milestone 2.
+> 2026-11-14: Milestone 1 implemented and validated for the narrow ETK 800
+> main-body adapter: empty Paint Design and stock Police. Original material
+> stages are retained beneath damage; other designs remain safely skipped.
+> [Supported scope and live evidence](../../investigations/06-etk-material-adapter.md).
+> Generic livery support remains deferred. Stop here; milestone 2 has not started.
 
 Run one feature thread at a time. Each starts from the latest merged baseline,
 owns a focused branch, implements and tests, updates documentation/examples,

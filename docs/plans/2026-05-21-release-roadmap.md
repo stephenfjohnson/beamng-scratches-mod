@@ -1,17 +1,17 @@
 # Release roadmap
 
-> 2026-11-14: Milestone 1 investigation delivered on its feature branch;
-> **incomplete, not ready to merge**. Safeguards hardened; generic composition
-> and exact paint-material preservation remain unresolved.
-> [Evidence and supported scope](../../investigations/05-livery-preservation.md).
-> Do not start milestone 2.
+> 2026-11-14: Milestone 1 implemented and validated for the narrow ETK 800
+> main-body adapter: empty Paint Design and stock Police. Original material
+> stages are retained beneath damage; other designs remain safely skipped.
+> [Supported scope and live evidence](../../investigations/06-etk-material-adapter.md).
+> Generic livery support remains deferred. Stop here; milestone 2 has not started.
 
 ## Release readiness update — 2026-11-14
 
 Status: development preview; not ready for a broad public release.
 
 Integrated surface cosmetics prototype (mud/dirt/snow color deposits and internal
-water exposure state). Preflight passes: 165 mock checks, Lua syntax/global
+water exposure state). Current preflight passes: 192 mock checks, Lua syntax/global
 checks and brush sidecars. Water does not visually wash or add wet gloss.
 See `investigations/04-surface-cosmetics.md` for exact scope and engine checks.
 
@@ -29,8 +29,9 @@ This asphalt run does not validate mud, dirt, snow or water behavior.
 Procedural cosmetic scratches for BeamNG.drive. Body contact creates scrape
 streaks and impact chips, with marks accumulating as you drive. Includes
 adjustable intensity presets, a diagnostic panel and reset-to-clean behavior.
-Uses the vehicle's Dynamic Textures paint design; existing liveries are skipped
-to preserve them. Applies to the player vehicle only and does not change physics.
+Preserves ETK 800 plain paint and stock Police material under scratches; other
+liveries are skipped. Other plain vehicles use Dynamic Textures. Applies to the
+player vehicle only and does not change physics.
 
 Development preview: experimental mud, dirt and snow contact deposits are also
 included. They require sufficient contact slip, use placeholder tinted brushes,
@@ -39,8 +40,9 @@ included. Do not promote these as finished release features.
 
 ### Gates before public download
 
-- [ ] Preserve liveries beneath scratches, or explicitly release with plain-paint
-  compatibility only. Never remove the current livery-preservation safeguard.
+- [x] Preserve the ETK 800 stock Police livery and plain main-body paint beneath
+  scratches. Narrow adapter verified; generic support remains deferred and
+  unsupported designs remain skipped.
 - [ ] Validate terrain deposits on real mud, dirt and snow, including rolling
   versus wheelspin and body contact; improve wheel-to-panel splash placement.
 - [ ] Implement separately removable soil for visual washing without erasing
@@ -117,11 +119,12 @@ does the same — coexistence isn't a supported mode.
 
 ### Dedicated session — livery + paint-canvas rework
 
-Originally two bundled items in a deferred dedicated session. The paint-canvas
-half is done; the livery half is still pending.
+Historical design notes follow. The 2026-11-14 ETK adapter supersedes the
+color-capture proposal for the supported ETK scope; generic support stays pending.
+The legacy paint-canvas path remains in use on other vehicles.
 
-1. **Livery + scratches compositing.** *(still pending)* Liveried cars
-   currently get no scratches (skipped by `ensureSkin`). To support both:
+1. **Livery + scratches compositing.** *(still pending)* Other liveried cars
+   get no scratches (skipped by `ensureSkin`). The original proposal was:
    before the skin swap, capture the livery's body textures and re-stamp them
    as a base layer in the dynamic canvas so scratches composite on top.
 2. **Paint-canvas seed rework.** *(done 2026-05-23)* Root cause: the body's
@@ -133,7 +136,7 @@ half is done; the livery half is still pending.
    `roughnessMap` (on the `.skin.dynamicTextures` variant) at static PNGs
    shipped with the mod — `_zero.png` for metallic, a tiny 0.2-grey
    `_paint_roughness.png` for roughness — then `flush()` + `reload()` the
-   material. Base gloss is uniform across the whole body, factory-perfect,
+   material. Base gloss is uniform across the whole body (exact factory fidelity unverified),
    and never needs seeding. `addPaintFill` collapsed to one `fill` layer for
    baseColor only. Trade-off: scratches lose metal-glint (their
    `setMetallicIntensity` / `setRoughnessIntensity` writes go to an unused

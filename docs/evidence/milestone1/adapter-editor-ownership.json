@@ -1,0 +1,28 @@
+{
+  "before": [
+    {
+      "children": {},
+      "color": null,
+      "colorPaletteMapId": 1,
+      "name": "milestone1-editor-sentinel",
+      "blendMode": 1,
+      "type": 1,
+      "uid": "FE4C-5D92",
+      "enabled": true,
+      "locked": false
+    }
+  ],
+  "afterResetAndReload": [
+    {
+      "children": {},
+      "color": null,
+      "colorPaletteMapId": 1,
+      "name": "milestone1-editor-sentinel",
+      "blendMode": 1,
+      "type": 1,
+      "uid": "FE4C-5D92",
+      "enabled": true,
+      "locked": false
+    }
+  ]
+}

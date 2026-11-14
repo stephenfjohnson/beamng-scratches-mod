@@ -14,7 +14,7 @@ local fields = {'baseColorMap','colorPaletteMap','opacityMap','diffuseMapUseUV',
   'clearCoatMap','clearCoatFactor','clearCoatRoughnessFactor','normalMap',
   'detailNormalMap','detailNormalMapStrength','detailScale'}
 local materials = {}
-for _, suffix in ipairs({'', '.skin.police', '.skin.dynamicTextures'}) do
+for _, suffix in ipairs({'', '_main', '.skin.police', '.skin.dynamicTextures'}) do
   local name = veh.JBeam .. suffix
   local mat = scenetree.findObject(name)
   if mat then
@@ -64,5 +64,5 @@ if __name__ == '__main__':
     result = json.loads(dev.lua(LUA))
     dest = Path(args.output)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(json.dumps(result, indent=2) + '\n')
+    dest.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(result['compatibility']))

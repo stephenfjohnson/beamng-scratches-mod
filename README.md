@@ -20,23 +20,32 @@ appearance still need in-game validation on each surface.
 
 Water detection updates internal wetness and washing/drying values, but **does
 not yet show wet gloss or visually wash off dirt**. Reset clears soil and
-scratches together. Liveried vehicles remain unsupported. See the
+scratches together. Livery support is limited to the ETK 800 adapter below. See the
 [implementation and validation handoff](investigations/04-surface-cosmetics.md).
 
 This is a development build, not a validated public release.
 
-## Milestone 1 investigation branch
+## Milestone 1: ETK 800 paint and police livery
 
-Livery compositing remains **incomplete**. Stock liveries and pre-existing
-Dynamic Textures designs are skipped to preserve them. Same-car part changes
-now re-check this safeguard. Start a plain-paint test with an empty Paint Design;
-the mod selects Dynamic Textures itself. After a Lua reload, an existing Dynamic
-Textures design is skipped too. Only remove it yourself if it contains no artwork
-you need. Concurrent livery-editor use is unsupported.
+A narrow material-preserving adapter supports the ETK 800 main body with an
+**empty Paint Design or stock Police (`etk800_skin_police`)**. It keeps the
+original paint/livery material channels beneath a separate scratch layer;
+it does not replace the selected design or flatten it into a color image.
+Other liveries and pre-existing Dynamic Textures designs are safely skipped.
 
-See [engine findings, exact compatibility scope and genuine screenshots](investigations/05-livery-preservation.md).
-The investigation ran on 0.40.5.0 build 302427 / Vulkan; this is not broad renderer
-certification or proof of exact original PBR paint fidelity.
+Actual scratches, clean/reset fidelity, two-car switching, vehicle/extension
+reload and editor ownership were checked on **0.40.5.0 build 302427 / Vulkan**.
+[Exact scope, matched captures and evidence](investigations/06-etk-material-adapter.md).
+This is a development prototype, not generic livery or renderer certification.
+
+![Scratches over the preserved stock ETK police livery](docs/evidence/milestone1/adapter-police-sideslide.jpg)
+
+The adapter can reload/repair the current car once on first activation to prepare
+its private material. Reset, switching, reload and editor suspension discard
+cosmetic marks. It pauses while the world/livery editor owns rendering and
+resumes after closure. Save editor work before changing vehicles or designs.
+Non-ETK plain vehicles retain the older Dynamic Textures path and its material
+fidelity limitations. Never remove artwork to force the painter to start.
 
 ## Start here
 
@@ -56,10 +65,10 @@ There is no stable release download yet; build the experimental ZIP below.
 
 ## Installation
 
-The mod is two Lua extensions plus brush art. It targets a recent version of
+The mod is two Lua extensions, an ETK material helper, and brush art. It targets a recent version of
 BeamNG.drive that includes the **Dynamic Decals** system. Development began on
-0.38; the repository records a later 0.39.4 audit. The latest ETK 800 smoke test
-did not record the exact game build, so it is not a version compatibility matrix.
+0.38; the repository records a later 0.39.4 audit. The ETK adapter was tested
+on 0.40.5.0 build 302427 with Vulkan; other builds/renderers are unverified.
 
 ### Players — packaged mod
 
@@ -167,9 +176,12 @@ call (`scratches_paint.ingest`), tagged with the vehicle id.
 
 ### 2. Painting — game-engine Lua (`scratches_paint.lua`)
 
-Owns a **Dynamic Decals** projection for the player vehicle. On setup it
-selects the vehicle's `dynamicTextures` skin (the canvas the decal system
-paints onto) and seeds the canvas with a PBR paint baseline.
+Owns a **Dynamic Decals** projection for the player vehicle. The ETK adapter
+copies the original two material stages into a per-vehicle clone and appends a
+damage stage. A construction-time flexbody material override selects the clone;
+the Paint Design slot stays intact. A private instance of the installed decal
+API keeps scratch clearing separate from editor artwork. Other supported plain
+vehicles use the older `dynamicTextures` skin and color-seed path.
 
 Incoming batches become **projection jobs** — one synthetic-camera projection
 plus the decal layers captured under it:
@@ -231,10 +243,14 @@ For the full design history, see `docs/plans/` and `investigations/`.
 - **Requires the Dynamic Decals system** and a vehicle that ships a
   `<jbeam>_skin_dynamicTextures` part. Vehicles without it are unsupported and
   the mod cleanly does nothing (the debug panel reports `NOT READY`).
-- **Liveried vehicles are skipped.** A livery and the dynamic-decal canvas both
-  occupy BeamNG's single skin slot. Rather than evict a livery, the mod leaves
-  liveried cars untouched — they keep their livery but get no scratches.
-  Livery + scratches together is planned (see [Known issues](#known-issues)).
+- **Narrow ETK 800 support:** empty Paint Design and stock Police preserve the
+  original main-body material beneath damage. Tested with Rennspecht 8R config;
+  extra-material panels remain original but do not receive scratches. Custom
+  body overrides are skipped. Other liveries and unowned Dynamic Textures
+  designs remain skipped. See the [compatibility matrix](docs/examples.md#compatibility-evidence).
+- **Editor ownership:** the ETK adapter pauses and clears cosmetic marks during
+  editor use, then resumes. Concurrent editor use on the legacy non-ETK path
+  remains unsupported; unload the painter before editing there.
 - **Cosmetic only.** The mod paints texture damage from contact events; it does
   not add or replace soft-body deformation.
 - **Glass and selected mechanical/internal parts are filtered out** so stray
@@ -247,6 +263,7 @@ For the full design history, see `docs/plans/` and `investigations/`.
 ```text
 lua/vehicle/extensions/auto/scratches_detect.lua   # VLUA contact detection
 lua/ge/extensions/scratches/paint.lua              # GELUA dynamic-decal painter
+lua/ge/extensions/scratches/etkAdapter.lua         # narrow material-preserving adapter
 lua/ge/extensions/core/input/actions/scratches.json # bindable panel hotkey
 art/dynamicDecals/textures/                        # scratch brush PNGs + metadata
 tools/generate_brushes.py                          # brush generation utility
@@ -359,7 +376,7 @@ files. One summary row per run goes to `bench/runs/index.csv`.
 
 ### Testing without the game
 
-Both Lua files are plain Lua 5.1. `tools/sim/harness.lua` runs both of them
+The Lua modules use Lua 5.1 syntax. `tools/sim/harness.lua` runs both of them
 in one stock Lua 5.1 state against mocked engine objects — the vehicle →
 game-engine payload round trip, player-only gating, the per-frame projection
 budget, composite gating, vehicle switch, clear, and the debug panel — so
@@ -424,13 +441,18 @@ BeamNG, and confirm a [clean install](#players--packaged-mod) works.
   detects and queues marks; nothing reaches the paint. Use Vulkan: **Options →
   Graphics → Vulkan**, or launch with `-gfx vk` for one session
   (`python tools/dev.py launch --game-arg=-gfx --game-arg=vk`).
-- **Liveried cars get no scratches** — they are skipped to preserve the livery.
-  Livery + scratches compositing (capturing the livery into the dynamic canvas
-  so scratches layer on top) is planned future work.
+- **Generic livery support remains deferred.** Only the ETK 800 stock Police
+  adapter is enabled. It depends on internal engine APIs and the tested material
+  layout; changed layouts fail closed. Material clones remain disabled in the
+  scene after use for existing mesh references; long-session resource cost is unmeasured.
+- **ETK damage opacity follows its red color channel.** Dark deposits/marks can
+  look weak; the added stage uses fixed roughness and no metallic response.
+  The original untouched paint retains its PBR channels. This milestone does
+  not improve deposit art, wet gloss, washing or per-scratch metal glint.
 - **Scratches have no metal glint** — metallic and roughness are served from
   static factory maps instead of the dynamic canvas (the fix that removed the
   paint seam), so scratch decals read as colour marks only. Base gloss is
-  uniform and correct across the whole body; per-scratch shine is the
-  trade-off.
+  uniform on that legacy path, but exact factory PBR fidelity is not verified.
+  The ETK adapter instead preserves the original channels below its damage stage.
 
 See `docs/plans/2026-05-21-release-roadmap.md` for the current roadmap.

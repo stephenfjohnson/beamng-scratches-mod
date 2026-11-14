@@ -1,0 +1,59 @@
+{
+  "first": {
+    "skipped": false,
+    "owned": true,
+    "material": "scratches_etk800_33168_police",
+    "ready": true,
+    "part": "etk800_skin_police",
+    "pending": false,
+    "adapter": "etk800.skin.police"
+  },
+  "second": {
+    "skipped": false,
+    "owned": true,
+    "material": "scratches_etk800_37498_police",
+    "ready": true,
+    "part": "etk800_skin_police",
+    "pending": false,
+    "adapter": "etk800.skin.police"
+  },
+  "firstInactiveLayers": "2",
+  "backToFirst": {
+    "skipped": false,
+    "owned": true,
+    "material": "scratches_etk800_33168_police",
+    "ready": true,
+    "part": "etk800_skin_police",
+    "pending": false,
+    "adapter": "etk800.skin.police"
+  },
+  "secondInactiveLayers": "2",
+  "unicycle": {
+    "skipped": true,
+    "owned": false,
+    "ready": false,
+    "pending": false
+  },
+  "returnFromUnicycle": {
+    "skipped": false,
+    "owned": true,
+    "material": "scratches_etk800_33168_police",
+    "ready": true,
+    "part": "etk800_skin_police",
+    "pending": false,
+    "adapter": "etk800.skin.police"
+  },
+  "editorLayers": [
+    {
+      "children": {},
+      "color": null,
+      "colorPaletteMapId": 1,
+      "name": "milestone1-editor-sentinel",
+      "blendMode": 1,
+      "type": 1,
+      "uid": "FE4C-5D92",
+      "enabled": true,
+      "locked": false
+    }
+  ]
+}

@@ -574,6 +574,8 @@ paint.onVehicleSpawned(playerVid)
 for i=1,4 do frame() end
 check(not paint.getCompatibility().ready, "reused id cannot claim an old dynamic skin")
 
+passes = passes + dofile("tools/sim/adapter_harness.lua")
+
 print(string.format("%d passed, %d failed  (projects=%d bakes=%d layers=%d composites=%d)",
   passes, failures, counters.projects, counters.bakes, counters.bakeLayers, counters.combines))
 os.exit(failures == 0 and 0 or 1)
