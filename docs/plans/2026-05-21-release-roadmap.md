@@ -1,5 +1,59 @@
 # Release roadmap
 
+## Release readiness update — 2026-11-14
+
+Status: development preview; not ready for a broad public release.
+
+Integrated surface cosmetics prototype (mud/dirt/snow color deposits and internal
+water exposure state). Preflight passes: 165 mock checks, Lua syntax/global
+checks and brush sidecars. Water does not visually wash or add wet gloss.
+See `investigations/04-surface-cosmetics.md` for exact scope and engine checks.
+
+Live regression: ETK 800, Gridmap v2, active Dynamic Textures skin, scripted
+sideslide. 90 impacts, 114 streams, 89 projections, zero dropped jobs. Painter
+peak 62.285 ms; whole-frame p95 41.006 ms. These are one-machine, one-run
+observations, not a baseline comparison or a performance guarantee. Five
+screenshots and raw timings are in the ignored local artifact folder
+`bench/runs/20261114-122304_sideslide_surface-integration/`. The left-side image
+confirms rendering, but bright brush-like marks need art/opacity refinement.
+This asphalt run does not validate mud, dirt, snow or water behavior.
+
+### Draft public description
+
+Procedural cosmetic scratches for BeamNG.drive. Body contact creates scrape
+streaks and impact chips, with marks accumulating as you drive. Includes
+adjustable intensity presets, a diagnostic panel and reset-to-clean behavior.
+Uses the vehicle's Dynamic Textures paint design; existing liveries are skipped
+to preserve them. Applies to the player vehicle only and does not change physics.
+
+Development preview: experimental mud, dirt and snow contact deposits are also
+included. They require sufficient contact slip, use placeholder tinted brushes,
+and have not yet been visually validated. Visible washing and wet gloss are not
+included. Do not promote these as finished release features.
+
+### Gates before public download
+
+- [ ] Preserve liveries beneath scratches, or explicitly release with plain-paint
+  compatibility only. Never remove the current livery-preservation safeguard.
+- [ ] Validate terrain deposits on real mud, dirt and snow, including rolling
+  versus wheelspin and body contact; improve wheel-to-panel splash placement.
+- [ ] Implement separately removable soil for visual washing without erasing
+  scratches; validate wet gloss without reintroducing paint seams.
+- [ ] Reduce projection/bake spikes; measure repeat runs against a clean baseline.
+- [ ] Refine overly bright scrape brushes and capture matching clean/damaged
+  views, close-up scrape/chip details and validated environmental effects.
+- [ ] Record exact game build and per-vehicle results: paint colors, liveries,
+  resets, switching, traffic, mod vehicles and Dynamic Decals editor conflicts.
+- [ ] Test the packaged ZIP alone in a clean mod setup (no unpacked duplicate).
+- [ ] Choose version, author/credits and license; include changelog, supported
+  configuration list, troubleshooting and installation/uninstallation steps.
+- [ ] Publish the tested ZIP to the chosen public destination and verify the
+  anonymous download/install path. No public host or download URL exists yet.
+
+The local `dist/scratches_mod.zip` is an experimental build, not a public link.
+
+---
+
 Date: 2026-05-21
 
 Trackable backlog toward packaging `scratches_mod` for release. Work the phases

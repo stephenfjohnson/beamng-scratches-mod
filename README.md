@@ -9,21 +9,53 @@ corner gets a chip cluster.
 It is purely cosmetic. It does **not** change BeamNG's soft-body deformation;
 it paints texture damage on top of whatever the physics already did.
 
+## Experimental surface deposits
+
+This development build also projects translucent mud, dirt and snow marks from
+recognized terrain contacts. It reuses tinted haze brushes; this is an initial
+prototype, not a finished splatter or snow coating system. Tire slip or body
+contact is required, so ordinary rolling may not leave marks. Deposits are capped
+at 96 attempts per reset and share the scratch rendering budget. Placement and
+appearance still need in-game validation on each surface.
+
+Water detection updates internal wetness and washing/drying values, but **does
+not yet show wet gloss or visually wash off dirt**. Reset clears soil and
+scratches together. Liveried vehicles remain unsupported. See the
+[implementation and validation handoff](investigations/04-surface-cosmetics.md).
+
+This is a development build, not a validated public release.
+
+## Start here
+
+- [Examples and troubleshooting](docs/examples.md)
+- [Sequential release plan](docs/plans/release-sequence.md)
+- [Contributing and validation](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
+
+![ETK 800 after an asphalt sideslide](docs/images/etk800-sideslide.png)
+
+Actual in-game development capture, 2026-11-14: ETK 800 on Gridmap v2,
+Dynamic Textures paint design. The bright scrape appearance is still being
+refined. This image demonstrates scratches, not mud, snow or water effects.
+There is no stable release download yet; build the experimental ZIP below.
+
 ---
 
 ## Installation
 
 The mod is two Lua extensions plus brush art. It targets a recent version of
-BeamNG.drive that includes the **Dynamic Decals** system (developed and tested
-on 0.38).
+BeamNG.drive that includes the **Dynamic Decals** system. Development began on
+0.38; the repository records a later 0.39.4 audit. The latest ETK 800 smoke test
+did not record the exact game build, so it is not a version compatibility matrix.
 
 ### Players — packaged mod
 
 1. Get `scratches_mod.zip` (see [Packaging for release](#packaging-for-release)
    if you are building it yourself).
-2. Drop the zip into your BeamNG user folder's `mods/` directory:
-   `Documents/BeamNG.drive/<version>/mods/`  *(or `%LOCALAPPDATA%\BeamNG\
-   BeamNG.drive\<version>\mods\`)*.
+2. Open the active user folder using the BeamNG launcher and place the ZIP
+   in its `mods/` directory without extracting it. The default used by the
+   development tools is `%LOCALAPPDATA%\BeamNG\BeamNG.drive\current\mods\`;
+   custom user folders can differ.
 3. Launch BeamNG; the mod manager picks it up automatically.
 4. Spawn a [supported vehicle](#supported-vehicles--limitations) and drive.
 
@@ -221,6 +253,11 @@ to it, or the dynamic-decal system loads it invisibly.
 
 ## Development
 
+Prerequisites: Python 3.10+ and Lua 5.1 (`lua` and `luac` on PATH) for the full
+preflight. Packaging uses Python's standard library. Regenerating brush art
+additionally needs `python -m pip install pillow numpy`. Live tests require a
+local BeamNG installation with MCP enabled. Mock checks cannot verify rendering.
+
 ### The dev loop: `tools/dev.py`
 
 Edit, save, and the running game picks up the change in a few seconds:
@@ -348,6 +385,15 @@ crashes in game), fails the harness, or a brush PNG is missing its
 `.dynDecalTexture.json` sidecar. `docs/`, `investigations/`, `tools/`,
 `reference/` and `README.md` are repo-only and are never included.
 
+If Lua tools are absent, the packager warns and skips Lua checks. A successful
+ZIP build alone is therefore not evidence that preflight ran; release builds
+must show successful syntax, globals, harness and sidecar checks.
+
+To uninstall, remove `scratches_mod.zip` from the active `mods/` folder and
+disable/remove any unpacked copy, then restart the game. If a saved vehicle
+configuration still selects Dynamic Textures, select its desired Paint Design
+again; uninstalling does not rewrite saved configurations.
+
 Then test it: remove the unpacked dev mount (`python tools/dev.py unmount`), drop the zip into `mods/`, restart
 BeamNG, and confirm a [clean install](#players--packaged-mod) works.
 
@@ -355,11 +401,13 @@ BeamNG, and confirm a [clean install](#players--packaged-mod) works.
 
 ## Known issues
 
-- **No scratches on the D3D12 renderer (BeamNG 0.39.4).** The game's own
+- **Recorded D3D12 failure on the development installation (BeamNG 0.39.4).** The game's own
   dynamic-decal shader (`shaders/common/dynamicDecals/decal.ps.hlsl`) fails to
   compile under D3D12, so every decal draw is dropped
   (`D3D12 cmd: draw skipped (pipelineBindFailed=1 ... dynamicDecals/decal...)`
-  in `beamng.log`). This also breaks the vanilla decal editor. The mod still
+  in `beamng.log`). This also broke the vanilla decal editor in that investigation.
+  This is a recorded environment-specific issue, not a claim about every installation.
+  The mod still
   detects and queues marks; nothing reaches the paint. Use Vulkan: **Options →
   Graphics → Vulkan**, or launch with `-gfx vk` for one session
   (`python tools/dev.py launch --game-arg=-gfx --game-arg=vk`).
