@@ -481,6 +481,72 @@ for _, l in ipairs(logLines) do
   if l:sub(1, 1) == "E" then check(false, "error logged: " .. l) end
 end
 
+paint.onExtensionLoaded()
+for i=1,5 do frame() end
+
+-- Surface capability: real callback argument order, rate limiting, independent
+-- wheel eligibility, washing state, disabled/missing API and lifecycle.
+paint.clearStamps()
+detect.onReset(); runGE()
+local function soil(id, material, x)
+  _G.onNodeCollision(id, vec3(x or 100,0,0.3),vec3(0,0,1),vec3(0,0,0),0,
+    vec3(0,0,0),5,0,300,0.01,material,METAL)
+end
+local function surfaceTick(wet)
+  obj.inWater = function() return wet end
+  obj.simTime = obj.simTime + 0.26
+  detect.updateGFX(0.26); runGE(); frame(0.26)
+end
+local scratchBeforeSoil = paint.getStats().stamp.streamsBaked
+for i=1,1000 do soil(30,18) end -- tire MUD, no body scratch
+surfaceTick(false)
+check(paint.getStats().stamp.streamsBaked == scratchBeforeSoil, "tire soil creates no scratch streams")
+check(paint.getSurfaceState().mud > 0, "wheel mud contact accumulates cosmetic exposure")
+check(paint.getSurfaceState().deposits == 1, "1000 contacts coalesce into one deposit")
+soil(30,15,101); soil(30,22,102); surfaceTick(false)
+check(paint.getSurfaceState().dirt > 0 and paint.getSurfaceState().snow > 0,
+  "DIRT and SNOW resolve by material name")
+local deposits = paint.getSurfaceState().deposits
+soil(20,18); surfaceTick(false)
+check(paint.getSurfaceState().deposits == deposits, "internal engine contact does not add soil")
+local clearsBeforeWater = counters.clears
+for i=1,5 do soil(30,18); surfaceTick(true) end
+check(paint.getSurfaceState().wetness > 0, "inWater raises wetness")
+check(paint.getSurfaceState().mud == 0, "water washes exposure state")
+check(counters.clears == clearsBeforeWater, "washing never clears baked scratches")
+check(paint.getSurfaceState().deposits == deposits, "submersion suppresses deposits")
+local wetness = paint.getSurfaceState().wetness
+for i=1,12 do surfaceTick(false) end
+check(paint.getSurfaceState().wetness < wetness, "wetness dries after water contact expires")
+obj.inWater = nil
+obj.simTime = obj.simTime + 0.26; detect.updateGFX(0.26); runGE()
+check(not paint.getSurfaceState().waterSupported, "missing water API reported without failure")
+local beforeForeign = paint.getSurfaceState().mud
+paint.ingestSurface(-1,{{"mud",100,0,0,0,0,1}},true,true)
+check(paint.getSurfaceState().mud == beforeForeign, "foreign vehicle surface packet ignored")
+paint.ingestSurface(playerVid,{{"mud",0/0,0,0,0,0,1},{"bogus",0,0,0,0,0,1}},false,true)
+check(paint.getSurfaceState().mud == beforeForeign, "invalid surface samples ignored")
+for i=1,150 do
+  paint.ingestSurface(playerVid,{{"mud",100+i,0,0,0,0,1}},false,true)
+end
+check(paint.getSurfaceState().deposits == 96, "surface deposit lifetime cap enforced")
+for i=1,120 do frame() end
+check(counters.maxProjectsInFrame <= projBudget(), "soil respects shared projection budget")
+paint.clearStamps()
+check(paint.getSurfaceState().deposits == 0 and paint.getSurfaceState().wetness == 0,
+  "clear resets surface state")
+soil(30,18); detect.setPaintEnabled(false); surfaceTick(false)
+check(paint.getSurfaceState().deposits == 0, "disable discards pending surface samples")
+detect.setPaintEnabled(true)
+soil(30,18); playerInfo.firstPlayerSeated=false; surfaceTick(false)
+playerInfo.firstPlayerSeated=true; surfaceTick(false)
+check(paint.getSurfaceState().deposits == 0, "leaving vehicle discards pending samples")
+soil(30,18); detect.onReset(); runGE(); surfaceTick(false)
+check(paint.getSurfaceState().deposits == 0, "reset discards pending samples")
+paint.ingestSurface(playerVid,{{"snow",100,0,0,0,0,1}},false,true)
+paint.onVehicleSwitched(playerVid,playerVid+1,0)
+check(paint.getSurfaceState().snow == 0, "switch clears surface state")
+
 print(string.format("%d passed, %d failed  (projects=%d bakes=%d layers=%d composites=%d)",
   passes, failures, counters.projects, counters.bakes, counters.bakeLayers, counters.combines))
 os.exit(failures == 0 and 0 or 1)

@@ -705,8 +705,38 @@ local function composite()
   stampStats.combinesRun = stampStats.combinesRun + 1
 end
 
+-- Washable exposure state is deliberately separate from irreversible baked
+-- decals. Never clear the scratch canvas to simulate washing.
+local surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false}
+local surfaceWaterAge = 1
+local surfaceSpots = {}
+local function resetSurfaceState()
+  surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false}
+  surfaceSpots, surfaceWaterAge = {}, 1
+end
+M.getSurfaceState = function()
+  local out = {}
+  for k,v in pairs(surfaceState) do out[k] = v end
+  out.visualCleaningSupported = false
+  out.visualWetnessSupported = false
+  return out
+end
+local function updateSurface(dt)
+  dt = math.max(0, math.min(0.25, tonumber(dt) or 0))
+  surfaceWaterAge = surfaceWaterAge + dt
+  if surfaceWaterAge <= 0.5 then
+    surfaceState.wetness = math.min(1, surfaceState.wetness + dt * 0.8)
+    for _, k in ipairs({"mud","dirt","snow"}) do
+      surfaceState[k] = math.max(0, surfaceState[k] - dt * 0.15)
+    end
+  else
+    surfaceState.wetness = math.max(0, surfaceState.wetness - dt / 20)
+  end
+end
+
 local function onUpdate(dtReal, dtSim, dtRaw)
   if ready then
+    updateSurface(dtSim)
     local t0 = clockhp()
     stampStats.framesTicked = stampStats.framesTicked + 1
     sinceCombine       = sinceCombine + (dtReal or 0)
@@ -774,6 +804,7 @@ end
 
 -- ---- vehicle lifecycle ----
 local function onVehicleSwitched(oldId, newId, player)
+  resetSurfaceState()
   -- Player switched cars. Tear down and re-setup against the new vehicle.
   ready = false
   lastSkinJBeam = nil
@@ -815,6 +846,7 @@ local function onVehicleSpawned(vid)
   -- Same id, possibly a different part config (body kit, bumper delete):
   -- refetch the spawn AABB the hull-face picker steers by.
   if veh and veh:getId() == vid then
+    resetSurfaceState()
     spawnAabbCache.vid = nil
     spawnAabbCache.box = nil
     if ready then combineDirty = true; rebindDirty = true end
@@ -1961,6 +1993,40 @@ M.ingest = function(vid, events, streams)
   end
 end
 
+-- Contact positions are a conservative splash proxy, not a fluid simulation.
+-- Existing projection/hull aiming and all scheduler budgets remain in use.
+M.ingestSurface = function(vid, samples, wet, supported)
+  local veh = getPlayerVehicle(0)
+  if not ready or not veh or veh:getId() ~= vid then return end
+  surfaceState.waterSupported = supported == true
+  if wet == true and supported == true then surfaceWaterAge = 0; return end
+  local colors = {mud={0.20,0.12,0.05}, dirt={0.42,0.31,0.18}, snow={0.88,0.92,0.96}}
+  local inv = veh:getRefNodeMatrix():fullInverse()
+  local rot = inv:copy(); rot:setColumn(3,vec3(0,0,0))
+  for i=1,math.min(3, type(samples) == "table" and #samples or 0) do
+    local e = samples[i]
+    local c = type(e) == "table" and colors[e[1]]
+    local valid = c ~= nil
+    for j=2,7 do
+      local n = type(e) == "table" and e[j]
+      if type(n) ~= "number" or n ~= n or math.abs(n) > 1e7 then valid=false end
+    end
+    if valid then
+      surfaceState[e[1]] = math.min(1, surfaceState[e[1]] + 0.025)
+      local p = inv:mulP3F(vec3(e[2],e[3],e[4]))
+      local key = e[1]..":"..math.floor(p.x*3)..":"..math.floor(p.y*3)..":"..math.floor(p.z*3)
+      if surfaceState.deposits < 96 and (surfaceSpots[key] or 0) < 3
+          and surfaceWaterAge > 0.5 then
+        surfaceSpots[key] = (surfaceSpots[key] or 0)+1
+        surfaceState.deposits = surfaceState.deposits+1
+        enqueueStamp(p, rot:mulP3F(vec3(e[5],e[6],e[7])), {
+          r=c[1],g=c[2],b=c[3],a=0.22,scale=0.28,skipMetal=true,noJitter=true,
+          colorTex="/art/dynamicDecals/textures/scr_haze_01.png",rot=0},vid)
+      end
+    end
+  end
+end
+
 -- Console / legacy entry points, routed through ingest so they share the
 -- player-vehicle check and the per-frame pipeline.
 M.stampBatch = function(events)
@@ -2084,6 +2150,7 @@ end
 -- clears the working stage and pushes the blank into the vehicle's texture set
 -- immediately. No history, no dedup.
 M.clearStamps = function()
+  resetSurfaceState()
   if not ready then log('W', logTag, "clearStamps: not ready"); return end
   if not resolveDecalProjection() then return end
   -- (2.1) Diagnostic: how many layers are about to be wiped. On a vehicle
@@ -2986,6 +3053,7 @@ local function onExtensionLoaded()
 end
 
 local function onExtensionUnloaded()
+  resetSurfaceState()
   ready = false
   api = nil
   -- The projection was resolved from an upvalue of the api module we are

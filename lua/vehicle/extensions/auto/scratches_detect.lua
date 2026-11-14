@@ -315,6 +315,69 @@ local function classifyNode(id1)
   return bodyName
 end
 
+-- Surface exposure is independent of scratch eligibility: tire contacts can
+-- dirty the body, but still never create scratches. One sample per kind per
+-- 0.25 simulated seconds, regardless of the physics contact rate.
+local surfaceKinds = {MUD="mud", DIRT="dirt", DIRT_DUSTY="dirt",
+  SAND="dirt", SANDY_ROAD="dirt", GRAVEL="dirt", SNOW="snow"}
+local surfacePending, surfaceLast = {}, 0
+local waterNodes = nil
+local function resetSurface()
+  surfacePending, surfaceLast, waterNodes = {}, 0, nil
+end
+local function surfaceContact(id, pos, normal, speed, force, material)
+  if not paintEnabled or not finite(speed) or not finite(force)
+      or speed < 0.5 or force < 10 then return end
+  local kind = surfaceKinds[nameById[material]]
+  if not kind or surfacePending[kind] then return end
+  local node = v.data.nodes and v.data.nodes[id]
+  if not node or (not node.wheelID and type(classifyNode(id)) ~= "string") then return end
+  if not (finite(pos.x) and finite(pos.y) and finite(pos.z)
+      and finite(normal.x) and finite(normal.y) and finite(normal.z)) then return end
+  surfacePending[kind] = {pos.x,pos.y,pos.z,normal.x,normal.y,normal.z}
+end
+local function flushSurface(now)
+  if not enabled or not paintEnabled then resetSurface(); return end
+  if now < surfaceLast then resetSurface() end
+  if now - surfaceLast < 0.25 then return end
+  surfaceLast = now
+  -- Build once, then probe at most eight representative body nodes per tick.
+  -- inWater(cid) is used by stock wheels/fire/thermals, not a guessed API.
+  if not waterNodes and buildSets() then
+    waterNodes = {}
+    for id in pairs(v.data.nodes or {}) do
+      if type(classifyNode(id)) == "string" then
+        waterNodes[#waterNodes+1] = id
+      end
+    end
+    table.sort(waterNodes)
+    local all = waterNodes
+    waterNodes = {}
+    for i = 1, math.min(8, #all) do
+      waterNodes[i] = all[math.floor((i-1)*#all/math.min(8,#all))+1]
+    end
+  end
+  local wet, supported = false, type(obj.inWater) == "function"
+  if supported then
+    for _, id in ipairs(waterNodes or {}) do
+      local ok, value = pcall(obj.inWater, obj, id)
+      if not ok then supported = false; break end
+      wet = wet or value == true
+    end
+  end
+  local parts = {}
+  for _, kind in ipairs({"mud", "dirt", "snow"}) do
+    local e = surfacePending[kind]
+    if e and not wet then
+      parts[#parts+1] = string.format("{%q,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f}",kind,unpack(e))
+    end
+  end
+  surfacePending = {}
+  obj:queueGameEngineLua(string.format(
+    "if scratches_paint and scratches_paint.ingestSurface then scratches_paint.ingestSurface(%d,{%s},%s,%s) end",
+    obj:getId(), table.concat(parts,","), tostring(wet), tostring(supported)))
+end
+
 -- ---- the filter ----
 local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slipVel,
                                 slipForce, normalForce, depth, mat1, mat2)
@@ -328,6 +391,8 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   stats.totalCalls = stats.totalCalls + 1
 
   if not buildSets() then return end
+
+  surfaceContact(id1, pos, normal, slipVel, normalForce, mat1)
 
   local bodyName = nodeClass[id1]
   if bodyName == nil then
@@ -594,6 +659,7 @@ local function detectFrame(dt)
   -- player just left this car, drop its half-built work instead of shipping
   -- it to a painter that is now decorating a different vehicle.
   if not playerInfo.firstPlayerSeated then
+    resetSurface()
     if next(nodeStreams) ~= nil then table.clear(nodeStreams) end
     if #pendingDetectEvents > 0 then pendingDetectEvents = {} end
     if #pendingStreams > 0 then pendingStreams = {} end
@@ -609,6 +675,7 @@ local function detectFrame(dt)
       end
     end
   end
+  flushSurface(now)
   flushDetectEvents()
   -- (K) Throttled stats push to drive the GE-side IMGUI panel.
   if (now - lastStatsPush) >= STATS_PUSH_PERIOD then
@@ -803,6 +870,7 @@ end
 
 M.setEnabled = function(b)
   enabled = b and true or false
+  if not enabled then resetSurface() end
   log('I', logTag, "enabled = " .. tostring(enabled))
 end
 
@@ -826,6 +894,7 @@ end
 
 M.setPaintEnabled = function(b)
   paintEnabled = b and true or false
+  if not paintEnabled then resetSurface() end
   log('I', logTag, "paintEnabled = " .. tostring(paintEnabled))
 end
 
@@ -888,6 +957,7 @@ local function onExtensionUnloaded()
 end
 
 local function onReset()
+  resetSurface()
   -- vehicle reset (Ctrl+R)
   log('I', logTag, "onReset (Ctrl+R) - clearing detect state, requesting GE clearStamps")
   M.resetStats()
