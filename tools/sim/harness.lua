@@ -594,6 +594,34 @@ paint.onVehicleSpawned(playerVid)
 for i=1,4 do frame() end
 check(not paint.getCompatibility().ready, "reused id cannot claim an old dynamic skin")
 
+-- Milestone 4: inspect style helpers without needing a GPU. Rendering is live-tested.
+local function up(fn, wanted)
+  for i=1,100 do
+    local name,value=debug.getupvalue(fn,i)
+    if not name then break end
+    if name==wanted then return value end
+  end
+  error("missing upvalue "..wanted)
+end
+local enqueue = up(paint.stampAtLocal,"enqueueStamp")
+local tone = up(enqueue,"lineTone")
+local pick = up(up(enqueue,"pickBrush"),"pickFromSet")
+local family={"a","b","c","d"}
+local other={"haze1","haze2"}
+local previous
+local different = true
+for i=1,100 do
+  local nextBrush=pick(family)
+  pick(other)
+  if nextBrush==previous then different=false end
+  previous=nextBrush
+end
+check(different,"brush variation never repeats immediately")
+local r,g,b,a=tone(0)
+check(r>=0.72 and r<=0.80 and r==g and g==b and a==0.72,"shallow depth brush uses restrained neutral tint")
+local _,_,_,deep=tone(1)
+check(deep>a and deep<=0.89,"deep damage increases opacity within bound")
+
 passes = passes + dofile("tools/sim/adapter_harness.lua")
 
 print(string.format("%d passed, %d failed  (projects=%d bakes=%d layers=%d composites=%d)",

@@ -1083,10 +1083,10 @@ end
 --   CHIPS  - impact paint loss (sharp flakes).
 --   GOUGE  - impact dig-in crater with short deep scores.
 local TEX = "/art/dynamicDecals/textures/"
-local SCRAPE_BRUSHES = { TEX .. "scr_scrape_01.png", TEX .. "scr_scrape_02.png", TEX .. "scr_scrape_03.png" }
+local SCRAPE_BRUSHES = { TEX .. "m4_rash_a.png", TEX .. "m4_rash_b.png", TEX .. "m4_rash_c.png", TEX .. "m4_rash_d.png" }
 local HAZE_BRUSHES   = { TEX .. "scr_haze_01.png", TEX .. "scr_haze_02.png" }
-local CHIP_BRUSHES   = { TEX .. "scr_chips_01.png", TEX .. "scr_chips_02.png" }
-local GOUGE_BRUSHES  = { TEX .. "scr_gouge_01.png", TEX .. "scr_gouge_02.png" }
+local CHIP_BRUSHES   = { TEX .. "m4_chip_a.png", TEX .. "m4_chip_b.png", TEX .. "m4_chip_c.png", TEX .. "m4_chip_d.png" }
+local GOUGE_BRUSHES  = { TEX .. "m4_gouge_a.png", TEX .. "m4_gouge_b.png" }
 
 -- Long straight slides used to become one large projected rectangle. On roof
 -- slides that rectangle could span past the roof edge and mark the rear/side,
@@ -1102,16 +1102,15 @@ local STRETCH_OVERLAP = 1.3
 local STREAM_MERGE_RADIUS    = 0.35  -- m between band centres
 local STREAM_MERGE_MAX_BANDS = 6
 
--- Recency-aware random picker. Avoids the last RECENT_BRUSH_MAX picks if
--- possible. One re-roll max so small brush sets don't loop.
+-- One bounded alternate choice prevents consecutive repeats within each family.
 local function pickFromSet(set)
-  local b = set[math.random(#set)]
-  for _, r in ipairs(recentBrushes) do
-    if r == b then
-      b = set[math.random(#set)]
-      break
-    end
+  local index = math.random(#set)
+  -- Family-keyed history survives intervening haze/chip selections.
+  local b = set[index]
+  if #set > 1 and b == recentBrushes[set] then
+    b = set[index % #set + 1]
   end
+  recentBrushes[set] = b
   recentBrushes[#recentBrushes + 1] = b
   if #recentBrushes > RECENT_BRUSH_MAX then table.remove(recentBrushes, 1) end
   return b
@@ -1130,7 +1129,7 @@ local function damageTone(layer)
   local j = (math.random() - 0.5) * 0.08
   if layer == "haze" then
     local v = mix(0.86, paintLum * 0.72) + j * 0.5
-    return v, v, math.min(1, v + 0.015), 0.18 + math.random() * 0.10
+    return v, v, math.min(1, v + 0.015), 0.05 + math.random() * 0.04
   elseif layer == "metal" then
     local v = mix(0.86, 0.62) + j
     return v - 0.01, v, math.min(1, v + 0.03), 1
@@ -1139,9 +1138,12 @@ local function damageTone(layer)
   return math.min(1, v + 0.012), v, math.max(0, v - 0.02), 0.95
 end
 
--- Primer or bare metal, more often metal the harder the hit (severity 0..1).
+-- Depth-colored brush tint and severity-dependent opacity (severity 0..1).
 local function lineTone(severity)
-  return damageTone(math.random() < 0.15 + 0.5 * (severity or 0) and "metal" or "primer")
+  -- Depth-colored brushes carry primer, dark coating and exposed highlights.
+  -- Restrained neutral tint; never turn every scrape into bright silver.
+  local v = 0.72 + math.random() * 0.08
+  return v, v, v, 0.72 + 0.16 * (severity or 0)
 end
 
 -- Scale wobble + per-brush bias. baseScale is the caller-supplied scale
@@ -1379,7 +1381,7 @@ local function enqueueStamp(localPos, localNormal, opts, vid)
   -- stamps at exactly the same point; with jitter they spread into a small
   -- cluster that reads as scratch coverage.
   if not opts.noJitter then
-    local jitter = 0.03  -- ±3 cm
+    local jitter = 0.008  -- ±3 cm
     localPos = vec3(
       localPos.x + (math.random() - 0.5) * 2 * jitter,
       localPos.y + (math.random() - 0.5) * 2 * jitter,
@@ -1721,7 +1723,7 @@ local function runStreamJob(job, projM, bakeList)
     -- band rather than a string of unrelated marks.
     local brush     = pickFromSet(SCRAPE_BRUSHES)
     local hazeBrush = pickFromSet(HAZE_BRUSHES)
-    local width     = 0.10 + math.random() * 0.10          -- 10..20 cm band
+    local width     = 0.055 + math.random() * 0.055          -- 5.5..11 cm band
     local lr, lg, lb, la = lineTone(band.severity or 0.3)
     local hr, hg, hb, ha = damageTone("haze")
     local segs = band.segments
@@ -1973,7 +1975,7 @@ end
 local function styleForEvent(kind, force)
   local heavy = severityOf(force)
   if kind == "impact" then
-    return { scale = 0.10 + heavy * 0.15, dist = 0.7 + heavy * 1.6,   -- 20..50 cm across
+    return { scale = 0.045 + heavy * 0.085, dist = 0.7 + heavy * 1.6,   -- 9..26 cm across before wobble
              colorTex = pickFromSet(CHIP_BRUSHES), severity = heavy }
   end
   if (force or 0) > 800 then
@@ -1991,7 +1993,7 @@ local function enqueueImpact(localPos, localNormal, force, vid)
   enqueueStamp(localPos, localNormal, main, vid)
   if math.random() < 0.25 + 0.6 * heavy then
     enqueueStamp(localPos, localNormal, { colorTex = pickFromSet(GOUGE_BRUSHES),
-      scale = 0.08 + heavy * 0.12, dist = main.dist, severity = math.min(1, heavy + 0.3) }, vid)
+      scale = 0.025 + heavy * 0.055, dist = main.dist, severity = math.min(1, heavy + 0.3) }, vid)
   end
 end
 
@@ -2004,7 +2006,7 @@ end
 -- exact because the ground doesn't move) flattened onto the panel, as long as
 -- a contact patch. Neighbouring contact nodes' bands join into the rash.
 -- A longer drag scrapes deeper: severity rises with slide distance.
-local SLIDE_BAND_MIN, SLIDE_BAND_MAX = 0.30, 0.70   -- band length, m (long enough to join neighbours)
+local SLIDE_BAND_MIN, SLIDE_BAND_MAX = 0.18, 0.42   -- band length, m (long enough to join neighbours)
 local function enqueueSlide(points, invM, rotOnly, vid)
   local first, last = points[1], points[#points]
   local anchor = invM:mulP3F(vec3(last[1], last[2], last[3]))
