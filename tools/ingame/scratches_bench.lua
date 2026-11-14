@@ -125,7 +125,7 @@ local function finish(err)
 end
 
 local function newFrames()
-  return { t = {}, frameMs = {}, painterMs = {}, speed = {}, upZ = {} }
+  return { t = {}, frameMs = {}, painterMs = {}, projectTotalMs = {}, bakeTotalMs = {}, queuedJobs = {}, queuedLayers = {}, speed = {}, upZ = {} }
 end
 
 -- frameMs is wall time between successive bench updates (os.clockhp): the
@@ -138,6 +138,11 @@ local function sample(veh)
   f.frameMs[n] = run.lastClock and (now - run.lastClock) * 1000 or 0
   run.lastClock = now
   f.painterMs[n] = scratches_paint and scratches_paint.getLastFrameMs and scratches_paint.getLastFrameMs() or 0
+  local stats = scratches_paint and scratches_paint.getStats and scratches_paint.getStats()
+  f.projectTotalMs[n] = stats and stats.perf.projectMsTotal or 0
+  f.bakeTotalMs[n] = stats and stats.perf.bakeMsTotal or 0
+  f.queuedJobs[n] = stats and stats.queue.jobs or 0
+  f.queuedLayers[n] = stats and stats.queue.bake or 0
   f.speed[n] = veh:getVelocity():length()
   f.upZ[n] = veh:getDirectionVectorUp().z
   table.clear(metricsScratch)
