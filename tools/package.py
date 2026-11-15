@@ -115,6 +115,7 @@ ENGINE_GLOBALS = {
         "dofile", "require", "createObject", "DecalShapeRenderApp", "DecalProjection", "Point2I", "editor", "MatrixF", "Point2F", "Point4F", "vec3", "core_vehicle_manager", "dump",
         "dumps", "extensions", "getCameraProjMatrix", "getPlayerVehicle",
         "getVehicleColor", "getAllVehicles", "log", "scenetree", "ui_imgui",
+        "core_terrain", "GBitmap", "ColorI",
     },
     "lua/vehicle/": {
         "dump", "log", "obj", "particles", "playerInfo", "tableSize", "v",

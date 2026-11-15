@@ -196,6 +196,10 @@ ui_imgui = setmetatable({
 }, { __index = function() return function() return false end end })
 
 -- ------------------------------------------------------ load the GE side ----
+local nativeDofile=dofile
+dofile=function(path)
+  return nativeDofile(path:sub(1,5)=="/lua/" and ROOT..path or path)
+end
 local paint = dofile(ROOT .. "/lua/ge/extensions/scratches/paint.lua")
 scratches_paint = paint
 
@@ -809,6 +813,7 @@ for _=1,30 do frame(.02) end
 check(paint.getStats().perf.projectCalls==1 and paint.getStats().anchors.synthesized==0,"legacy projected anchors remain selectable for comparison")
 paint.setSyntheticAnchors(true)
 passes = passes + dofile("tools/sim/adapter_harness.lua")
+passes = passes + dofile("tools/sim/soil_color_harness.lua")
 
 print(string.format("%d passed, %d failed  (projects=%d bakes=%d layers=%d composites=%d)",
   passes, failures, counters.projects, counters.bakes, counters.bakeLayers, counters.combines))

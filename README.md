@@ -127,9 +127,12 @@ own factory paint, normals and livery. Mud, scratches, washing and detail relief
 reach both materials. [Panel-seam captures and reproduction steps](docs/evidence/soil-continuity/report.md)
 cover plain and Police paint. This fixes the previously clean rear quarters.
 
-Soil colors are still fixed by kind, not sampled from the ground texture. Mud
-can look too orange against gray-brown terrain. Terrain-matched color remains
-unfinished; collision material IDs alone do not provide the visible surface RGB.
+Soil tint now follows the contacted terrain material: local base-map color plus
+averaged detail/macro color, converted for the vehicle decal's color space.
+The Gridmap mud strip now deposits gray-brown mud instead of the old orange.
+Mesh surfaces, unreadable maps and unmatched ground models use a fallback.
+This approximates surface albedo; it does not copy shadows, puddles or terrain
+layer blending. [Color captures, limits and reproduction](docs/evidence/terrain-color/report.md).
 
 Driving over real MUD, DIRT or SNOW collision materials adds overlapping soil
 patches around the wheels and lower side panels. Rolling tires work without

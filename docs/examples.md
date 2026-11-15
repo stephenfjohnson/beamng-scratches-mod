@@ -1,5 +1,20 @@
 # Examples and troubleshooting
 
+## Terrain-colored mud
+
+On Gridmap v2, select the supported plain or stock Police ETK and drive through
+the mud strip. Fresh mud should be gray-brown, following the terrain beneath
+the wheels, rather than orange. Existing marks keep their baked color; reset
+before comparing versions. Check both the lower doors and rear quarters.
+See [before/after captures and the short automated fixture](evidence/terrain-color/report.md).
+
+For a developer check, inspect `scratches_paint.getSurfaceState().lastSample`
+in GE Lua after a deposit: `colorSource = "terrain-local"`, `terrainMaterial`,
+`terrainTexture` and `color` identify the sampled source and decal tint.
+`terrain-average` means a texture average was used; `fallback` means the contact
+could not be matched safely. At the deposit cap, later rejected samples may no
+longer carry color metadata. Terrain's lighting and puddles are not copied.
+
 ## First drive
 
 1. Install one copy of the mod using the README instructions.

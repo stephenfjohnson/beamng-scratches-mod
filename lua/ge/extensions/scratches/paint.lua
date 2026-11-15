@@ -47,6 +47,7 @@ end
 -- ---- state ----
 local adapter = nil
 local adapterModule = nil
+local soilColor = dofile("/lua/ge/extensions/scratches/soilColor.lua")
 local adapterReloaded = {}
 local editorPaused = false
 local api               = nil    -- editor_api_dynamicDecals module
@@ -2259,20 +2260,20 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
   if not ready or not veh or veh:getId() ~= vid then return end
   surfaceState.waterSupported = supported == true
   if wet == true and supported == true then surfaceWaterAge = 0; waterFraction=math.max(0,math.min(1,tonumber(fraction) or 1)); return end
-  local colors = {mud={0.62,0.36,0.16}, dirt={0.68,0.53,0.33}, snow={0.88,0.92,0.96}}
+  local kinds = {mud=true,dirt=true,snow=true}
   local inv = veh:getRefNodeMatrix():fullInverse()
   local rot = inv:copy(); rot:setColumn(3,vec3(0,0,0))
   for i=1,math.min(3, type(samples) == "table" and #samples or 0) do
     local e = samples[i]
-    local c = type(e) == "table" and colors[e[1]]
-    local valid = c ~= nil
+    local valid = type(e) == "table" and kinds[e[1]] == true
     for j=2,7 do
       local n = type(e) == "table" and e[j]
       if type(n) ~= "number" or n ~= n or math.abs(n) > 1e7 then valid=false end
     end
     if valid then
       surfaceState[e[1]] = math.min(1, surfaceState[e[1]] + 0.025)
-      local p = inv:mulP3F(vec3(e[2],e[3],e[4]))
+      local worldPos=vec3(e[2],e[3],e[4])
+      local p = inv:mulP3F(worldPos)
       local normal = rot:mulP3F(vec3(e[5],e[6],e[7]))
       local flow, spraySpeed, trailLength, projectionDepth
       if e[8] == 1 then
@@ -2321,6 +2322,11 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
       local key = e[1]..":"..math.floor(p.x*3)..":"..math.floor(p.y*3)..":"..math.floor(p.z*3)
       if surfaceState.deposits < 96 and (surfaceSpots[key] or 0) < 12
           and surfaceWaterAge > 0.5 then
+        local c,source,material,texture=soilColor.resolve(e[1],worldPos)
+        surfaceState.lastSample.color=c
+        surfaceState.lastSample.colorSource=source
+        surfaceState.lastSample.terrainMaterial=material
+        surfaceState.lastSample.terrainTexture=texture
         surfaceSpots[key] = (surfaceSpots[key] or 0)+1
         surfaceState.deposits = surfaceState.deposits+1
         enqueueStamp(p, normal, {

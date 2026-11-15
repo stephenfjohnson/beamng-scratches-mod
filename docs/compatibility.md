@@ -12,6 +12,11 @@ Process-cold tests retain shader caches. No other build, GPU or OS is certified.
 
 ## Synthetic-anchor build (current)
 
+Terrain-aware soil tint is visually checked on Gridmap v2 MUD with the Police
+ETK on Vulkan. It samples the local terrain base map, with bounded texture
+caching and fallback colors for unsupported contacts. Dirt/snow color and other
+maps still need live checks. [Color test and known limits](evidence/terrain-color/report.md).
+
 The November 15 soil follow-up adds the separate ETK `etk800_extra` material
 alongside the main body, preserving each material's own plain/Police stages.
 Live Vulkan seam fixtures on both paints now cross the fender/door, door/door

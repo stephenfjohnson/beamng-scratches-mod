@@ -1,0 +1,17 @@
+{
+  "position": {
+    "x": -314.5578918,
+    "y": -309.56604,
+    "z": 99.98213959
+  },
+  "source": "terrain-local",
+  "texture": "/levels/gridmap_v2/art/terrains/t_terrain_base_b.png",
+  "firstResolveMs": 98.690299997543,
+  "cachedMeanMs": 0.028186999988975,
+  "material": "Mud",
+  "color": [
+    0.61380635887279,
+    0.59334655234603,
+    0.55766528782119
+  ]
+}
