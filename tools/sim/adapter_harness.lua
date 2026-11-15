@@ -46,6 +46,9 @@ local function engineAPI()
   local api={}
   api.bakeLayers=function() return decalProjection end
   api.onUpdate_=function() return app end
+  local width=4096
+  api.getTextureResolution=function() return {x=width,y=width/2} end
+  api.setTextureResolution=function(r) width=r.x end
   api.setup=function() api.updateVehicleMaterials() end
   api.updateVehicleMaterials=function() error('unsafe heuristic called') end
   api.getShapeMaterialNames=function() return {[5]='etk800',[7]='scratches_etk800_42_police',[8]='scratches_etk800_42_plain'} end
@@ -58,7 +61,7 @@ dofile=function(path)
   if path:find('editor/api/dynamicDecals') then return engineAPI() end
   return realDofile(path)
 end
-Point2I=function() return {} end
+Point2I=function(x,y) return {x=x,y=y} end
 local soilAllocations=0
 DecalProjection=function()
   soilAllocations=soilAllocations+1
@@ -126,6 +129,12 @@ check(p.material:getField('baseColorFactor',2)=='0.75 0.75 0.75 1','dark plain p
 check(damageAllocations==2,'one damage projection per adapter module, reused on switch')
 check(p.api==a.api,'same private API across supported attachments')
 check(soilAllocations==2,'one soil projection per adapter module, reused on switch')
+p:setDamageWidth(2048)
+check(p:getDamageWidth()==2048,'explicit half-resolution private quality setting')
+check(p.source:getField('activeLayers',0)=='2','quality never changes original source')
+check(soilAllocations==2 and damageAllocations==2,'quality reuses private projections without soil allocation')
+check(not pcall(function() p:setDamageWidth(1536) end),'unsupported resolution is rejected')
+p:setDamageWidth(4096)
 -- Simulate map teardown: stale userdata must never be called.
 objects[p.material:getName()]=nil
 p.material.setField=function() error('deleted material called') end

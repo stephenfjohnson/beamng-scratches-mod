@@ -19,7 +19,8 @@ Repeated tests reproduced a **652 ms native projection call** on the old
 baseline and **738 ms with these fixes installed** during sustained scraping.
 The ten-minute run also reproduced a 732 ms projection and 663 ms bake batch;
 sustained input dropped work and needed up to 6.52 seconds to drain. Milestone 5
-feature acceptance remains incomplete; this investigation run is complete.
+feature acceptance remains incomplete. Work has resumed on explicit quality presets,
+native batch size and coverage-aware aggregation; see [resumed investigation](investigations/11-quality-throughput.md).
 Changes are retained on the milestone branch; last merged baseline is c8bcae6.
 Stable release remains blocked pending native profiling, mitigation and repeated validation;
 there is no all-hardware FPS guarantee. See the [acceptance gates and measured

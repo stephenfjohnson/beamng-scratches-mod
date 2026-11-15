@@ -6,7 +6,8 @@ local skipFields = {name=true,mapTo=true,persistentId=true,parentGroup=true,
 local prepared = {}
 local rejected = {}
 local clones = {}
-local privateApi -- reuse the full-resolution damage target across attachments
+local privateApi -- reuse the private damage target across attachments
+local damageWidth = 4096
 local soilTarget -- one reusable soil projection for this painter, not per vehicle
 
 function M.editorActive()
@@ -125,6 +126,9 @@ function M.create(veh,part)
   privateApi = api
   local projection = getUpvalue(api.bakeLayers,"decalProjection")
   local app = getUpvalue(api.onUpdate_,"app")
+  if api.getTextureResolution().x ~= damageWidth then
+    api.setTextureResolution(Point2I(damageWidth,damageWidth/2))
+  end
   local textureSet = app.textureSet
   function app:onUpdate()
     projection:setShape(veh:getDecalProjectionShape())
@@ -170,6 +174,16 @@ function M.create(veh,part)
   -- Material is selected at construction via the flexbody override.
   local result = {api=api,projection=projection,material=mat,source=source,
     sourceName=sourceName,stage=count,part=part,indices=indices,vid=veh:getId()}
+  function result:setDamageWidth(width)
+    assert(width==4096 or width==2048 or width==1024, "unsupported damage resolution")
+    assert(not M.editorActive(), "editor owns rendering")
+    api.setTextureResolution(Point2I(width,width/2))
+    textureSet=app.textureSet
+    app:onUpdate()
+    assert(api.getTextureResolution().x==width, "native resolution change failed")
+    damageWidth=width
+  end
+  function result:getDamageWidth() return api.getTextureResolution().x end
   local originalWet = {}
   for st=0,count-1 do
     originalWet[st]={}

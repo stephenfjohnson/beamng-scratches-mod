@@ -62,7 +62,7 @@ HOMES = {
 
 # offset/vel are in the home frame (fwd, right, up); euler in degrees.
 SCENARIOS = {
-    "sustained": dict(desc="assisted roof scrape: maintain 4 m/s horizontal velocity for 30 seconds; real collisions",
+    "sustained": dict(desc="assisted roof scrape v2: additive translation to 4 m/s for 30 seconds, preserving internal node motion; real collisions",
                       offset={"up": 1.3}, euler={"roll": 180}, vel={"fwd": 4},
                       sustainVelocity=True, settle=False, maxTime=30),
     "baseline": dict(desc="upright, coasting at 15 m/s - should leave no marks",

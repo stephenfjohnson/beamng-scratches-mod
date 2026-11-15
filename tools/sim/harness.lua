@@ -637,6 +637,54 @@ check(r>=0.72 and r<=0.80 and r==g and g==b and a==0.72,"shallow depth brush use
 local _,_,_,deep=tone(1)
 check(deep>a and deep<=0.89,"deep damage increases opacity within bound")
 
+-- Representative coalescing: contained repeated damage is accounted, not lost.
+partConfig.partsTree.children[1].chosenPartName=""
+paint.onVehicleSpawned(playerVid)
+for i=1,4 do frame() end
+local savedDofile=dofile
+dofile=function(path) return savedDofile(path=="/lua/ge/extensions/scratches/coverage.lua" and "lua/ge/extensions/scratches/coverage.lua" or path) end
+paint.clearStamps();paint.setCoverageCoalescing(true);paint.resetPaintStats()
+for i=1,200 do paint.stampAtLocal(vec3(0,0,.3),vec3(0,0,1),{noJitter=true,scale=.1,colorTex="m4_scrape_a.png"}) end
+local co=paint.getStats().coverage
+check(co.requests==200 and co.representatives==1 and co.mergedQueued==199,"repeated contained inputs retain one queued representative")
+check(paint.getStats().stamp.aggregateDropped==0,"coalescing happens before aggregate cap")
+for _=1,50 do frame(.02) end
+co=paint.getStats().coverage
+check(co.completedRequests==200 and co.pendingRequests==0 and co.lostRequests==0,"bake accounts all represented requests")
+check(co.unrepresentedCells==0,"all requested footprint proxy cells represented")
+paint.stampAtLocal(vec3(0,0,.3),vec3(0,0,1),{noJitter=true,scale=.05,colorTex="m4_scrape_b.png"})
+check(paint.getStats().coverage.mergedBaked==1,"contained brush variant is an explicit completed representative merge")
+paint.stampAtLocal(vec3(.4,0,.3),vec3(0,0,1),{noJitter=true,scale=.1,colorTex="m4_scrape_a.png"})
+check(paint.getStats().coverage.representatives==2,"new area is never merged into a distant mark")
+paint.setCoverageCoalescing(false);dofile=savedDofile
+
+local cov=savedDofile("lua/ge/extensions/scratches/coverage.lua").new(function() return 2 end)
+local function input(x,n,scale,sev) return {localPos=vec3(x,0,0),localNormal=n,scale=scale,brush="m4_scrape_a.png",severity=sev,queuedAt=0} end
+local r=cov:admit(input(0,vec3(0,0,1),.1,0))
+local _,needed=cov:admit(input(0,vec3(0,0,-1),.1,0));check(needed,"opposite panels never coalesce")
+_,needed=cov:admit(input(0,vec3(0,0,1),.2,0));check(needed,"larger footprint retains new coverage")
+_,needed=cov:admit(input(0,vec3(0,0,1),.1,1));check(needed,"stronger severity retains new work")
+cov:fail(r);check(cov:snapshot().lostRequests==1,"failed representative explicitly counts lost coverage requests")
+local fresh=savedDofile("lua/ge/extensions/scratches/coverage.lua").new(function() return 2 end)
+local failed=fresh:admit(input(0,vec3(0,0,1),.1,0));fresh:fail(failed)
+_,needed=fresh:admit(input(0,vec3(0,0,1),.1,0));check(needed,"failed mark cannot suppress retry")
+local _,same=fresh:admit(input(0,vec3(0,0,1),.1,0));check(not same and fresh:snapshot().staleMerged==1,"stale queued work coalesces with original age retained")
+
+paint.clearStamps();paint.resetPaintStats();paint.setPanelGrouping(true);paint.setBakeBudget(1)
+counters.maxBakeLayers=0
+for i=1,20 do paint.stampAtLocal(vec3((i-10)*.07,0,.3),vec3(0,0,1),{noJitter=true,scale=.04}) end
+for _=1,100 do frame(.02) end
+check(paint.getStats().stamp.projectsIssued==1,"wider same-panel group shares one projection")
+check(paint.getStats().perf.bakeLayersTotal==20,"panel grouping retains every authored layer")
+check(counters.maxBakeLayers<=1,"native bake batch setting is honored")
+local gen=paint.getStats().generation;paint.clearStamps()
+check(paint.getStats().generation>gen,"reset generation exposes invalidated measurement")
+paint.resetPaintStats()
+paint.stampAtLocal(vec3(0,0,.3),vec3(0,0,1),{noJitter=true,scale=.04})
+paint.stampAtLocal(vec3(.05,0,.3),vec3(0,0,-1),{noJitter=true,scale=.04})
+for _=1,40 do frame(.02) end
+check(paint.getStats().stamp.projectsIssued==2,"opposing normals never share the wider panel camera")
+paint.setPanelGrouping(false);paint.setBakeBudget(6)
 passes = passes + dofile("tools/sim/adapter_harness.lua")
 
 print(string.format("%d passed, %d failed  (projects=%d bakes=%d layers=%d composites=%d)",

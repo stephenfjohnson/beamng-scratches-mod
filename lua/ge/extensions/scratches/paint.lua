@@ -121,7 +121,8 @@ local stampStats = {
   framesFlushed       = 0,
   bakesIssued         = 0,
   projectsIssued      = 0,  -- (F) shared-camera projects/frame; was N
-  clustersTotal       = 0,  -- (F) total clusters across flushed frames
+  clustersTotal       = 0,
+  clusterJobsMerged   = 0,  -- (F) total clusters across flushed frames
   streamsBaked        = 0,
   streamSubstrokesTotal = 0,
   jobsDropped         = 0,  -- projection jobs refused because the backlog was full
@@ -148,6 +149,7 @@ local perfStats = {
   projectMsTotal = 0, projectMsMax = 0, projectCalls = 0,
   layerMsTotal = 0, layerCalls = 0,
   bakeMsTotal = 0, bakeMsMax = 0, bakeCalls = 0, bakeLayersTotal = 0,
+  inputToBakeMaxMs = 0, inputToProjectMaxMs = 0,
 }
 
 -- Add the time since t0 (os.clockhp seconds) to perfStats[totalKey], track
@@ -1331,6 +1333,10 @@ end
 -- so a big crash is spread across a few frames instead of landing as a single
 -- long hitch. Positions are vehicle-local, so a job deferred a frame or two
 -- still lands on the right panel.
+local cosmeticGeneration = 0
+local panelGrouping = false
+local coverage -- optional; explicit representative policy, independent of soil
+local coverageModule
 local jobQueue               = {}
 -- Captured decal layers waiting to be baked. Baking costs ~0.85 ms per layer
 -- and has no per-frame toll of its own, so it runs on the frames between
@@ -1358,10 +1364,29 @@ local function enqueueJob(job, vid)
     table.clear(jobQueue)
     jobQueueVid = vid
   end
+  -- Preserve every layer while sharing a projection across nearby queued work.
+  if panelGrouping and not job.stream then
+    local normal=averageNormals(job.members)
+    for _,q in ipairs(jobQueue) do
+      if not q.stream and #q.members+#job.members<=MAX_LAYERS_PER_FLUSH then
+        local dx,dy,dz=q.cx-job.cx,q.cy-job.cy,q.cz-job.cz
+        if dx*dx+dy*dy+dz*dz<=1.2*1.2 and averageNormals(q.members):dot(normal)>=.9 then
+          local a,b=#q.members,#job.members
+          q.cx=(q.cx*a+job.cx*b)/(a+b);q.cy=(q.cy*a+job.cy*b)/(a+b);q.cz=(q.cz*a+job.cz*b)/(a+b)
+          for _,s in ipairs(job.members) do q.members[#q.members+1]=s end
+          q.queuedAt=math.min(q.queuedAt or clockhp(),job.queuedAt or clockhp())
+          stampStats.clusterJobsMerged=stampStats.clusterJobsMerged+1
+          return true
+        end
+      end
+    end
+  end
   if #jobQueue >= MAX_QUEUED_JOBS then
     stampStats.jobsDropped = stampStats.jobsDropped + 1
+    if coverage then for _,s in ipairs(job.members or {}) do coverage:fail(s.coverageRecord) end end
     return false
   end
+  job.queuedAt = job.queuedAt or clockhp()
   jobQueue[#jobQueue + 1] = job
   return true
 end
@@ -1373,8 +1398,10 @@ hasPendingWorkRef = hasPendingWork
 
 -- Drop every queued projection job (vehicle switch, clear).
 M._dropQueuedJobs = function()
+  cosmeticGeneration=cosmeticGeneration+1
   table.clear(jobQueue)
   table.clear(bakeQueue)
+  if coverage then coverage=coverageModule.new(clockhp) end
   jobQueueVid = nil
 end
 
@@ -1421,12 +1448,8 @@ local function enqueueStamp(localPos, localNormal, opts, vid)
     pendingStampsVid = vid
   end
 
-  if #pendingStampInputs >= AGGREGATE_PER_FRAME_CAP then
-    stampStats.aggregateDropped = stampStats.aggregateDropped + 1
-    return
-  end
-
-  pendingStampInputs[#pendingStampInputs + 1] = {
+  local input = {
+    queuedAt    = clockhp(), severity = opts.severity,
     localPos    = localPos,
     localNormal = localNormal,
     soil        = opts.soil,
@@ -1439,6 +1462,17 @@ local function enqueueStamp(localPos, localNormal, opts, vid)
     skipMetal   = opts.skipMetal and true or false,
     dist        = opts.dist,
   }
+  if coverage and not input.soil then
+    local rec,needed=coverage:admit(input)
+    if not needed then return end
+    input.coverageRecord=rec
+  end
+  if #pendingStampInputs >= AGGREGATE_PER_FRAME_CAP then
+    stampStats.aggregateDropped = stampStats.aggregateDropped + 1
+    if coverage then coverage:fail(input.coverageRecord) end
+    return
+  end
+  pendingStampInputs[#pendingStampInputs+1]=input
   stampStats.stampsEnqueued = stampStats.stampsEnqueued + 1
 end
 
@@ -1467,11 +1501,14 @@ local function buildClusters(inputs)
       local dx = s.localPos.x - c.cx
       local dy = s.localPos.y - c.cy
       local dz = s.localPos.z - c.cz
-      if (dx*dx + dy*dy + dz*dz) < (CLUSTER_RADIUS * CLUSTER_RADIUS) then
+      local radius=panelGrouping and math.max(CLUSTER_RADIUS,1.2) or CLUSTER_RADIUS
+      if (dx*dx + dy*dy + dz*dz) < radius*radius and
+        (not panelGrouping or (#c.members<MAX_LAYERS_PER_FLUSH and averageNormals(c.members):dot(s.localNormal)>=.9)) then
         local k = #c.members
         c.cx = (c.cx * k + s.localPos.x) / (k + 1)
         c.cy = (c.cy * k + s.localPos.y) / (k + 1)
         c.cz = (c.cz * k + s.localPos.z) / (k + 1)
+        c.queuedAt = math.min(c.queuedAt,s.queuedAt or clockhp())
         c.members[k + 1] = s
         placed = true
         break
@@ -1480,7 +1517,7 @@ local function buildClusters(inputs)
     if not placed then
       clusters[#clusters + 1] = {
         cx = s.localPos.x, cy = s.localPos.y, cz = s.localPos.z,
-        members = {s},
+        members = {s}, queuedAt = s.queuedAt or clockhp(),
       }
     end
   end
@@ -1781,6 +1818,11 @@ local function runClusterJob(cluster, projM, bakeList)
       clusterDist = s.dist
     end
   end
+  if panelGrouping then
+    local extent=0
+    for _,s in ipairs(cluster.members) do extent=math.max(extent,distLocal(centroid,s.localPos)+s.scale) end
+    clusterDist=math.max(clusterDist or .5,(extent+.05)*2.2)
+  end
   local camLocal = buildSyntheticCameraLocal(centroid, averageNormals(cluster.members), clusterDist)
   setScratchProjectionFence(true)
   local tp = clockhp()
@@ -1825,7 +1867,9 @@ local function runClusterJob(cluster, projM, bakeList)
       local cuv = decalData.cursorPosScreenUv
       if not cuv or cuv.x < 0 or cuv.x > 1 or cuv.y < 0 or cuv.y > 1 then
         skipped = skipped + 1
+        if coverage then coverage:fail(s.coverageRecord) end
       else
+        decalData._scratchesCoverage = s.coverageRecord
         decalData.uid       = nextLayerUid()
         decalData.name      = s.soil and "soil" or "scratch"
         decalData.enabled   = true
@@ -1842,7 +1886,7 @@ local function runClusterJob(cluster, projM, bakeList)
             cuv.x, cuv.y, decalData.uid))
         end
       end
-    end
+    elseif coverage then coverage:fail(s.coverageRecord) end
   end
   setScratchProjectionFence(false)
   if skipped > 0 then
@@ -1913,16 +1957,19 @@ local function flushPendingStamps()
   for i = 1, run do
     local job = batch[i]
     local before = #bakeList
+    perfStats.inputToProjectMaxMs = math.max(perfStats.inputToProjectMaxMs,(clockhp()-(job.queuedAt or clockhp()))*1000)
     local ok, err = pcall(job.stream and runStreamJob or runClusterJob, job, projM, bakeList)
     if not ok then
       -- Discard whatever the failed job half-produced.
       for k = #bakeList, before + 1, -1 do bakeList[k] = nil end
       setScratchProjectionFence(false)
       stampStats.jobsFailed = stampStats.jobsFailed + 1
+      if coverage then for _,s in ipairs(job.members or {}) do coverage:fail(s.coverageRecord) end end
       log('E', logTag, "projection job failed: " .. tostring(err))
     elseif not job.stream then
       clusters = clusters + 1
     end
+    for k=before+1,#bakeList do bakeList[k]._scratchesQueuedAt=job.queuedAt end
   end
 
   -- Capturing soil on the shared camera leaves a working preview in the
@@ -1963,6 +2010,10 @@ local function bakePending()
   end
   perfAdd(tb, "bakeMsTotal", "bakeMsMax", "bakeCalls")
   perfStats.bakeLayersTotal = perfStats.bakeLayersTotal + k
+  for _,layer in ipairs(chunk) do
+    if coverage then coverage:complete(layer._scratchesCoverage) end
+    perfStats.inputToBakeMaxMs=math.max(perfStats.inputToBakeMaxMs,(clockhp()-(layer._scratchesQueuedAt or clockhp()))*1000)
+  end
   M._lastDecal = chunk[k]
   combineDirty = true
   stampStats.bakesIssued   = stampStats.bakesIssued + 1
@@ -2456,6 +2507,7 @@ M.resetPaintStats = function()
   stampStats.bakesIssued = 0
   stampStats.projectsIssued = 0
   stampStats.clustersTotal = 0
+  stampStats.clusterJobsMerged = 0
   stampStats.streamsBaked = 0
   stampStats.streamSubstrokesTotal = 0
   stampStats.jobsDropped = 0
@@ -2477,7 +2529,17 @@ M.getStats = function()
   local stamp, perf = {}, {}
   for k, v in pairs(stampStats) do stamp[k] = v end
   for k, v in pairs(perfStats) do perf[k] = v end
+  local oldest
+  for _,q in ipairs({pendingStampInputs,jobQueue,bakeQueue}) do
+    for _,v in ipairs(q) do
+      local born=v.queuedAt or v._scratchesQueuedAt
+      if born then oldest=oldest and math.min(oldest,born) or born end
+    end
+  end
   return {
+    generation=cosmeticGeneration,
+    coverage = coverage and coverage:snapshot() or {enabled=false},
+    latency = {oldestMs=oldest and (clockhp()-oldest)*1000 or 0},
     ready  = ready,
     stamp  = stamp,
     perf   = perf,
@@ -2485,7 +2547,8 @@ M.getStats = function()
     queue  = { stamps = #pendingStampInputs, jobs = #jobQueue, bake = #bakeQueue },
     config = { aggregateCap = AGGREGATE_PER_FRAME_CAP, clusterRadius = CLUSTER_RADIUS,
                projBudget = MAX_PROJECTS_PER_FRAME, flushInterval = FLUSH_INTERVAL,
-               layerBudget = MAX_LAYERS_PER_FLUSH,
+               layerBudget = MAX_LAYERS_PER_FLUSH, bakeBudget = BAKE_LAYERS_PER_FRAME,
+               damageWidth = adapter and adapter:getDamageWidth() or 0, coverageCoalescing=coverage~=nil, panelGrouping=panelGrouping,
                fullRateCombine = fullRateCombine },
   }
 end
@@ -2495,6 +2558,29 @@ M.getLastFrameMs = function() return perfStats.lastMs end
 
 -- Projection passes allowed per frame. Lower = flatter frame times during a
 -- big crash (marks trickle in over a few frames); higher = marks land sooner.
+-- Changing quality clears cosmetics explicitly; only our private ETK target changes.
+M.setDamageResolution = function(width)
+  width=tonumber(width)
+  assert(adapter and ready, "private ETK adapter required")
+  assert(width==4096 or width==2048 or width==1024, "use 4096, 2048 or 1024")
+  if adapter:getDamageWidth()==width then return end
+  M.clearStamps()
+  adapter:setDamageWidth(width)
+  combineDirty=true; rebindDirty=true
+end
+M.setCoverageCoalescing = function(enabled)
+  if (coverage~=nil)==(enabled and true or false) then return end
+  M.clearStamps()
+  if enabled then
+    coverageModule=coverageModule or dofile("/lua/ge/extensions/scratches/coverage.lua")
+    coverage=coverageModule.new(clockhp)
+  else coverage=nil end
+end
+M.setPanelGrouping = function(enabled) panelGrouping=enabled and true or false end
+M.setBakeBudget = function(n)
+  BAKE_LAYERS_PER_FRAME=math.max(1,math.min(24,math.floor(tonumber(n) or 6)))
+end
+
 M.setProjectionBudget = function(n)
   MAX_PROJECTS_PER_FRAME = math.max(1, math.floor(tonumber(n) or 6))
   log('I', logTag, "MAX_PROJECTS_PER_FRAME = " .. tostring(MAX_PROJECTS_PER_FRAME))

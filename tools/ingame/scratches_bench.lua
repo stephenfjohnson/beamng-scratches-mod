@@ -116,7 +116,8 @@ local function finish(err)
     drainSeconds = run.drainSeconds,
     drainWallSeconds = run.drainWallSeconds,
     frames = run.frames,
-    painter = run.painterStats or paintStats,
+    painter = run.painterStats or run.lastValidPainterStats or paintStats,
+    initialGeneration = run.initialGeneration,
     detect = run.detect,
     detectProf = run.detectProf,
     shots = run.shotFiles,
@@ -126,7 +127,7 @@ local function finish(err)
 end
 
 local function newFrames()
-  return { t = {}, frameMs = {}, painterMs = {}, projectTotalMs = {}, bakeTotalMs = {}, queuedJobs = {}, queuedLayers = {}, speed = {}, upZ = {} }
+  return { t = {}, frameMs = {}, painterMs = {}, projectTotalMs = {}, bakeTotalMs = {}, queuedJobs = {}, queuedLayers = {}, oldestMs = {}, inputToBakeMaxMs = {}, coverageRequests = {}, coverageDelivered = {}, coverageRequired = {}, coverageMerged = {}, coverageLost = {}, speed = {}, upZ = {} }
 end
 
 -- frameMs is wall time between successive bench updates (os.clockhp): the
@@ -135,15 +136,30 @@ local function sample(veh)
   local f = run.frames
   local n = #f.t + 1
   local now = clockhp()
+  local stats = scratches_paint and scratches_paint.getStats and scratches_paint.getStats()
+  if stats then
+    if run.initialGeneration and stats.generation~=run.initialGeneration then
+      error('cosmetic reset during measured run; queues/coverage invalidated')
+    end
+    run.initialGeneration=stats.generation
+    run.lastValidPainterStats=stats
+  end
   f.t[n] = run.t
   f.frameMs[n] = run.lastClock and (now - run.lastClock) * 1000 or 0
   run.lastClock = now
   f.painterMs[n] = scratches_paint and scratches_paint.getLastFrameMs and scratches_paint.getLastFrameMs() or 0
-  local stats = scratches_paint and scratches_paint.getStats and scratches_paint.getStats()
+  local cov=stats and stats.coverage or {}
+  f.coverageRequests[n]=cov.requests or 0
+  f.coverageRequired[n]=cov.requiredCells or 0
+  f.coverageDelivered[n]=cov.deliveredCells or 0
+  f.coverageMerged[n]=(cov.mergedQueued or 0)+(cov.mergedBaked or 0)
+  f.coverageLost[n]=cov.lostRequests or 0
   f.projectTotalMs[n] = stats and stats.perf.projectMsTotal or 0
   f.bakeTotalMs[n] = stats and stats.perf.bakeMsTotal or 0
   f.queuedJobs[n] = stats and stats.queue.jobs or 0
   f.queuedLayers[n] = stats and stats.queue.bake or 0
+  f.oldestMs[n] = stats and stats.latency and stats.latency.oldestMs or 0
+  f.inputToBakeMaxMs[n] = stats and stats.perf.inputToBakeMaxMs or 0
   f.speed[n] = veh:getVelocity():length()
   f.upZ[n] = veh:getDirectionVectorUp().z
   table.clear(metricsScratch)
@@ -255,9 +271,11 @@ local function step(dtReal)
     local sc = cfg.scenario
     if run.phase == 'run' then
       if sc.sustainVelocity then
-        -- Assisted stress fixture: retain gravity/vertical motion, inject no contacts.
-        local v = run.launchVel
-        veh:applyClusterVelocityScaleAdd(veh:getRefNodeId(), 0, v.x, v.y, veh:getVelocity().z)
+        -- Rigid translation correction only: preserve internal node velocities.
+        -- Scale=0 erased deformation motion every render frame and could cause
+        -- physics instability; this fixture never synthesizes contact events.
+        local v,current = run.launchVel,veh:getVelocity()
+        veh:applyClusterVelocityScaleAdd(veh:getRefNodeId(), 1, v.x-current.x, v.y-current.y, 0)
       end
       local speed = run.frames.speed[#run.frames.speed]
       run.still = (speed < (sc.settleSpeed or 0.3)) and (run.still + dtReal) or 0
