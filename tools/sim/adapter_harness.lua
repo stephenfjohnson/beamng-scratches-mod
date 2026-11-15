@@ -141,4 +141,31 @@ p.material.setField=function() error('deleted material called') end
 check(pcall(function() p:detach() end),'detach tolerates deleted scene material')
 check(pcall(adapter.disableAll),'unload tolerates deleted scene material')
 dofile=realDofile
+local realRequire=require
+local invalidations=0
+require=function(name)
+  assert(name=='jbeam/loader')
+  return {onFileChanged=function() invalidations=invalidations+1 end}
+end
+adapter.invalidateConstructionCache()
+check(invalidations==1,'construction retry invalidates cached per-vehicle overrides')
+editor.active=true
+check(not pcall(adapter.invalidateConstructionCache) and invalidations==1,'editor ownership prevents cache invalidation')
+editor.active=false
+require=realRequire
+local orphan=material('scratches_etk800_99_plain');objects[orphan:getName()]=orphan
+orphan:setField('scratchesOwner',0,'etkAdapter-v1')
+function orphan:delete() objects[self.name]=nil end
+scenetree.findClassObjects=function() local names={};for name in pairs(objects) do names[#names+1]=name end;return names end
+getAllVehicles=function() return {veh} end
+local originalNames=veh.getMaterialNames
+veh.getMaterialNames=function() return {'scratches_etk800_99_plain'} end
+adapter.collectUnusedMaterials()
+check(objects[orphan:getName()]~=nil,'cached clone referenced by another live mesh is retained')
+veh.getMaterialNames=originalNames
+editor.active=true
+check(not adapter.collectUnusedMaterials() and objects[orphan:getName()]~=nil,'editor defers orphan material cleanup')
+editor.active=false
+adapter.collectUnusedMaterials()
+check(objects[orphan:getName()]==nil and objects['etk800_main']~=nil,'unreferenced owned orphan removed without deleting source materials')
 return n

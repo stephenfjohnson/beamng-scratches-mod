@@ -42,6 +42,7 @@ local function cloneMaterial(veh,part)
   mat:setField("name",0,name)
   mat:setField("mapTo",0,name)
   mat.canSave = false
+  mat:setField("scratchesOwner",0,"etkAdapter-v1")
   clones[name] = {mat=mat,count=count}
   local function set(f,v) mat:setField(f,count,tostring(v)) end
   set("baseColorMap","@DynamicTextureBaseColor")
@@ -97,6 +98,38 @@ function M.prepare(_,vid,vdata,_,cfg)
     overrides[#overrides+1]={"etk800",prep.material:getName()}
     flex.materialOverride=overrides
   end
+end
+
+function M.invalidateConstructionCache()
+  assert(not M.editorActive(), "editor owns rendering")
+  -- Installed loader caches Phase2 flexbody overrides by config, not vehicle ID.
+  -- The existing one-shot reload must rebuild that bundle to get a private clone.
+  -- Use its public invalidation entry point only on this exceptional retry.
+  require("jbeam/loader").onFileChanged()
+end
+
+function M.collectUnusedMaterials()
+  if M.editorActive() then return false end
+  local liveIds, referenced = {}, {}
+  for _, veh in ipairs(getAllVehicles()) do
+    liveIds[veh:getId()] = true
+    for _, name in pairs(veh:getMaterialNames()) do referenced[name] = true end
+  end
+  -- Ownership marker survives extension reload; never touch a source material
+  -- or a clone referenced by any live mesh, including a stale cached bundle.
+  for _, id in ipairs(scenetree.findClassObjects("Material")) do
+    local mat = scenetree.findObject(id)
+    local name = mat and mat:getName()
+    local owner = name and tonumber(name:match("^scratches_etk800_(%d+)_"))
+    if owner and not liveIds[owner] and not referenced[name]
+       and mat:getField("scratchesOwner",0)=="etkAdapter-v1" then
+      mat:delete()
+      clones[name] = nil
+    end
+  end
+  for vid in pairs(prepared) do if not liveIds[vid] then prepared[vid]=nil end end
+  for vid in pairs(rejected) do if not liveIds[vid] then rejected[vid]=nil end end
+  return true
 end
 
 function M.create(veh,part)

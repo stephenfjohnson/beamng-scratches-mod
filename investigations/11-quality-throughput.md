@@ -269,3 +269,17 @@ loader.lua caches the Phase2-mutated bundle by configuration and skips Phase2 on
 a cache hit. A readiness/isolation probe follows; bounded material counts alone
 do not establish correct lifecycle behavior. No speculative deletion of a
 material still referenced by a cached/live mesh is appropriate.
+
+The readiness probe confirmed two of three subsequent identical ETK spawns were
+skipped. The narrow existing one-shot construction retry now invokes the installed
+loader public cache-invalidation entry point before reload. This invalidates the
+whole JBeam construction cache on that exceptional retry (not per frame or every
+spawn); it does not edit a config or share another vehicle's material. Editor
+ownership blocks the operation. Five replacements then all became ready with
+distinct clones. That exposed genuine material accumulation (3 to 8 after five
+spawn/deletes). Deferred cleanup now deletes only explicitly marked mod-owned
+materials whose owner and all mesh references are gone. It runs after destruction
+or extension startup, pauses for editor ownership and prunes stale Lua records.
+Five further replacements returned to the same count after every deletion. The
+eight older unmarked materials in that process were deliberately not deleted;
+a fresh process verifies clean lifetime bounds. Current preflight: 263 checks.

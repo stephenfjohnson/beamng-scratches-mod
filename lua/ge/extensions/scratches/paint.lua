@@ -567,6 +567,7 @@ local function trySetup()
         pendingSetup=false
         if adapterReloaded[vid] then skippedVid=vid; log('W',logTag,"ETK construction adapter unavailable; leaving original paint"); return false end
         adapterReloaded[vid]=true
+        adapterModule.invalidateConstructionCache()
         veh:reload()
         return false
       end
@@ -804,7 +805,11 @@ local function updateSurface(dt)
   if adapter then adapter:appearance(surfaceState.wetness,soilRemaining) end
 end
 
+local materialCleanupPending = true
 local function onUpdate(dtReal, dtSim, dtRaw)
+  if materialCleanupPending and adapterModule then
+    materialCleanupPending = not adapterModule.collectUnusedMaterials()
+  end
   if editorPaused and adapterModule and not adapterModule.editorActive() then
     editorPaused=false; skippedVid=nil; pendingSetup=true; setupAttemptTimer=SETUP_RETRY
   end
@@ -3357,7 +3362,11 @@ M.onJbeamLoadingPhase2 = function(...)
   if not adapterModule then adapterModule = dofile("/lua/ge/extensions/scratches/etkAdapter.lua") end
   adapterModule.prepare(...)
 end
-M.onVehicleDestroyed  = function(vid) ownedSkins[vid] = nil end
+M.onVehicleDestroyed  = function(vid)
+  ownedSkins[vid] = nil
+  adapterReloaded[vid] = nil
+  materialCleanupPending = true -- after destruction, never during mesh teardown
+end
 -- A reset can rebuild the car's materials; re-bind on the next composite.
 M.onVehicleResetted   = function(vid)
   local veh = getPlayerVehicle(0)
