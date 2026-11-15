@@ -1,0 +1,28 @@
+{
+  "before": [
+    {
+      "children": {},
+      "color": null,
+      "colorPaletteMapId": 1,
+      "name": "$type Layer",
+      "blendMode": 1,
+      "type": 1,
+      "uid": "2D10-F4FC",
+      "enabled": true,
+      "locked": false
+    }
+  ],
+  "after": [
+    {
+      "children": {},
+      "color": null,
+      "colorPaletteMapId": 1,
+      "name": "$type Layer",
+      "blendMode": 1,
+      "type": 1,
+      "uid": "2D10-F4FC",
+      "enabled": true,
+      "locked": false
+    }
+  ]
+}

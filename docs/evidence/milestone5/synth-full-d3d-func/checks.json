@@ -1,0 +1,7 @@
+{
+  "lifecycleSnapshots": 32,
+  "trafficNPCs": 3,
+  "waterStateChecks": true,
+  "scratchGenerationPreserved": true,
+  "renderingRequiresImageReview": true
+}
