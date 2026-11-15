@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased: material-preserving adapter for every vehicle
+## v0.2.0-preview — 2026-11-15: material-preserving adapter for every vehicle
+
+ZIP-only install, crash, mud and uninstall tested in game
+([record](docs/evidence/release-v0.2.0/README.md)).
 
 - Replace the ETK-only adapter with `bodyAdapter.lua`. Body materials are found
   the way the game does (mesh keys with a Dynamic Textures variant in the

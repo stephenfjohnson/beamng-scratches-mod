@@ -49,7 +49,8 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 - [ ] Listing text and screenshots for the BeamNG mod repository.
 - [x] The default ETK Rennspecht livery (and every other factory livery) is now
   supported, so a fresh install shows scratches immediately.
-- [ ] Cut a v0.2.0-preview release with the generic adapter (v0.1.0 is ETK-only).
+- [x] [v0.2.0-preview](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/tag/v0.2.0-preview) with the generic adapter; ZIP-only install,
+  crash and uninstall tested ([record](docs/evidence/release-v0.2.0/README.md)).
 
 ## Visual quality
 
@@ -86,8 +87,9 @@ not started. See [the release plan](docs/plans/release-sequence.md).
   Dynamic Textures vehicles attach ([survey](docs/evidence/adapter-survey/survey.json)),
   ten crash-tested with exact original-stage preservation
   ([fleet](docs/evidence/showcase/fleet/README.md)).
-- [ ] Drive mud, snow and water washing live on non-ETK vehicles (same stages,
-  not yet exercised).
+- [x] Mud driven live on a non-ETK vehicle (Covet, 26 deposits, terrain tint;
+  [evidence](docs/evidence/release-v0.2.0/mud-covet/)).
+- [ ] Drive snow and water washing live on non-ETK vehicles.
 - [ ] Spawn cost: clearing the JBeam cache before every supported spawn adds
   ~180 ms (covet: ~850 vs ~710 ms), traffic included. Invalidate only when the
   same config is already cached with another vehicle's clones.

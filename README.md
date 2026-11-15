@@ -10,12 +10,10 @@ actually happened and is baked into the car's paint without touching its livery.
 ![Scrapes, mud splashes, snow and washing, all captured in game](docs/showcase/hero.jpg)
 
 > **Status: development preview.** Everything on this page runs in game today on
-> BeamNG.drive 0.40.5.0. On `master` the material-preserving adapter covers **all
-> 38 stock cars, trucks and buses that ship Dynamic Textures**, with any paint
-> colour or factory livery. The published
-> **[v0.1.0-preview](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/tag/v0.1.0-preview)**
-> (MIT licensed) predates that and supports the ETK 800 only; or
-> [build the ZIP yourself](#packaging-for-release) from `master`.
+> BeamNG.drive 0.40.5.0, on **all 38 stock cars, trucks and buses that ship
+> Dynamic Textures**, with any paint colour or factory livery.
+> **[Download v0.2.0-preview](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/tag/v0.2.0-preview)** (MIT licensed), or
+> [build the ZIP yourself](#packaging-for-release).
 > Release blockers, open bugs and ideas parked on archived branches live in
 > **[TODO.md](TODO.md)**.
 
@@ -100,7 +98,7 @@ were crashed and checked: every clone matched its source material in every
 original stage, with 0–2.4% of marks missed
 ([fleet evidence](docs/evidence/showcase/fleet/README.md)). Mud, snow, washing and
 wet gloss use the same appended stages on every vehicle, but so far they've only
-been driven live on the ETK 800.
+been driven live on the ETK 800 and through Gridmap mud on a Covet.
 
 ### Mud, dirt and snow build up as you drive
 
@@ -225,7 +223,7 @@ bakes, backlog, composites) and sliders for every threshold and limit. See
 | --- | --- |
 | 38 stock cars, trucks and buses with Dynamic Textures, any paint colour | Material-preserving adapter: scratches over the real paint ([survey](docs/evidence/adapter-survey/survey.json)) |
 | The same vehicles with a factory livery | Livery cloned and preserved under the damage |
-| Mud, snow, washing, wet gloss | Same stages on every vehicle; driven live on the ETK 800 only so far |
+| Mud, snow, washing, wet gloss | Same stages on every vehicle; mud driven live on the ETK 800 and a Covet, snow and washing on the ETK 800 |
 | Your own Dynamic Textures editor design, another mod's body override, non-PBR materials | Detected and skipped; paint untouched |
 | Percheron and vehicles without Dynamic Textures | Mod stays idle (`NOT READY`) |
 | Vulkan | **Recommended.** Meets the native-call and latency targets in measured runs |
@@ -256,7 +254,7 @@ with both Vulkan and D3D12. Other builds are unverified.
 
 ### Players — packaged mod
 
-1. Download `scratches_mod.zip` from the [latest release](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/tag/v0.1.0-preview) and check it
+1. Download `scratches_mod.zip` from the [latest release](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/tag/v0.2.0-preview) and check it
    against `scratches_mod.zip.sha256` if you like (or [build it](#packaging-for-release)).
 2. Open the active user folder using the BeamNG launcher and place the ZIP
    in its `mods/` directory without extracting it. The default used by the
