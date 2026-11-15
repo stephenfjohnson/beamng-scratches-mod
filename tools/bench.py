@@ -152,7 +152,7 @@ def r3(x) -> float:
 def summarize(res: dict, run_id: str, name: str, tag: str, tuning: list[dict]) -> dict:
     f = res.get("frames") or {}
     n = len(f.get("t") or [])
-    span = (f["t"][-1] if n else 0) or 1e-9
+    span = sum(f.get("frameMs") or []) / 1000.0 or 1e-9
     painter = res.get("painter") or {}
     stamp, perf = painter.get("stamp") or {}, painter.get("perf") or {}
     det, prof = res.get("detect") or {}, res.get("detectProf") or {}
@@ -163,7 +163,7 @@ def summarize(res: dict, run_id: str, name: str, tag: str, tuning: list[dict]) -
         "run": run_id, "scenario": name, "tag": tag or "",
         "settled": bool(res.get("settled")), "seconds": r3(res.get("runSeconds")),
         "min_up_z": r3(min(f.get("upZ") or [1])), "rolled": min(f.get("upZ") or [1]) < 0,
-        "fps_avg": round(n / span, 1) if n else 0,
+        "fps_avg": round(max(0, n - 1) / span, 1) if n else 0,
         "frame_ms_p50": r3(pct(f.get("frameMs"), 50)), "frame_ms_p95": r3(pct(f.get("frameMs"), 95)),
         "frame_ms_max": r3(max(f.get("frameMs") or [0])),
         "lua_ms_p95": r3(pct(f.get("Lua"), 95)), "lua_ms_max": r3(max(f.get("Lua") or [0])),
@@ -209,10 +209,14 @@ def write_report(out_dir: str, s: dict, res: dict, scenario: dict) -> None:
     L = [f"# {s['scenario']} - {s['run']}", "", f"_{scenario.get('desc', '')}_", ""]
     if res.get("error"):
         L += [f"**Run error:** `{res['error']}`", ""]
+    queue = res.get("painter", {}).get("queue", {})
+    L += ["Remaining queues: `" + json.dumps(queue, sort_keys=True) + "`", ""]
+    if any(queue.values()):
+        L += ["**Incomplete drain: rendering backlog remains. This run is not a latency acceptance pass.**", ""]
     if s["tuning"]:
         L += [f"Tuning: `{s['tuning']}`", ""]
     L += [f"Settled: {s['settled']} after {s['seconds']} s - {len(f.get('t') or [])} frames, "
-          f"{s['fps_avg']} fps average (background limiter lifted)",
+          f"{s['fps_avg']} fps average from sampled wall intervals (background limiter lifted)",
           f"Went past upside down: {s['rolled']} (lowest up-vector z {s['min_up_z']})", ""]
     L += ["## Marks", "",
           "| contacts | passed filters | impacts | streams | stamps | projections | bakes | missed | jobs dropped | deferred frames |",
@@ -293,6 +297,7 @@ def run_one(name: str, args, tuning: list[dict], home: dict, rep: int) -> dict:
         "shotScale": args.shot_scale, "optick": args.optick,
         "optickPath": os.path.join(user_abs, "capture.opt").replace("\\", "/"),
     }
+    cfg["scenario"]["drainTimeout"] = getattr(args, "drain_timeout", 3)
     started = dev.lua(f"return scratches_bench.start({lua_long_string(json.dumps(cfg))})")
     if started != "started":
         raise dev.DeployError(f"bench refused to start: {started}")
@@ -436,6 +441,7 @@ def main() -> int:
     r.add_argument("--set", action="append", help="tuning override, e.g. paint.setProjectionBudget=3")
     r.add_argument("--tag", default="", help="label for the run (shows in `list`)")
     r.add_argument("--repeat", type=int, default=1)
+    r.add_argument("--drain-timeout", type=float, default=3, help="maximum drain seconds; record remaining queues even on timeout")
     r.add_argument("--optick", action="store_true", help="save an Optick capture of each run")
     r.add_argument("--no-shots", action="store_true", help="skip screenshots")
     r.add_argument("--shot-scale", type=float, default=0.5, help="screenshot scale (default 0.5)")

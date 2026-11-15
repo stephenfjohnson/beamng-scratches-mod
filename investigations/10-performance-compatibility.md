@@ -59,3 +59,40 @@ scuffs and original-stage fields. This is visual verification, not proof that
 native stalls are fixed. Original lifecycle: 20 player switches and 10 vehicle
 reloads retained ready status; memory fluctuated and returned after collection.
 Whole-process memory alone does not establish a leak or its absence.
+
+
+## Candidate failure retained (not waived by favorable cold repeats)
+
+All three candidate D3D12 process-cold repeats drained their queues, without
+reproducing the long native stall. The subsequent sustained roof-scrape series
+**did reproduce it**: repeat 3 had projection 738.0238 ms, painter 739.6770 ms,
+and worst whole frame 757.8555 ms. All three 30-second sustained repeats exceeded
+throughput: 38/26/47 jobs and 215/110/17 aggregate inputs dropped respectively;
+32/39/26 jobs remained at the three-second drain cutoff (repeat 1 also had 28
+captured layers pending). Zero thrown jobs is not a throughput pass.
+
+The one-projection alternative also fails latency: 34/35/38 jobs remained after
+its sideslide drain cutoff. Reduced peaks cannot be interpreted as equivalent
+rendering when so much work is delayed. Default resolution and brush quality
+remain unchanged. A shorter flush interval is being tested separately; it cannot
+preempt a single native call. Stable release remains blocked.
+
+## Functional and resource regression observations
+
+- Original vs candidate lifecycle: 20 switches and 10 vehicle reloads each;
+  all 32 snapshots ready with unchanged original fields. Original process-private
+  memory 7.56-10.25 GiB, ending 7.79 GiB after collection; candidate 7.53-7.79 GiB,
+  ending 7.67 GiB. Automation elapsed 371.4 vs 80.8 seconds includes MCP and host
+  sampling waits, so it is not a frame-time benchmark. This supports reduced
+  allocation churn, not proof of multi-hour native/GPU memory safety.
+- Five candidate extension reloads passed; stock Heritage and unicycle skipped;
+  return to Police ready. Nonempty editor test layer UID A3A8-EABF was unchanged
+  through mod clear/reload, then the fixture was removed.
+- Three moving stock `simple_traffic` vehicles had zero detector impacts/streams;
+  the player ETK produced 83 projections. This is a three-car functional test,
+  not heavy-traffic performance certification.
+- Matched plain/Police D3D12 captures retain visible scratches and original fields.
+  Real mud/water regression starts with 26 deposits, shallow unchanged, removes
+  soil while photographed gray scratches remain, dries to original fields,
+  freezes while paused and re-dirties to 27 deposits. No fake contacts or water
+  sensor values are injected; Gridmap's real WaterBlock is temporarily repositioned and restored.

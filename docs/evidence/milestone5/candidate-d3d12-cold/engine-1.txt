@@ -1,0 +1,3 @@
+  0.00890|D|logging| -- Log started - v 0.40.5.0 - x64 - build 302427 - 2026-11-14 17:00:24 -0700 -----
+  6.71721|D|gfx|  - name:NVIDIA GeForce RTX 3090 (D3D12), outputName:\\.\DISPLAY1, gfx:D3D12, gpu:NVIDIA GeForce RTX 3090
+  6.71728|D|gfx| Attempting to create GFX device 0: NVIDIA GeForce RTX 3090 (D3D12) [with output \\.\DISPLAY1]

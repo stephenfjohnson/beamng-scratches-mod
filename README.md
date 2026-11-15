@@ -15,9 +15,9 @@ The private ETK damage projection is reused across vehicle attachments, and
 captured layers now drain before another projection batch. Texture resolution,
 brushes, original paint/livery and separate washable soil are retained.
 
-Repeated engine tests reproduced a **652 ms native projection call** on the
-milestone 4 baseline. These changes do not establish that intermittent native
-stalls are fixed. Stable release remains blocked pending repeated validation;
+Repeated tests reproduced a **652 ms native projection call** on the old
+baseline and **738 ms with these fixes installed** during sustained scraping.
+Sustained input can also exceed throughput and delay or drop cosmetic marks. Stable release remains blocked pending repeated validation;
 there is no all-hardware FPS guarantee. See the [acceptance gates and measured
 evidence](investigations/10-performance-compatibility.md) and
 [reproducible performance commands](docs/examples.md#milestone-5-reproducible-performance-investigation).

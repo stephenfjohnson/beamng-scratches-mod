@@ -114,6 +114,7 @@ local function finish(err)
     settled = run.settled,
     runSeconds = run.runSeconds,
     drainSeconds = run.drainSeconds,
+    drainWallSeconds = run.drainWallSeconds,
     frames = run.frames,
     painter = run.painterStats or paintStats,
     detect = run.detect,
@@ -264,9 +265,11 @@ local function step(dtReal)
       if settled or run.t >= (sc.maxTime or 10) then
         run.settled = settled
         run.runSeconds = run.t
+        run.drainClock = clockhp()
         run.phase, run.phaseT = 'drain', 0
       end
-    elseif painterIdle() or run.phaseT >= 3 then
+    elseif painterIdle() or run.phaseT >= (sc.drainTimeout or 3) then
+      run.drainWallSeconds = clockhp() - run.drainClock
       run.drainSeconds = run.phaseT
       if run.optickRunning then
         Engine.Profiler.stopCapture()

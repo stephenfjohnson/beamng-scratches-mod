@@ -6,7 +6,7 @@ import dev,bench
 p=argparse.ArgumentParser();p.add_argument('--label',required=True);a=p.parse_args()
 out=Path('docs/evidence/milestone5')/a.label;out.mkdir(parents=True,exist_ok=False)
 def vehicles():
- return json.loads(dev.lua('local r={};for _,v in ipairs(getAllVehicles()) do r[tostring(v:getId())]={model=v.JBeam,pos=v:getPosition(),velocity=v:getVelocity(),materials=v:getMaterialNames()} end;return jsonEncode(r)'))
+ return json.loads(dev.lua('local r={};for _,v in ipairs(getAllVehicles()) do local layers={};for _,name in pairs(v:getMaterialNames()) do if name:find("scratches_etk800_",1,true) then local m=scenetree.findObject(name);layers[name]=m and m:getField("activeLayers",0) or "missing" end end;r[tostring(v:getId())]={model=v.JBeam,pos=v:getPosition(),velocity=v:getVelocity(),materials=v:getMaterialNames(),privateLayers=layers} end;return jsonEncode(r)'))
 before=vehicles();new=[];r={'before':before}
 try:
  dev.lua('gameplay_traffic.setupTraffic(3,{keepCurrent=true});return true');time.sleep(15)
