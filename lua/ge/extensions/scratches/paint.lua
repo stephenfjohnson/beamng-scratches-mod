@@ -1347,6 +1347,32 @@ local function buildSyntheticCameraLocal(localPos, localNormal, dist)
   return m
 end
 
+-- Anchor normal for a synthetic layer: the detector's contact normal with its
+-- sign resolved against the owning hull face (the collision normal can point
+-- into the car), or that face's axis when the contact normal is missing or
+-- grazes the face by more than ~70 degrees.
+local function anchorNormal(localPos, localNormal)
+  local outward = chooseHullOutward(localPos, localNormal)
+  if localNormal and vecLen(localNormal) > 1e-3 then
+    local n = localNormal:normalized()
+    local d = n:dot(outward)
+    if d < 0 then n = -n; d = -d end
+    if d >= 0.35 then return n end
+  end
+  return outward
+end
+
+-- Replace the projection readback with the known contact point/normal. The
+-- bake tolerates the node-to-mesh offset: anchors moved +-15 cm along the
+-- normal painted identical marks in game (investigation 12).
+local syntheticAnchorCount = 0
+local function anchorLayer(layer, pos, normal)
+  layer.decalPos = vec3(pos.x, pos.y, pos.z)
+  layer.decalNorm = vec3(normal.x, normal.y, normal.z)
+  layer.surfaceNormal = vec3(normal.x, normal.y, normal.z)
+  syntheticAnchorCount = syntheticAnchorCount + 1
+end
+
 -- ---- projection job queue ----
 -- Every visible mark is produced by a "job": ONE synthetic-camera projection
 -- pass plus one or more layers captured under that camera. Discrete stamps
@@ -1358,6 +1384,14 @@ end
 -- still lands on the right panel.
 local cosmeticGeneration = 0
 local panelGrouping = false
+-- Projection-free anchoring (milestone 5 stall fix). A captured layer bakes
+-- where its camera ray meets the plane (decalPos, decalNorm). The native
+-- projectDynamicDecals pass exists only to read that anchor back from a
+-- rendered position buffer, and it is the call measured at 30 ms idle and up
+-- to 508 ms under load. The detector already knows each contact point and
+-- normal, so synthetic anchors supply them directly and skip the pass.
+-- false restores the legacy projected anchors for comparison.
+local syntheticAnchors = true
 local coverage -- optional; explicit representative policy, independent of soil
 local coverageModule
 local jobQueue               = {}
@@ -1741,9 +1775,11 @@ local function runStreamJob(job, projM, bakeList)
   local camLocal = buildSyntheticCameraLocal(job.centroid, job.normal,
                                              math.max(0.5, math.min(panelGrouping and 3 or 1.6, (extent + 0.05) * 2.2)))
   setScratchProjectionFence(true)
-  local tp = clockhp()
-  decalProjection:projectDynamicDecals(camLocal, projM)
-  perfAdd(tp, "projectMsTotal", "projectMsMax", "projectCalls")
+  if not syntheticAnchors then
+    local tp = clockhp()
+    decalProjection:projectDynamicDecals(camLocal, projM)
+    perfAdd(tp, "projectMsTotal", "projectMsMax", "projectCalls")
+  end
 
   -- Helper layer used only to compute screen-UV for start/end points (cheap;
   -- we mutate cursor and read it back without baking). Does NOT enter the
@@ -1769,7 +1805,10 @@ local function runStreamJob(job, projM, bakeList)
     api.setUseSurfaceNormal(true)
     local tl = clockhp()
     local layer = decalProjection:getDecalData(camLocal, projM)
-    if layer then api.setDecalLocalPos(layer, center) end
+    if layer then
+      api.setDecalLocalPos(layer, center)
+      if syntheticAnchors then anchorLayer(layer, center, anchorNormal(center, job.normal)) end
+    end
     perfAdd(tl, "layerMsTotal", nil, "layerCalls")
     if not layer then return end
     -- Frustum sanity (out-of-frustum stamps wouldn't paint correctly).
@@ -1858,9 +1897,11 @@ local function runClusterJob(cluster, projM, bakeList)
   end
   local camLocal = buildSyntheticCameraLocal(centroid, averageNormals(cluster.members), clusterDist)
   setScratchProjectionFence(true)
-  local tp = clockhp()
-  decalProjection:projectDynamicDecals(camLocal, projM)
-  perfAdd(tp, "projectMsTotal", "projectMsMax", "projectCalls")
+  if not syntheticAnchors then
+    local tp = clockhp()
+    decalProjection:projectDynamicDecals(camLocal, projM)
+    perfAdd(tp, "projectMsTotal", "projectMsMax", "projectCalls")
+  end
 
   local skipped = 0
   for _, s in ipairs(cluster.members) do
@@ -1888,8 +1929,13 @@ local function runClusterJob(cluster, projM, bakeList)
     if decalData then
       -- Move the layer's cursor from the cluster centroid (where project
       -- placed it) to the actual stamp position. This recomputes
-      -- cursorPosScreenUv and decalPos for s.localPos under the shared cam.
+      -- cursorPosScreenUv for s.localPos under the shared cam. decalPos is
+      -- NOT re-read: it stays the projection's centroid hit, or the stamp's
+      -- own contact point under synthetic anchors.
       api.setDecalLocalPos(decalData, s.localPos)
+      if syntheticAnchors then
+        anchorLayer(decalData, s.localPos, anchorNormal(s.localPos, s.localNormal))
+      end
     end
     perfAdd(tl, "layerMsTotal", nil, "layerCalls")
     if decalData then
@@ -2010,7 +2056,8 @@ local function flushPendingStamps()
 
   -- Capturing soil on the shared camera leaves a working preview in the
   -- damage projection. Flush only that transient preview, never baked damage.
-  if adapter then decalProjection:flushDynamicTextures() end
+  -- Synthetic anchors never run the preview pass, so there is nothing to flush.
+  if adapter and not syntheticAnchors then decalProjection:flushDynamicTextures() end
   stampStats.projectsIssued = stampStats.projectsIssued + run
   stampStats.clustersTotal  = stampStats.clustersTotal + clusters
   if run < n then stampStats.framesDeferred = stampStats.framesDeferred + 1 end
@@ -2572,6 +2619,7 @@ M.resetPaintStats = function()
   stampStats.streamsMerged = 0
   stampStats.framesTicked = 0
   for k in pairs(perfStats) do perfStats[k] = 0 end
+  syntheticAnchorCount = 0
   table.clear(nativeEvents)
   for _,p in pairs(nativeProfiles) do table.clear(p.bins);p.count=0;p.maxMs=0 end
   log('I', logTag, "paint stats reset")
@@ -2625,7 +2673,8 @@ M.getStats = function()
                projBudget = MAX_PROJECTS_PER_FRAME, flushInterval = FLUSH_INTERVAL,
                layerBudget = MAX_LAYERS_PER_FLUSH, bakeBudget = BAKE_LAYERS_PER_FRAME,
                damageWidth = adapter and adapter:getDamageWidth() or 0, coverageCoalescing=coverage~=nil, panelGrouping=panelGrouping,
-               fullRateCombine = fullRateCombine },
+               fullRateCombine = fullRateCombine, syntheticAnchors = syntheticAnchors },
+    anchors = { synthesized = syntheticAnchorCount },
   }
 end
 
@@ -2653,6 +2702,9 @@ M.setCoverageCoalescing = function(enabled)
   else coverage=nil end
 end
 M.setPanelGrouping = function(enabled) panelGrouping=enabled and true or false end
+-- true (default): projection-free anchors from the detector's contact points.
+-- false: legacy native projection per job. Applies to work captured afterwards.
+M.setSyntheticAnchors = function(enabled) syntheticAnchors=enabled and true or false end
 M.setBakeBudget = function(n)
   BAKE_LAYERS_PER_FRAME=math.max(1,math.min(24,math.floor(tonumber(n) or 6)))
 end

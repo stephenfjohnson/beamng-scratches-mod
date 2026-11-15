@@ -213,6 +213,10 @@ end
 local function projBudget() return paint.getStats().config.projBudget end
 
 paint.onExtensionLoaded()
+-- The scheduling checks below count native projection passes, so they run in
+-- the legacy projected-anchor mode; synthetic anchors are checked at the end.
+check(paint.getStats().config.syntheticAnchors == true, "projection-free synthetic anchors are the default")
+paint.setSyntheticAnchors(false)
 for _ = 1, 5 do frame() end
 check(skinMat.fields.metallicMap[1] == "/art/dynamicDecals/textures/_zero.png",
   "restoreFactoryMR repoints the @DynamicTexture metallic stage")
@@ -728,6 +732,35 @@ local streamStats=paint.getStats()
 check(streamStats.stamp.streamsMerged==1,"adjacent stream bands share a projection")
 check(streamStats.stamp.streamLayersExpected==4 and streamStats.stamp.streamSubstrokesTotal==4 and streamStats.perf.bakeLayersTotal==4,"merged bands retain exactly one haze and one segment each without alias duplication")
 paint.setPanelGrouping(false)
+-- Synthetic anchors: no native projection pass, and every layer is anchored at
+-- its own contact point with an outward normal (sign resolved against the hull
+-- face even when the detector's collision normal points into the car).
+paint.clearStamps();paint.resetPaintStats();paint.setSyntheticAnchors(true)
+local bakedLayers={}
+local bakeBeforeCapture=decalProjection.bakeLayers
+decalProjection.bakeLayers=function(self,list) for _,l in ipairs(list) do bakedLayers[#bakedLayers+1]=l end;return bakeBeforeCapture(self,list) end
+local projectsBeforeSynthetic=counters.projects
+paint.stampAtLocal(vec3(.9,.3,.9),vec3(-1,0,0),{noJitter=true,scale=.05})
+paint.stampAtLocal(vec3(.2,-1.5,1.8),vec3(0,0,1),{noJitter=true,scale=.05})
+paint.ingest(playerVid,nil,{{{100,0,.6,0,0,1},{100.4,0,.6,0,0,1}}})
+for _=1,60 do frame(.02) end
+local synth=paint.getStats()
+check(counters.projects==projectsBeforeSynthetic and synth.perf.projectCalls==0,"synthetic anchors issue no native projection pass")
+check(synth.stamp.projectsIssued>=2 and synth.perf.bakeLayersTotal==4 and #bakedLayers==4,"synthetic jobs still capture and bake every layer (2 stamps + haze + segment)")
+check(synth.anchors.synthesized==4,"every synthetic layer is explicitly anchored")
+local side,roof
+for _,l in ipairs(bakedLayers) do
+  if l.decalPos and math.abs(l.decalPos.x-.9)<1e-6 then side=l end
+  if l.decalPos and math.abs(l.decalPos.z-1.8)<1e-6 then roof=l end
+end
+check(side and side.decalNorm.x==1 and side.surfaceNormal.x==1,"inward collision normal is flipped to the hull-outward side")
+check(roof and roof.decalNorm.z==1 and math.abs(roof.decalPos.y+1.5)<1e-6,"roof stamp anchors at its own contact point, not a shared hit")
+decalProjection.bakeLayers=bakeBeforeCapture
+paint.setSyntheticAnchors(false);paint.clearStamps();paint.resetPaintStats()
+paint.stampAtLocal(vec3(.9,.3,.9),vec3(1,0,0),{noJitter=true,scale=.05})
+for _=1,30 do frame(.02) end
+check(paint.getStats().perf.projectCalls==1 and paint.getStats().anchors.synthesized==0,"legacy projected anchors remain selectable for comparison")
+paint.setSyntheticAnchors(true)
 passes = passes + dofile("tools/sim/adapter_harness.lua")
 
 print(string.format("%d passed, %d failed  (projects=%d bakes=%d layers=%d composites=%d)",

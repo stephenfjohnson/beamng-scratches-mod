@@ -10,7 +10,8 @@ p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--label',required=True);p.add_argument('--minutes',type=float,default=10)
 p.add_argument('--width',type=int,default=4096);p.add_argument('--bake',type=int,default=6)
 p.add_argument('--flush',type=float,default=.2);p.add_argument('--coalesce',action='store_true');p.add_argument('--group',action='store_true')
-p.add_argument('--continuous',action='store_true');p.add_argument('--disabled',action='store_true');a=p.parse_args()
+p.add_argument('--continuous',action='store_true');p.add_argument('--disabled',action='store_true')
+p.add_argument('--projected-anchors',action='store_true',help='legacy native projection per job instead of the default synthetic anchors');a=p.parse_args()
 out=Path('docs/evidence/milestone5')/a.label;out.mkdir(parents=True,exist_ok=False)
 bench.ensure_bench()
 environment=json.loads(dev.lua(livery_probe.LUA));(out/'environment.json').write_text(json.dumps(environment,indent=2))
@@ -18,7 +19,7 @@ assert environment['compatibility']['ready'] and not environment['comparison']['
 (out/'engine.txt').write_text('\n'.join(l for l in (Path(dev.user_dir())/'beamng.log').read_text(errors='replace').splitlines() if 'Log started' in l or 'Attempting to create GFX' in l))
 (out/'source-sha256.json').write_text(json.dumps({str(f):hashlib.sha256((Path(dev.mount_dir())/f).read_bytes()).hexdigest() for f in (x.relative_to(Path(dev.mount_dir())) for x in (Path(dev.mount_dir())/'lua').rglob('*.lua'))},indent=2))
 (out/'settings.json').write_text(json.dumps(vars(a),indent=2))
-tuning=bench.parse_tuning(['paint.setDamageResolution='+str(a.width),'paint.setBakeBudget='+str(a.bake),'paint.setFlushInterval='+str(a.flush),'paint.setCoverageCoalescing='+str(a.coalesce).lower(),'paint.setPanelGrouping='+str(a.group).lower()])
+tuning=bench.parse_tuning(['paint.setDamageResolution='+str(a.width),'paint.setBakeBudget='+str(a.bake),'paint.setFlushInterval='+str(a.flush),'paint.setCoverageCoalescing='+str(a.coalesce).lower(),'paint.setPanelGrouping='+str(a.group).lower(),'paint.setSyntheticAnchors='+str(not a.projected_anchors).lower()])
 if a.disabled:tuning+=bench.parse_tuning(['detect.setPaintEnabled=false'])
 # Resolve PID once, outside the measured window. Cheap native reads thereafter.
 pid=int(subprocess.check_output(['powershell','-NoProfile','-Command','(Get-Process BeamNG.drive.x64 | Sort-Object PrivateMemorySize64 -Descending | Select-Object -First 1).Id'],text=True))
@@ -68,4 +69,4 @@ except Exception as e:
  (out/'error.txt').write_text(str(e));archive();raise
 finally:
  k.CloseHandle(handle)
- dev.lua('if scratches_paint.getCompatibility().ready then scratches_paint.setDamageResolution(4096) end;scratches_paint.setBakeBudget(6);scratches_paint.setFlushInterval(0.2);scratches_paint.setCoverageCoalescing(false);scratches_paint.setPanelGrouping(false);local v=getPlayerVehicle(0);if v then v:queueLuaCommand("if scratches_detect then scratches_detect.setPaintEnabled(true) end") end;return true')
+ dev.lua('if scratches_paint.getCompatibility().ready then scratches_paint.setDamageResolution(4096) end;scratches_paint.setBakeBudget(6);scratches_paint.setFlushInterval(0.2);scratches_paint.setCoverageCoalescing(false);scratches_paint.setPanelGrouping(false);scratches_paint.setSyntheticAnchors(true);local v=getPlayerVehicle(0);if v then v:queueLuaCommand("if scratches_detect then scratches_detect.setPaintEnabled(true) end") end;return true')

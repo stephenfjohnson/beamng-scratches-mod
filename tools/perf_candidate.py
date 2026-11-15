@@ -3,7 +3,7 @@ import argparse,json,time,shutil,hashlib,subprocess,sys
 from pathlib import Path
 from types import SimpleNamespace
 import dev,bench,livery_probe,damage_probe
-p=argparse.ArgumentParser();p.add_argument('--label',required=True);p.add_argument('--width',type=int,default=4096);p.add_argument('--bake',type=int,default=6);p.add_argument('--repeat',type=int,default=3);p.add_argument('--coalesce',action='store_true');p.add_argument('--group',action='store_true');p.add_argument('--flush',type=float,default=.2);p.add_argument('--projects',type=int,default=6);p.add_argument('--layers',type=int,default=24);p.add_argument('--scenarios',nargs='+',default=['sideslide','roofdrop','sustained']);p.add_argument('--capture',action='store_true');p.add_argument('--restart',action='store_true');p.add_argument('--renderer',choices=['d3d12','vk'],default='d3d12');p.add_argument('--disabled',action='store_true');p.add_argument('--skin',choices=['plain','police'],default='police');a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--label',required=True);p.add_argument('--width',type=int,default=4096);p.add_argument('--bake',type=int,default=6);p.add_argument('--repeat',type=int,default=3);p.add_argument('--coalesce',action='store_true');p.add_argument('--group',action='store_true');p.add_argument('--flush',type=float,default=.2);p.add_argument('--projects',type=int,default=6);p.add_argument('--layers',type=int,default=24);p.add_argument('--scenarios',nargs='+',default=['sideslide','roofdrop','sustained']);p.add_argument('--capture',action='store_true');p.add_argument('--restart',action='store_true');p.add_argument('--renderer',choices=['d3d12','vk'],default='d3d12');p.add_argument('--disabled',action='store_true');p.add_argument('--skin',choices=['plain','police'],default='police');p.add_argument('--projected-anchors',action='store_true',help='legacy native projection per job instead of the default synthetic anchors');a=p.parse_args()
 out=Path('docs/evidence/milestone5')/a.label;out.mkdir(parents=True,exist_ok=False)
 def prepare():
  dev.lua('simTimeAuthority.pause(false);core_vehicle_partmgmt.setSkin('+json.dumps('' if a.skin=='plain' else 'police')+');return true');time.sleep(3)
@@ -20,7 +20,7 @@ def environment(path):
   raise AssertionError('adapter/material regression; evidence retained')
 if not a.restart:prepare()
 tuning=bench.parse_tuning(['detect.setPaintEnabled='+str(not a.disabled).lower(),'paint.setDamageResolution='+str(a.width),'paint.setBakeBudget='+str(a.bake),'paint.setFlushInterval='+str(a.flush),'paint.setProjectionBudget='+str(a.projects),'paint.setLayerBudget='+str(a.layers)])
-tuning+=bench.parse_tuning(['paint.setCoverageCoalescing='+str(a.coalesce).lower(),'paint.setPanelGrouping='+str(a.group).lower()])
+tuning+=bench.parse_tuning(['paint.setCoverageCoalescing='+str(a.coalesce).lower(),'paint.setPanelGrouping='+str(a.group).lower(),'paint.setSyntheticAnchors='+str(not a.projected_anchors).lower()])
 if not a.restart:environment(out/'environment.json')
 settings=dict(vars(a));settings['restartRenderer']=settings.pop('renderer') if a.restart else None
 settings['actualRendererEvidence']='engine*.txt; --renderer only selects the backend when --restart is used'
@@ -50,6 +50,6 @@ except Exception as e:
   if not (out/run.name).exists():shutil.copytree(run,out/run.name)
  raise
 finally:
- try:dev.lua('if scratches_paint.getCompatibility().ready then scratches_paint.setDamageResolution(4096) end;scratches_paint.setBakeBudget(6);scratches_paint.setFlushInterval(0.2);scratches_paint.setProjectionBudget(6);scratches_paint.setLayerBudget(24);if scratches_paint.setPanelGrouping then scratches_paint.setPanelGrouping(false) end;if scratches_paint.setCoverageCoalescing then scratches_paint.setCoverageCoalescing(false) end;local v=getPlayerVehicle(0);if v then v:queueLuaCommand("if scratches_detect then scratches_detect.setPaintEnabled(true) end") end;return true')
+ try:dev.lua('if scratches_paint.getCompatibility().ready then scratches_paint.setDamageResolution(4096) end;scratches_paint.setBakeBudget(6);scratches_paint.setFlushInterval(0.2);scratches_paint.setProjectionBudget(6);scratches_paint.setLayerBudget(24);if scratches_paint.setPanelGrouping then scratches_paint.setPanelGrouping(false) end;if scratches_paint.setCoverageCoalescing then scratches_paint.setCoverageCoalescing(false) end;if scratches_paint.setSyntheticAnchors then scratches_paint.setSyntheticAnchors(true) end;local v=getPlayerVehicle(0);if v then v:queueLuaCommand("if scratches_detect then scratches_detect.setPaintEnabled(true) end") end;return true')
 
  except Exception as restore_error:(out/'restore-error.txt').write_text(str(restore_error))
