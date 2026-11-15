@@ -656,6 +656,20 @@ paint.stampAtLocal(vec3(0,0,.3),vec3(0,0,1),{noJitter=true,scale=.05,colorTex="m
 check(paint.getStats().coverage.mergedBaked==1,"contained brush variant is an explicit completed representative merge")
 paint.stampAtLocal(vec3(.4,0,.3),vec3(0,0,1),{noJitter=true,scale=.1,colorTex="m4_scrape_a.png"})
 check(paint.getStats().coverage.representatives==2,"new area is never merged into a distant mark")
+paint.stampAtLocal(vec3(0,0,.3),vec3(0,0,1),{noJitter=true,scale=.05,colorTex="m4_scrape_b.png",r=.1,g=.2,b=.3})
+check(paint.getStats().coverage.representatives==3,"explicit color override is not merged into procedural damage")
+paint.clearStamps();paint.resetPaintStats()
+local bakeBeforeFailure=decalProjection.bakeLayers
+local failBake=true
+decalProjection.bakeLayers=function(self,list) if failBake then failBake=false;error("simulated native bake failure") end;return bakeBeforeFailure(self,list) end
+paint.stampAtLocal(vec3(0,0,.3),vec3(0,0,1),{noJitter=true,scale=.1,colorTex="m4_scrape_a.png"})
+local bakeOk=pcall(function() for _=1,40 do frame(.02) end end)
+check(bakeOk and paint.getStats().stamp.bakeFailures==1,"native bake error does not abort scheduler")
+check(paint.getStats().coverage.lostRequests==1 and paint.getStats().coverage.pendingRequests==0,"failed bake explicitly accounts lost request")
+paint.stampAtLocal(vec3(0,0,.3),vec3(0,0,1),{noJitter=true,scale=.1,colorTex="m4_scrape_a.png"})
+for _=1,40 do frame(.02) end
+check(paint.getStats().coverage.completedRequests==1,"failed native bake cannot suppress a subsequent mark")
+decalProjection.bakeLayers=bakeBeforeFailure
 paint.setCoverageCoalescing(false);dofile=savedDofile
 
 local cov=savedDofile("lua/ge/extensions/scratches/coverage.lua").new(function() return 2 end)
@@ -669,6 +683,11 @@ local fresh=savedDofile("lua/ge/extensions/scratches/coverage.lua").new(function
 local failed=fresh:admit(input(0,vec3(0,0,1),.1,0));fresh:fail(failed)
 _,needed=fresh:admit(input(0,vec3(0,0,1),.1,0));check(needed,"failed mark cannot suppress retry")
 local _,same=fresh:admit(input(0,vec3(0,0,1),.1,0));check(not same and fresh:snapshot().staleMerged==1,"stale queued work coalesces with original age retained")
+
+local bounded=savedDofile("lua/ge/extensions/scratches/coverage.lua").new(function() return 2 end)
+for i=1,8200 do local record=bounded:admit(input(i*.5,vec3(0,0,1),.1,0));bounded:complete(record) end
+check(bounded:snapshot().cachedRepresentatives==8192 and bounded:snapshot().historyEvicted==8,"representative history remains bounded across a long session")
+check(bounded:snapshot().requiredCells<=65536 and bounded:snapshot().trackingOverflow>0,"coverage diagnostic cap reports overflow instead of unbounded growth")
 
 paint.clearStamps();paint.resetPaintStats();paint.setPanelGrouping(true);paint.setBakeBudget(1)
 counters.maxBakeLayers=0
@@ -685,6 +704,8 @@ paint.stampAtLocal(vec3(.05,0,.3),vec3(0,0,-1),{noJitter=true,scale=.04})
 for _=1,40 do frame(.02) end
 check(paint.getStats().stamp.projectsIssued==2,"opposing normals never share the wider panel camera")
 paint.setPanelGrouping(false);paint.setBakeBudget(6)
+local profile=paint.getNativeTimingProfile()
+check(profile.project.calls==paint.getStats().perf.projectCalls and profile.bakeBatch.calls==paint.getStats().perf.bakeCalls,"bounded native histogram accounts every timed call/batch")
 passes = passes + dofile("tools/sim/adapter_harness.lua")
 
 print(string.format("%d passed, %d failed  (projects=%d bakes=%d layers=%d composites=%d)",

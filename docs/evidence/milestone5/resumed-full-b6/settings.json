@@ -1,0 +1,13 @@
+{
+  "label": "resumed-full-b6",
+  "width": 4096,
+  "bake": 6,
+  "repeat": 1,
+  "coalesce": false,
+  "scenarios": [
+    "sideslide",
+    "roofdrop",
+    "sustained"
+  ],
+  "capture": true
+}

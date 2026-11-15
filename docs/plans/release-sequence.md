@@ -8,7 +8,7 @@
 > Milestone 4 polish: [scope and evidence](../../investigations/09-scratch-impact-polish.md).
 > Milestone 5 is authorized and implementation has resumed; feature acceptance
 > is **blocked and unmerged**. Last merged baseline: c8bcae6. Milestone 6/public
-> release was not started. [Final evidence and gates](../../investigations/10-performance-compatibility.md).
+> release was not started. [Resumed implementation and gates](../../investigations/11-quality-throughput.md).
 
 Run one feature thread at a time. Each starts from the latest merged baseline,
 owns a focused branch, implements and tests, updates documentation/examples,
@@ -33,8 +33,9 @@ explicitly incomplete; a passing mock suite does not establish visual success.
    after review; improve opacity, material response, scale and placement. Capture
    matched before/after examples on light and dark paint and several body types.
 5. **Performance and compatibility: blocked.** Mitigations and repeated evidence
-   are committed on the scoped branch; native stalls and sustained throughput fail
-   acceptance. Repeated baseline/stress runs, traffic,
+   are committed on the scoped branch; native stalls still fail acceptance. Explicit quality, batching and grouping
+   improve corrected-fixture throughput; [resumed evidence](../../investigations/11-quality-throughput.md)
+   distinguishes those gains from unresolved native hitches. Repeated baseline/stress runs, traffic,
    switching, long sessions, renderers and supported vehicles. Record exact
    versions, settings and frame-time results. Address spikes before release.
 6. **Public release.** Clean ZIP-only install/uninstall test, final screenshots,

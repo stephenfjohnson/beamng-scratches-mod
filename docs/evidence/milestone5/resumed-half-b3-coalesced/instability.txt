@@ -1,0 +1,6 @@
+2741.60897|E|GELua.| Instability detected for vehicle ID: 33151, jbeamFilename: "etk800"
+2741.60904|E|GELua.| List of vehicles very close to unstable vehicle 33151 (<1m): none
+2741.61935|I|libbeamng.scratches:33151| onReset (Ctrl+R) - clearing detect state, requesting GE clearStamps
+2741.61943|I|libbeamng.scratches:33151| stats reset
+2741.61992|E|GELua.core_cameraUpdate.| Invalid camera calculations detected (should only happen after a vehicle instability)
+2741.62018|D|GELua.core_cameraUpdate.| Attempting to fix invalid camera data: {

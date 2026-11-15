@@ -1,0 +1,26 @@
+{
+  "nativeProjectMs": 425.9219,
+  "clockAlignmentUncertaintyMs": 2.465,
+  "pagingPacket": {
+    "sequence": 29480,
+    "vidMmOpType": 113,
+    "queuedOffsetMs": 2.2953,
+    "event324OffsetMs": 424.8864,
+    "completedOffsetMs": 424.9402,
+    "queueToCompleteMs": 422.6449,
+    "executionTime100ns": 0
+  },
+  "observations": [
+    "Game D3D12 event streams pause for about 423 ms; kernel graphics events continue.",
+    "A game-device paging packet spans that pause and completes about 1 ms before the native projection returns.",
+    "A 256-byte default-heap buffer creation is recorded near the start of the pause; this is not proof that the buffer caused it.",
+    "No selected ShaderCache or CreatePipelineStateObject events appear in the exported window. This does not exclude shader work."
+  ],
+  "limits": [
+    "Diagnostic tracing can perturb timing. Untraced native outliers independently reproduced.",
+    "No CPU context-switch stacks or GPU command-duration attribution; the underlying wait dependency and driver/engine cause remain unknown.",
+    "VidMmOpType numeric value is preserved without assigning an undocumented meaning.",
+    "Zero ExecutionTime100ns is the recorded field, not proof of zero GPU work.",
+    "System-wide ETL stays local. Export includes game-owned events and correlated paging completion only; addresses removed."
+  ]
+}

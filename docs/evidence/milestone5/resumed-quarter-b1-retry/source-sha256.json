@@ -1,0 +1,7 @@
+{
+  "lua\\vehicle\\extensions\\auto\\scratches_detect.lua": "b77682a11b6aa2ac791d6d4ece7808ebce2e7a8c5aaa7212113e7b18705a0803",
+  "lua\\ge\\extensions\\scratches\\bench.lua": "9705a21979cf996b7ed63d5424545eb54aa9bfae9c59cb40405f7f288aba2355",
+  "lua\\ge\\extensions\\scratches\\coverage.lua": "e692fa73e1fa368dd0f72a9b5bd3a0248977d89fe0f0675f06d25cc4698d2eef",
+  "lua\\ge\\extensions\\scratches\\etkAdapter.lua": "0d4dba44db236cc3257c8d565898421f36cdf42ccdaeb13928810f9973e358ee",
+  "lua\\ge\\extensions\\scratches\\paint.lua": "84d9cb3823fa0dbf3ca82c46564249c26b69c4eb60c985dced24bf493fffdebf"
+}

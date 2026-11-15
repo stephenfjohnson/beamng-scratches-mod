@@ -1,0 +1,13 @@
+{
+  "label": "resumed-quarter-b1-retry",
+  "width": 1024,
+  "bake": 1,
+  "repeat": 1,
+  "coalesce": false,
+  "scenarios": [
+    "sideslide",
+    "roofdrop",
+    "sustained"
+  ],
+  "capture": true
+}

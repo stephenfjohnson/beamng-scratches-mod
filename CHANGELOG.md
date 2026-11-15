@@ -2,19 +2,23 @@
 
 ## Milestone 5: performance investigation — blocked, unmerged
 
-- Reuse the private full-resolution ETK damage projection across attachments;
-  rebind shape before clearing/selecting exact private material indices.
-- Prevent long projection frames from starving the captured-layer bake queue.
-- Add repeated warm/process-cold physics runs, per-frame queue/timing records,
-  lifecycle snapshots and a static frame-tail report.
-- 226 mock checks pass; the new starvation test fails on the prior baseline.
-- Retain 148 engine runs, renderer/control comparisons, a ten-minute same-instance
-  session, exact stock/mod compatibility checks and matched rendering/wash evidence.
-- Reproduce 738 ms projection, 663 ms bake batches and lost/delayed sustained marks.
-  Lower budgets, faster flushing and reflection changes did not establish a fix.
-- Native/GPU trace output was unavailable; root cause and stable release readiness
-  remain unresolved. Milestone 5 acceptance failed; no merge or milestone 6 release.
-  [Acceptance/evidence](investigations/10-performance-compatibility.md).
+- Reuse private ETK projection resources and exact material indices across attachments;
+  drain captured layers before further projection to prevent starvation.
+- Add explicit 4096/2048/1024 damage widths and independent native bake batch limits.
+  Default resolution is unchanged; separate soil and original material maps are untouched.
+- Add opt-in same-panel grouping and representative footprint coalescing with explicit
+  completed/merged/pending/lost request and proxy coverage accounting. Retain every
+  stream layer when grouping; do not present representative brushes as pixel-equivalent.
+- Correct sustained fixture velocity forcing, reject mid-run cosmetic resets, record
+  queue ages and native outlier timestamps, and add continuous circular endurance.
+- 254 mock checks pass. Historical 148-run cohort remains separately documented;
+  new corrected-fixture cohorts, invalid old runs and traced diagnostics are distinguished.
+- Capture a 426 ms native call with a correlated 423 ms graphics paging packet.
+  WPR CPU profiling remains unavailable; no unsupported shader/driver attribution.
+- Half-resolution grouping improves observed throughput but still reproduces native
+  stalls (613 ms projection / 402 ms bake in untraced warm runs). Stable release and
+  milestone 5 merge remain blocked; no milestone 6/public release.
+  [Resumed implementation and evidence](investigations/11-quality-throughput.md).
 
 ## Milestone 4: scratch and impact polish — 2026-11-14
 

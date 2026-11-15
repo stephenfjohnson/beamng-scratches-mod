@@ -1,0 +1,18 @@
+{
+  "label": "resumed-half-b1-fast-cold-v2",
+  "width": 2048,
+  "bake": 1,
+  "repeat": 3,
+  "coalesce": true,
+  "flush": 0.05,
+  "projects": 2,
+  "layers": 12,
+  "scenarios": [
+    "sideslide",
+    "roofdrop",
+    "sustained"
+  ],
+  "capture": false,
+  "restart": true,
+  "renderer": "d3d12"
+}

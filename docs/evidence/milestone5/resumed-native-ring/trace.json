@@ -1,0 +1,22 @@
+{
+  "session": "ScratchesM5Ring1794706585",
+  "etlLocalPath": "C:\\Users\\sforr\\.t3\\worktrees\\beamng-scratches-mod\\t3-c117a600-b9a98965ce0422e0\\bench\\resumed-native-ring.etl",
+  "profilingDiagnostic": true,
+  "events": [
+    {
+      "phase": "started",
+      "hostBeforeUTCSeconds": 1794706586.0911207,
+      "engineClockSeconds": 916.1317805,
+      "hostAfterUTCSeconds": 1794706586.0960503
+    },
+    {
+      "phase": "stopped",
+      "hostBeforeUTCSeconds": 1794706671.6082408,
+      "engineClockSeconds": 1001.6544844,
+      "hostAfterUTCSeconds": 1794706671.6207685
+    }
+  ],
+  "stopReason": "native-over-100ms",
+  "etlBytes": 134217728,
+  "etlSHA256": "04adef067f6481458fe2ba341ed4c7a36ff9924dbf62051849de621e8563fde8"
+}

@@ -302,3 +302,79 @@ selects that backend only with `--restart`; always verify its saved startup log.
 The final [acceptance table](../investigations/10-performance-compatibility.md#acceptance-disposition-and-remaining-gates)
 is blocked despite passing mock checks. These settings are reproducible test
 conditions, not guaranteed FPS recommendations.
+
+
+## Resumed quality and throughput experiments
+
+Use this **development branch**, BeamNG 0.40.5.0 build 302427, Gridmap v2 and the
+verified ETK 800 main body with empty Paint Design or `etk800_skin_police`.
+These controls are experiments, not a stable preset or a renderer recommendation.
+From the repo in PowerShell, deploy the dev mount first:
+
+```powershell
+python tools/dev.py deploy
+python tools/dev.py lua 'return jsonEncode(scratches_paint.getCompatibility())'
+```
+
+When `ready` is true, the explicit **half-resolution experimental preset** is:
+
+```powershell
+python tools/dev.py lua 'scratches_paint.setDamageResolution(2048);scratches_paint.setBakeBudget(3);scratches_paint.setFlushInterval(0.05);scratches_paint.setProjectionBudget(6);scratches_paint.setLayerBudget(24);scratches_paint.setCoverageCoalescing(true);scratches_paint.setPanelGrouping(true);return jsonEncode(scratches_paint.getStats())'
+```
+
+Changing damage resolution or coalescing mode clears existing cosmetics. The
+2048x1024 damage target has one quarter of the texels of 4096x2048, so small marks
+can soften. It does not resize the original livery/PBR maps or 1024x512 soil.
+Allowed damage widths are 4096, 2048 and 1024. Quarter width is a tested tradeoff,
+not an accepted quality recommendation. Bake budget is layers per native call,
+clamped to 1–24. The scheduler cannot interrupt a slow native call.
+
+Grouping shares cameras but retains layers. Discrete coalescing intentionally
+represents contained same-family/severity footprints with an existing brush;
+random brush composites are not pixel-identical. `coverage` reports merged,
+completed, pending and lost requests and 8 cm footprint-proxy coverage. It excludes
+stream shaping and detector/spot saturation; inspect `stamp` and detector counters
+too. Zero proxy loss does not prove visible pixel coverage. `latency.oldestMs`
+is current pending age; `perf.inputToBakeMaxMs` conservatively ages each layer
+from its job's oldest input. A reset during a bench measurement invalidates it.
+
+Use **fresh labels** (the tools refuse overwriting evidence):
+
+```powershell
+# Same v2 physics fixture, full-resolution control and experimental candidate.
+python tools/perf_candidate.py --label my-control-v2 --repeat 3 --capture
+python tools/perf_candidate.py --label my-grouped-half --width 2048 --bake 3 --flush .05 --coalesce --group --repeat 3 --capture
+# Fresh process; existing shader caches are retained. Repeat separately per backend.
+python tools/perf_candidate.py --label my-grouped-half-cold --width 2048 --bake 3 --flush .05 --coalesce --group --repeat 3 --restart --renderer d3d12
+python tools/perf_candidate.py --label my-grouped-half-vulkan --width 2048 --bake 3 --flush .05 --coalesce --group --repeat 3 --restart --renderer vk
+# Current backend: no reset during a continuous 10-minute real-contact scrape.
+python tools/perf_endurance.py --label my-half-circle --minutes 10 --continuous --width 2048 --bake 3 --flush .05 --coalesce --group
+# Omit --continuous for repeated fresh-contact fixtures, same painter instance.
+python tools/perf_endurance.py --label my-half-repeated --minutes 10 --width 2048 --bake 3 --flush .05 --coalesce --group
+```
+
+The circle fixture adds horizontal translation around a 25 m radius; it preserves
+internal and vertical motion. This is controlled assisted scraping, not normal
+driving or fake contacts. Review contact activity throughout, final queue,
+completed-layer age, lost requests, native maxima, p95/p99/worst frames and memory.
+Tools restore the full-resolution/default controls afterward; evidence records the
+actual measured settings. Process-private memory is not dedicated GPU allocation.
+
+For **D3D12 diagnostics only**, the bounded ETW tool stops at a native outlier:
+
+```powershell
+python tools/perf_trace.py --label my-native-trace --runs 6
+python tools/perf_resumed_report.py
+```
+
+It uses user-provider ETW without elevation; Windows policy can still deny it.
+Diagnostic trace timings are excluded from untraced acceptance. The raw system-wide
+ETL stays under ignored `bench/`; export only the game-owned window with
+`tools/perf_trace_report.py`, not unrelated process data. Retain failures and invalid
+runs. [Trace interpretation and limits](../investigations/11-quality-throughput.md#native-resource-trace-obtained-during-resumed-implementation).
+
+Restore the developer defaults explicitly if an interrupted experiment left them:
+
+```powershell
+python tools/dev.py lua 'scratches_paint.setDamageResolution(4096);scratches_paint.setBakeBudget(6);scratches_paint.setFlushInterval(0.2);scratches_paint.setProjectionBudget(6);scratches_paint.setLayerBudget(24);scratches_paint.setCoverageCoalescing(false);scratches_paint.setPanelGrouping(false);return jsonEncode(scratches_paint.getStats())'
+```

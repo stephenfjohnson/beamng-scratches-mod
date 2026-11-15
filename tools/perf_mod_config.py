@@ -1,9 +1,10 @@
 """Probe the installed Scintilla GT3 config; restore its prior activation state."""
-import json,time,hashlib
+import json,time,hashlib,argparse
 from pathlib import Path
 import dev,livery_probe,damage_probe
 
-out=Path('docs/evidence/milestone5/mod-config');out.mkdir(parents=True,exist_ok=False)
+p=argparse.ArgumentParser();p.add_argument('--label',default='mod-config');a=p.parse_args()
+out=Path('docs/evidence/milestone5')/a.label;out.mkdir(parents=True,exist_ok=False)
 archive=Path(dev.user_dir())/'mods/repo/scintilla_gt3.zip'
 prior=json.loads(dev.lua('return jsonEncode(core_modmanager.getMods()["scintilla_gt3"].active)'))
 (out/'archive.json').write_text(json.dumps({'name':archive.name,'sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),'previouslyActive':prior},indent=2))

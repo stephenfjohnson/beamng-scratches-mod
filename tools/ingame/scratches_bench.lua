@@ -117,6 +117,7 @@ local function finish(err)
     drainWallSeconds = run.drainWallSeconds,
     frames = run.frames,
     painter = run.painterStats or run.lastValidPainterStats or paintStats,
+    nativeTimingProfile = run.nativeTimingProfile,
     initialGeneration = run.initialGeneration,
     detect = run.detect,
     detectProf = run.detectProf,
@@ -271,6 +272,10 @@ local function step(dtReal)
     sample(veh)
     local sc = cfg.scenario
     if run.phase == 'run' then
+      if sc.requireInverted then
+        run.uprightTime = (run.frames.upZ[#run.frames.upZ] > .5) and ((run.uprightTime or 0)+dtReal) or 0
+        if run.uprightTime > 5 then finish('continuous scrape lost inverted orientation');return end
+      end
       if sc.sustainVelocity then
         -- Rigid translation correction only: preserve internal node velocities.
         -- Scale=0 erased deformation motion every render frame and could cause
@@ -302,6 +307,7 @@ local function step(dtReal)
         end
       end
       run.painterStats = scratches_paint and scratches_paint.getStats and scratches_paint.getStats() or nil
+      run.nativeTimingProfile = scratches_paint and scratches_paint.getNativeTimingProfile and scratches_paint.getNativeTimingProfile() or nil
       veh:queueLuaCommand("if scratches_detect and scratches_detect.sendStatsTo then " ..
         "scratches_detect.sendStatsTo('scratches_bench.recvDetect') " ..
         "scratches_detect.setProfile(false) end")

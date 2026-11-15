@@ -46,7 +46,7 @@ function M.new(clock)
   function self:admit(s)
     assert(not s.soil,'soil must bypass representative damage policy')
     self.stats.requests=self.stats.requests+1
-    local family=(s.brush:match('m4_([a-z]+)') or s.brush)..':'..math.floor((s.severity or 0)*3)
+    local family=(s.brush:match('m4_([a-z]+)') or s.brush)..':'..math.floor((s.severity or 0)*3)..':'..(s.styleKey or 'procedural')
     local keys=cells(s,family);requireKeys(keys)
     local p,n=s.localPos,s.localNormal
     local bx,by,bz=math.floor(p.x/BUCKET),math.floor(p.y/BUCKET),math.floor(p.z/BUCKET)

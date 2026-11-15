@@ -2,7 +2,9 @@
 
 **Development branch; milestone 5 acceptance failed, stable release blocked.**
 The table records actual tests, not a promise of all configurations or hardware.
-[Performance failures, criteria and raw evidence](../investigations/10-performance-compatibility.md).
+[Resumed quality/throughput implementation and current evidence](../investigations/11-quality-throughput.md).
+The matrix below identifies the original full-resolution cohort; new quality-preset
+results are recorded separately, not silently applied to every row.
 
 Exact installed engine: **BeamNG.drive 0.40.5.0 x64 build 302427**, Windows 11,
 RTX 3090 / Ryzen 9 3900XT. Settings: 3840x2160 Custom, Ultra lighting, High shader,
@@ -41,8 +43,9 @@ Vulkan dirt/snow washing has not been separately certified. Water tests temporar
 reposition a real Gridmap WaterBlock and restore it; they are controlled physics
 fixtures, not an unassisted stock-pool driving demonstration.
 
-The ETK adapter preserves original PBR stages in per-vehicle clones, with full
-4096x2048 damage and separate 1024x512 soil. Washing removes soil while scratches
+The ETK adapter preserves original PBR stages in per-vehicle clones. Default damage
+is 4096x2048; explicit 2048x1024 and 1024x512 experimental damage targets are available.
+Separate soil stays 1024x512; original maps are never resized. Washing removes soil while scratches
 remain; partial washing attenuates the whole soil cycle. This is not a spatial
 waterline/spray simulation. Drying restores original fields. Reset, switching,
 reload and editor suspension discard cosmetics. Extra body materials and unusual
@@ -52,9 +55,16 @@ Milestone 4's fixed damage roughness (0.65), muted diffuse and depth-colored
 brushes remain; there is no per-mark physical metal/paint-layer simulation.
 [Visual limitations](../investigations/09-scratch-impact-polish.md).
 
-D3D12 native projection still reached **738 ms**, with **663 ms bake batches** in
-the longer run. Sustained input drops or delays marks. Vulkan had lower measured
-bake costs in this sample, but aggregate drops and non-painter frame stalls remain.
-Ten minutes of sampled process memory does not certify multi-hour native/GPU
-resource behavior. Neither renderer is a stable performance recommendation;
-no all-hardware FPS guarantee or public release is made.
+The historical full-resolution cohort reproduced 738 ms projection and 663 ms bake
+batches. Its sustained velocity fixture was later found to erase internal node
+motion and sometimes reset/delete the vehicle; its throughput figures are not
+comparable to the corrected v2 fixture. Native stall timings remain actual observations.
+
+In the corrected untraced grouped half-resolution warm cohort, every tracked discrete
+request completed, with no queue-cap drops or missing footprint-proxy cells. Native
+stalls still reached 613 ms projection and 402 ms bake. Reduced resolution trades fine
+mark detail for lower typical bake cost; it does not establish a stall-free renderer.
+[Separate cohort results, settings and acceptance limits](evidence/milestone5/resumed-summary.md).
+Ten minutes of sampled process memory does not certify multi-hour native/GPU resource
+behavior. Neither renderer is a stable performance recommendation; no all-hardware FPS
+guarantee or public release is made.

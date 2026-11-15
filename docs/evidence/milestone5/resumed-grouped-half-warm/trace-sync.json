@@ -1,0 +1,9 @@
+{
+  "profilingDiagnostic": true,
+  "hostBeforeUTCSeconds": 1794706178.9030027,
+  "engineClockSeconds": 508.9612253,
+  "hostAfterUTCSeconds": 1794706178.916121,
+  "trace": "bench/m5-d3d12-user.etl",
+  "session": "ScratchesM5D3D12_1828",
+  "traceStopFileMtimeUTCSeconds": 1794706295.1277003
+}

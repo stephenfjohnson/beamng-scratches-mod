@@ -1,0 +1,13 @@
+{
+  "label": "resumed-half-b3-coalesced",
+  "width": 2048,
+  "bake": 3,
+  "repeat": 3,
+  "coalesce": true,
+  "scenarios": [
+    "sideslide",
+    "roofdrop",
+    "sustained"
+  ],
+  "capture": true
+}

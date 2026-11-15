@@ -9,7 +9,7 @@ p=argparse.ArgumentParser();p.add_argument('--label',required=True);p.add_argume
 out=Path('docs/evidence/milestone5')/a.label;out.mkdir(parents=True,exist_ok=False)
 trace=Path('bench')/(a.label+'.etl');session='ScratchesM5Ring'+str(int(time.time()))
 bench.ensure_bench();(out/'environment.json').write_text(dev.lua(livery_probe.LUA))
-(out/'source-sha256.json').write_text(json.dumps({str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in Path('lua').rglob('*.lua')},indent=2))
+(out/'source-sha256.json').write_text(json.dumps({str(f):hashlib.sha256((Path(dev.mount_dir())/f).read_bytes()).hexdigest() for f in (x.relative_to(Path(dev.mount_dir())) for x in (Path(dev.mount_dir())/'lua').rglob('*.lua'))},indent=2))
 metadata={'session':session,'etlLocalPath':str(trace.resolve()),'profilingDiagnostic':True,'events':[]};active=False;triggered=False
 
 def sync(phase):

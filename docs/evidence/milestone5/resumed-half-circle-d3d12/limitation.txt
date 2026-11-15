@@ -1,0 +1,1 @@
+Aborted at 235.5 seconds after observing the car roll upright; not ten-minute sustained acceptance. Native bake reached 130.7 ms. Full frames/upZ/activity and last valid painter statistics retained. Later fixture adds an automatic >5 s upright failure guard.

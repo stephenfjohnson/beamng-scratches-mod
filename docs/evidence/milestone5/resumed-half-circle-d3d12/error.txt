@@ -1,0 +1,1 @@
+circle: engine run failed; evidence retained in C:\Users\sforr\.t3\worktrees\beamng-scratches-mod\t3-c117a600-b9a98965ce0422e0\bench\runs\20261114-184725_circle_resumed-half-circle-d3d12_r1

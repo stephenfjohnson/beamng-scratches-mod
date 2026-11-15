@@ -1,0 +1,16 @@
+{
+  "label": "resumed-v2-full-control",
+  "width": 4096,
+  "bake": 6,
+  "repeat": 3,
+  "coalesce": false,
+  "flush": 0.2,
+  "projects": 6,
+  "layers": 24,
+  "scenarios": [
+    "sustained"
+  ],
+  "capture": false,
+  "restart": false,
+  "renderer": "d3d12"
+}

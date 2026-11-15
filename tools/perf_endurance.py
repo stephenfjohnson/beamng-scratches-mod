@@ -16,7 +16,7 @@ bench.ensure_bench()
 environment=json.loads(dev.lua(livery_probe.LUA));(out/'environment.json').write_text(json.dumps(environment,indent=2))
 assert environment['compatibility']['ready'] and not environment['comparison']['differences']
 (out/'engine.txt').write_text('\n'.join(l for l in (Path(dev.user_dir())/'beamng.log').read_text(errors='replace').splitlines() if 'Log started' in l or 'Attempting to create GFX' in l))
-(out/'source-sha256.json').write_text(json.dumps({str(f):hashlib.sha256((Path(dev.mount_dir())/f).read_bytes()).hexdigest() for f in Path('lua').rglob('*.lua')},indent=2))
+(out/'source-sha256.json').write_text(json.dumps({str(f):hashlib.sha256((Path(dev.mount_dir())/f).read_bytes()).hexdigest() for f in (x.relative_to(Path(dev.mount_dir())) for x in (Path(dev.mount_dir())/'lua').rglob('*.lua'))},indent=2))
 (out/'settings.json').write_text(json.dumps(vars(a),indent=2))
 tuning=bench.parse_tuning(['paint.setDamageResolution='+str(a.width),'paint.setBakeBudget='+str(a.bake),'paint.setFlushInterval='+str(a.flush),'paint.setCoverageCoalescing='+str(a.coalesce).lower(),'paint.setPanelGrouping='+str(a.group).lower()])
 if a.disabled:tuning+=bench.parse_tuning(['detect.setPaintEnabled=false'])
@@ -48,7 +48,7 @@ def archive():
 try:
  sample('start');i=0
  if a.continuous:
-  bench.SCENARIOS['circle']=dict(bench.SCENARIOS['sustained'],maxTime=a.minutes*60,circleRadius=25,desc='continuous additive roof scrape in a 25 m radius circle; no mid-run reset')
+  bench.SCENARIOS['circle']=dict(bench.SCENARIOS['sustained'],maxTime=a.minutes*60,circleRadius=25,requireInverted=True,desc='continuous additive roof scrape in a 25 m radius circle; no mid-run reset')
  while time.monotonic()-started<a.minutes*60:
   scenario='circle' if a.continuous else ['sideslide','roofdrop','sustained'][i%3];i+=1
   args=SimpleNamespace(tag=a.label,repeat=1000,no_shots=True,shot_scale=.5,optick=False,drain_timeout=15,on_poll=poll)

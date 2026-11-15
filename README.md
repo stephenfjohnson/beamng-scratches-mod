@@ -11,24 +11,26 @@ it paints texture damage on top of whatever the physics already did.
 
 ## Milestone 5: performance investigation (release blocked)
 
-The private ETK damage projection is reused across vehicle attachments, and
-captured layers now drain before another projection batch. Texture resolution,
-brushes, original paint/livery and separate washable soil are retained.
+The private ETK projection is reused across attachments, and captured layers drain
+before more projection work. Experimental controls now offer half-resolution
+private damage, three-layer native bake batches, same-panel grouping and explicitly
+counted representative coalescing. Original paint/livery and the separate washable
+soil target retain their resolution and materials. Default damage remains 4096x2048.
 
-Repeated tests reproduced a **652 ms native projection call** on the old
-baseline and **738 ms with these fixes installed** during sustained scraping.
-The ten-minute run also reproduced a 732 ms projection and 663 ms bake batch;
-sustained input dropped work and needed up to 6.52 seconds to drain. Milestone 5
-feature acceptance remains incomplete. Work has resumed on explicit quality presets,
-native batch size and coverage-aware aggregation; see [resumed investigation](investigations/11-quality-throughput.md).
-Changes are retained on the milestone branch; last merged baseline is c8bcae6.
-Stable release remains blocked pending native profiling, mitigation and repeated validation;
-there is no all-hardware FPS guarantee. See the [acceptance gates and measured
-evidence](investigations/10-performance-compatibility.md) and
-[reproducible performance commands](docs/examples.md#milestone-5-reproducible-performance-investigation).
-The [exact compatibility matrix](docs/compatibility.md) distinguishes stock ETK
-configurations, Police paint design, tested renderers and safe skips. No milestone 6
-or public release was performed.
+The corrected sustained fixture preserves internal vehicle motion and rejects
+mid-run resets. Half-resolution grouped warm runs drained without queue losses,
+but native stalls still reached **613 ms projection and 402 ms bake**. A separate
+ETW diagnostic captured a graphics paging packet spanning about 423 ms of a
+426 ms native call; the engine/driver root cause remains unresolved. The prior
+6.52-second delays came from an older, physically unstable stress fixture and
+must not be presented as directly comparable throughput evidence.
+
+Milestone 5 acceptance remains incomplete and unmerged; last merged baseline is
+c8bcae6. No milestone 6, stable release or all-hardware FPS claim. See the
+[resumed implementation, criteria and limits](investigations/11-quality-throughput.md),
+[measured cohorts and charts](docs/evidence/milestone5/resumed-summary.md),
+[exact compatibility matrix](docs/compatibility.md) and
+[reproducible experimental settings](docs/examples.md#resumed-quality-and-throughput-experiments).
 
 ## Milestone 4: scratch and impact polish
 

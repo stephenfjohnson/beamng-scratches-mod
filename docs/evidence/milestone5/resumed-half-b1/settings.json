@@ -1,0 +1,13 @@
+{
+  "label": "resumed-half-b1",
+  "width": 2048,
+  "bake": 1,
+  "repeat": 1,
+  "coalesce": false,
+  "scenarios": [
+    "sideslide",
+    "roofdrop",
+    "sustained"
+  ],
+  "capture": true
+}

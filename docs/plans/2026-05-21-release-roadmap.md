@@ -8,7 +8,7 @@
 > Milestone 4 polish: [scope and evidence](../../investigations/09-scratch-impact-polish.md).
 > Milestone 5 is authorized and implementation has resumed; feature acceptance
 > is **blocked and unmerged**. Last merged baseline: c8bcae6. Milestone 6/public
-> release was not started. [Final evidence and gates](../../investigations/10-performance-compatibility.md).
+> release was not started. [Resumed implementation and gates](../../investigations/11-quality-throughput.md).
 
 
 ## Release readiness update — 2026-11-14

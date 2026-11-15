@@ -1,0 +1,130 @@
+[
+  {
+    "sequence": "27332",
+    "vidMmOpType": "206",
+    "queuedOffsetMs": 2.3162364959716797,
+    "completedOffsetMs": 425.03929138183594,
+    "queueToCompleteMs": 422.72305488586426,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "29480",
+    "vidMmOpType": "113",
+    "queuedOffsetMs": 2.295255661010742,
+    "completedOffsetMs": 424.9401092529297,
+    "queueToCompleteMs": 422.64485359191895,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "27336",
+    "vidMmOpType": "206",
+    "queuedOffsetMs": 437.8471374511719,
+    "completedOffsetMs": 438.02809715270996,
+    "queueToCompleteMs": 0.18095970153808594,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "27338",
+    "vidMmOpType": "206",
+    "queuedOffsetMs": 446.1202621459961,
+    "completedOffsetMs": 446.29812240600586,
+    "queueToCompleteMs": 0.17786026000976562,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "27333",
+    "vidMmOpType": "206",
+    "queuedOffsetMs": 426.23114585876465,
+    "completedOffsetMs": 426.39923095703125,
+    "queueToCompleteMs": 0.16808509826660156,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "27335",
+    "vidMmOpType": "206",
+    "queuedOffsetMs": 437.1452331542969,
+    "completedOffsetMs": 437.29329109191895,
+    "queueToCompleteMs": 0.1480579376220703,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "27337",
+    "vidMmOpType": "206",
+    "queuedOffsetMs": 438.66729736328125,
+    "completedOffsetMs": 438.7631416320801,
+    "queueToCompleteMs": 0.09584426879882812,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "29481",
+    "vidMmOpType": "113",
+    "queuedOffsetMs": 426.2120723724365,
+    "completedOffsetMs": 426.30720138549805,
+    "queueToCompleteMs": 0.09512901306152344,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "27334",
+    "vidMmOpType": "206",
+    "queuedOffsetMs": 427.0801544189453,
+    "completedOffsetMs": 427.15907096862793,
+    "queueToCompleteMs": 0.07891654968261719,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "27339",
+    "vidMmOpType": "206",
+    "queuedOffsetMs": 446.9630718231201,
+    "completedOffsetMs": 447.04127311706543,
+    "queueToCompleteMs": 0.0782012939453125,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "29484",
+    "vidMmOpType": "113",
+    "queuedOffsetMs": 437.83116340637207,
+    "completedOffsetMs": 437.89219856262207,
+    "queueToCompleteMs": 0.06103515625,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "29483",
+    "vidMmOpType": "113",
+    "queuedOffsetMs": 437.12329864501953,
+    "completedOffsetMs": 437.183141708374,
+    "queueToCompleteMs": 0.05984306335449219,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "29486",
+    "vidMmOpType": "113",
+    "queuedOffsetMs": 446.09618186950684,
+    "completedOffsetMs": 446.14410400390625,
+    "queueToCompleteMs": 0.04792213439941406,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "29485",
+    "vidMmOpType": "113",
+    "queuedOffsetMs": 438.6472702026367,
+    "completedOffsetMs": 438.6942386627197,
+    "queueToCompleteMs": 0.04696846008300781,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "29482",
+    "vidMmOpType": "113",
+    "queuedOffsetMs": 427.0610809326172,
+    "completedOffsetMs": 427.1061420440674,
+    "queueToCompleteMs": 0.04506111145019531,
+    "executionTime100ns": "0"
+  },
+  {
+    "sequence": "29487",
+    "vidMmOpType": "113",
+    "queuedOffsetMs": 446.9432830810547,
+    "completedOffsetMs": 446.98214530944824,
+    "queueToCompleteMs": 0.03886222839355469,
+    "executionTime100ns": "0"
+  }
+]

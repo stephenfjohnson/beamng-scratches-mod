@@ -120,6 +120,8 @@ local stampStats = {
   aggregateDropped    = 0,
   framesFlushed       = 0,
   bakesIssued         = 0,
+  bakeFailures        = 0,
+  layersLost          = 0,
   projectsIssued      = 0,  -- (F) shared-camera projects/frame; was N
   clustersTotal       = 0,
   clusterJobsMerged   = 0,  -- (F) total clusters across flushed frames
@@ -140,6 +142,9 @@ local stampStats = {
 -- debug panel's imgui draw is excluded so opening the panel doesn't skew it.
 local clockhp = os.clockhp or os.clock
 local nativeEvents = {}
+-- Bounded call histograms: 0.1 ms bins through 100 ms, 1 ms through 1000 ms,
+-- then one overflow bin. Read separately so per-frame snapshots stay small.
+local nativeProfiles = {project={bins={},count=0,maxMs=0},bakeBatch={bins={},count=0,maxMs=0}}
 local perfStats = {
   frames = 0, lastMs = 0, msTotal = 0, msMax = 0,
   framesOver1ms = 0, framesOver4ms = 0,
@@ -158,6 +163,12 @@ local perfStats = {
 local function perfAdd(t0, totalKey, maxKey, countKey, layers)
   local ended=clockhp()
   local ms = (ended - t0) * 1000
+  if maxKey=="projectMsMax" or maxKey=="bakeMsMax" then
+    local profile=nativeProfiles[maxKey=="projectMsMax" and "project" or "bakeBatch"]
+    local bin=math.max(1,ms<=100 and math.ceil(ms*10) or math.min(1901,1000+math.ceil(ms-100)))
+    profile.bins[bin]=(profile.bins[bin] or 0)+1
+    profile.count=profile.count+1;profile.maxMs=math.max(profile.maxMs,ms)
+  end
   if ms>=50 and (maxKey=="projectMsMax" or maxKey=="bakeMsMax") then
     if #nativeEvents>=32 then table.remove(nativeEvents,1) end
     nativeEvents[#nativeEvents+1]={stage=maxKey=="projectMsMax" and "project" or "bake",started=t0,ended=ended,ms=ms,layers=layers}
@@ -201,7 +212,7 @@ local spawnAabbCache       = { vid = nil, box = nil }
 --   * re-bind only when the binding can actually be stale (rebindDirty): at
 --     setup, and when our car spawns, resets, or is switched to, or after a
 --     clear. Every other composite takes the light path (shape + transforms +
---     combineTextures), which is what keeps a crash from stuttering.
+--     combineTextures), which avoids that repeated rebind cost.
 -- fullRateCombine restores the API's every-frame full update for diagnosis.
 local combineDirty         = true
 local rebindDirty          = true
@@ -210,11 +221,10 @@ local sinceCombine         = 0      -- seconds since the last composite
 local framesSinceCombine   = 0
 local apiApp               = nil    -- the API's private `app` (texture set holder)
 
--- Projection cost is per FRAME, not per pass: the first projectDynamicDecals
--- in a frame costs ~14 ms (an engine-side sync; physics paused or not), each
--- further one ~1.2 ms. So work is batched: new marks accumulate and are
--- flushed every FLUSH_INTERVAL, running up to MAX_PROJECTS_PER_FRAME passes in
--- that one frame. The first mark after an idle spell flushes immediately.
+-- Earlier samples measured a more expensive first projection than subsequent
+-- passes in a frame. Batch nearby work to amortize that observed cost; this is
+-- not a native latency bound or proof of a particular synchronization cause.
+-- New marks accumulate up to FLUSH_INTERVAL; the first after idle flushes now.
 local FLUSH_INTERVAL       = 0.20   -- seconds between projection batches (tunable)
 local sinceFlush           = math.huge
 
@@ -1456,6 +1466,10 @@ local function enqueueStamp(localPos, localNormal, opts, vid)
 
   local input = {
     queuedAt    = clockhp(), severity = opts.severity,
+    -- Procedural variants may share a representative; explicit debug/user style
+    -- overrides must not be silently replaced by a differently styled mark.
+    styleKey = table.concat({tostring(opts.r),tostring(opts.g),tostring(opts.b),
+      tostring(opts.a),tostring(opts.alphaTex),tostring(opts.rot),tostring(opts.skipMetal)},","),
     localPos    = localPos,
     localNormal = localNormal,
     soil        = opts.soil,
@@ -2004,6 +2018,7 @@ local function bakePending()
   for i = k + 1, n do bakeQueue[i - k] = bakeQueue[i] end
   for i = n - k + 1, n do bakeQueue[i] = nil end
   local tb = clockhp()
+  local ok,err=pcall(function()
   if adapter then
     local damage,soil = {},{}
     for _,layer in ipairs(chunk) do
@@ -2015,7 +2030,18 @@ local function bakePending()
   else
     decalProjection:bakeLayers(chunk, veh.JBeam or veh.jbeam)
   end
+  end)
   perfAdd(tb, "bakeMsTotal", "bakeMsMax", "bakeCalls", k)
+  if not ok then
+    -- A native failure may have partially drawn the batch. Do not retry and
+    -- double-composite it, or claim its requests completed. Later work proceeds.
+    stampStats.bakeFailures=stampStats.bakeFailures+1
+    stampStats.layersLost=stampStats.layersLost+k
+    for _,layer in ipairs(chunk) do if coverage then coverage:fail(layer._scratchesCoverage) end end
+    combineDirty=true
+    log('E',logTag,"native bake batch failed: "..tostring(err))
+    return false
+  end
   perfStats.bakeLayersTotal = perfStats.bakeLayersTotal + k
   for _,layer in ipairs(chunk) do
     if coverage then coverage:complete(layer._scratchesCoverage) end
@@ -2512,6 +2538,8 @@ M.resetPaintStats = function()
   stampStats.aggregateDropped = 0
   stampStats.framesFlushed = 0
   stampStats.bakesIssued = 0
+  stampStats.bakeFailures = 0
+  stampStats.layersLost = 0
   stampStats.projectsIssued = 0
   stampStats.clustersTotal = 0
   stampStats.clusterJobsMerged = 0
@@ -2528,7 +2556,29 @@ M.resetPaintStats = function()
   stampStats.framesTicked = 0
   for k in pairs(perfStats) do perfStats[k] = 0 end
   table.clear(nativeEvents)
+  for _,p in pairs(nativeProfiles) do table.clear(p.bins);p.count=0;p.maxMs=0 end
   log('I', logTag, "paint stats reset")
+end
+
+M.getNativeTimingProfile = function()
+  local out={}
+  for name,p in pairs(nativeProfiles) do
+    local row={calls=p.count,maxMs=p.maxMs,overflowCalls=p.bins[1901] or 0}
+    for _,q in ipairs({95,99}) do
+      local count,target=0,math.ceil(p.count*q/100)
+      if p.count>0 then
+        for i=1,1901 do
+          count=count+(p.bins[i] or 0)
+          if count>=target then
+            row["p"..q]=i==1901 and {aboveMs=1000} or {upperMs=i<=1000 and i/10 or i-900}
+            break
+          end
+        end
+      end
+    end
+    out[name]=row
+  end
+  return out
 end
 
 -- Machine-readable snapshot of every counter, for tools/bench.py and anything

@@ -1,0 +1,58 @@
+
+Name:                 ScratchesM5Ring1794706585
+Status:               Running
+Root Path:            C:\Users\sforr\.t3\worktrees\beamng-scratches-mod\t3-c117a600-b9a98965ce0422e0\bench
+Segment:              Off
+Schedules:            On
+Segment Max Size:     128 MB
+
+Name:                 ScratchesM5Ring1794706585\ScratchesM5Ring1794706585
+Type:                 Trace
+Output Location:      C:\Users\sforr\.t3\worktrees\beamng-scratches-mod\t3-c117a600-b9a98965ce0422e0\bench\resumed-native-ring.etl
+Append:               Off
+Circular:             On
+Overwrite:            Off
+Buffer Size:          64
+Buffers Lost:         0
+Buffers Written:      4495
+Buffer Flush Timer:   0
+Clock Type:           Performance
+File Mode:            File
+
+Provider:
+Name:                 Microsoft-Windows-Direct3DShaderCache
+Provider Guid:        {2D4EBCA6-EA64-453F-A292-AE2EA0EE513B}
+Level:                5 (win:Verbose)
+KeywordsAll:          0x0
+KeywordsAny:          0xf (Objects,APIs,Events,Profiling)
+Properties:           64
+Filter Type:          0
+
+Provider:
+Name:                 Microsoft-Windows-DxgKrnl
+Provider Guid:        {802EC45A-1E99-4B83-9920-87C98277BA9D}
+Level:                5
+KeywordsAll:          0x0
+KeywordsAny:          0x80c1 (Base,Resource,Memory,GPUScheduler)
+Properties:           64
+Filter Type:          0
+
+Provider:
+Name:                 Microsoft-Windows-DXGI
+Provider Guid:        {CA11C036-0102-4A2D-A6AD-F03CFED5D3C9}
+Level:                5
+KeywordsAll:          0x0
+KeywordsAny:          0x2 (Events)
+Properties:           64
+Filter Type:          0
+
+Provider:
+Name:                 Microsoft-Windows-Direct3D12
+Provider Guid:        {5D8087DD-3A9B-4F56-90DF-49196CDC4F11}
+Level:                5 (win:Verbose)
+KeywordsAll:          0x0
+KeywordsAny:          0x484 (Resources,ObjectLifetime,APIs)
+Properties:           64
+Filter Type:          0
+
+The command completed successfully.

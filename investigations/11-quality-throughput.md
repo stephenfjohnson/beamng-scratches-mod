@@ -132,3 +132,58 @@ motion. It does not reset the car or painter during the measured interval.
 Repeated-fixture endurance remains available and is labeled separately. Native
 process-memory sampling replaces spawning PowerShell inside measured windows.
 Any automatic reset, missing car, residual work or lost coverage fails acceptance.
+
+
+## Evidence cohort boundaries
+
+The `resumed-full-b6`, `resumed-half-b6`, `resumed-half-b1`, quarter-b1 and early
+coalesced cohorts use the old v1 sustained forcing. Their side/drop fixtures are
+unchanged, but their sustained throughput is **not acceptance evidence**. The
+misleadingly named `resumed-half-b1-fast-cold-v2` also predates the actual fixture
+correction: repeat 1 reset its counters and repeat 2 lost the car. Both are invalid.
+No raw results were rewritten to hide that mistake.
+
+`resumed-v2-full-control` and `resumed-v2-half-b3` are the first corrected sustained
+comparisons. `resumed-grouped-half-warm` ran during an ETW diagnostic and is excluded
+from untraced acceptance, as is `resumed-native-ring`. The separate
+`resumed-grouped-half-untraced` cohort uses the grouped candidate with no ETW session.
+It reproduced 613 ms projection and 402 ms bake stalls while completing all tracked
+requests, with no queue-cap drops or uncovered footprint-proxy cells.
+
+The 25 m circular attempt was stopped at 235.5 seconds after the car rolled upright.
+It is retained as `resumed-half-circle-d3d12`, with an error and full up-vector/activity
+samples. It is **not** ten-minute continuous-scrape acceptance. Later tooling rejects
+more than five seconds upright automatically. Repeated fresh-contact endurance
+resets the vehicle between fixtures but keeps the same game process and painter.
+This distinction is explicit; no idle tail is sold as sustained projection load.
+
+The resumed report separates per-frame accumulated projection/bake distributions
+(all frames and active frames) from exact individual-call maxima. Completed-layer
+age is conservative and cannot certify individual pixel appearance time. Coverage
+coalescing applies to discrete inputs; existing stream path shaping, detector caps
+and spot saturation remain outside that proxy and are reported separately.
+
+Static review also found that a thrown native bake had already removed its layers
+from the queue without resolving their coverage ledger. The new failure path logs
+and counts the failed batch/layers, marks requests lost and permits later work.
+It does not retry a potentially partially composited batch. A mock native exception
+verifies failure accounting and subsequent recovery. Explicit custom color/alpha/
+rotation/material overrides no longer share a procedural representative. Bounded
+history/coverage overflow tests exercise 8200 representatives. **254 mock checks**
+pass; these checks do not waive native/visual acceptance.
+
+Native-call histograms added for the subsequent selected/control cohorts report
+p95/p99 upper bin bounds (0.1 ms through 100 ms, 1 ms through 1000 ms, explicit
+overflow above 1000 ms) plus exact worst and call counts. Bake timing is the entire
+batch, including both native calls when damage and soil share a chunk. The histogram
+is bounded and read at run completion, not copied/scanned every render frame.
+Earlier cohorts retain per-frame stage distributions and exact native maxima only.
+
+First corrected D3D12 repeated-fixture endurance: 39 fixtures over 606 seconds,
+no tracked lost requests, maximum completed-layer input age 656.5 ms. Native
+projection/bake peak **411.3 ms**, so the unchanged 100 ms gate fails. Process-private
+memory sampled 7.33–8.18 GiB and returned to 7.37 GiB after collection. These are
+whole-process samples, not a proof of native/GPU allocation bounds. This cohort
+predates the later custom-style/native-failure accounting hardening and call
+histograms; its mounted runtime hashes are retained. Subsequent cold/renderer
+cohorts exercise the hardened implementation.

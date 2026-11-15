@@ -1,0 +1,16 @@
+{
+  "label": "resumed-half-b3-fast-coalesced",
+  "width": 2048,
+  "bake": 3,
+  "repeat": 3,
+  "coalesce": true,
+  "flush": 0.05,
+  "projects": 2,
+  "layers": 12,
+  "scenarios": [
+    "sideslide",
+    "roofdrop",
+    "sustained"
+  ],
+  "capture": true
+}
