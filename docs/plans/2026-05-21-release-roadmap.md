@@ -6,16 +6,18 @@
 > Milestone 3 adds selective water washing and drying within the ETK scope.
 > [Implementation and live evidence](../../investigations/08-water-washing.md).
 > Milestone 4 polish: [scope and evidence](../../investigations/09-scratch-impact-polish.md).
-> This thread stops after milestone 4; milestone 5 and stable release are not authorized.
+> Milestone 5 is authorized and in progress; milestone 6/public release is outside this run.
 
 
 ## Release readiness update — 2026-11-14
 
 Status: development preview; not ready for a broad public release.
+Milestone 5 reproduced a 652 ms native projection call; [current acceptance
+gates and experiments](../../investigations/10-performance-compatibility.md).
 
 Integrated surface cosmetics prototype (mud/dirt/snow color deposits and internal
 water exposure state), now extended with separate ETK soil composition and
-wet/dry appearance. Current preflight: 222 mock checks, Lua syntax/global
+wet/dry appearance. Current preflight: 226 mock checks, Lua syntax/global
 checks and brush sidecars. See investigation 08 for water validation and limits.
 See [milestone 2](../../investigations/07-progressive-deposits.md) for current
 soil scope, real captures and engine checks.
@@ -40,8 +42,9 @@ player vehicle only and does not change physics.
 
 Development preview: experimental mud, dirt and snow contact deposits are also
 included. They now admit rolling tires and use dedicated coverage masks; real
-ETK/Police and plain-paint driving is recorded in milestone 2. Visible washing and wet gloss are not
-included. Do not promote these as finished release features.
+ETK/Police and plain-paint driving is recorded in milestone 2. Selective washing
+and wet/dry appearance are implemented for that ETK scope in milestone 3;
+scratch polish is recorded in milestone 4. Native stalls still block stable release.
 
 ### Gates before public download
 
@@ -50,10 +53,10 @@ included. Do not promote these as finished release features.
   unsupported designs remain skipped.
 - [x] Validate terrain deposits on real mud, dirt and snow, including rolling
   versus wheelspin and body contact; improve wheel-to-panel splash placement.
-- [ ] Implement separately removable soil for visual washing without erasing
+- [x] Implement separately removable soil for visual washing without erasing
   scratches; validate wet gloss without reintroducing paint seams.
 - [ ] Reduce projection/bake spikes; measure repeat runs against a clean baseline.
-- [ ] Refine overly bright scrape brushes and capture matching clean/damaged
+- [x] Refine overly bright scrape brushes and capture matching clean/damaged
   views, close-up scrape/chip details and validated environmental effects.
 - [ ] Record exact game build and per-vehicle results: paint colors, liveries,
   resets, switching, traffic, mod vehicles and Dynamic Decals editor conflicts.

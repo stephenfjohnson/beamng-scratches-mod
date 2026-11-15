@@ -14,17 +14,23 @@ def main():
     p.add_argument('--restart',action='store_true')
     p.add_argument('--renderer',choices=['d3d12','vk'],default='d3d12')
     p.add_argument('--disabled',action='store_true')
+    p.add_argument('--reflections-off',action='store_true')
     p.add_argument('--budget',type=int)
     p.add_argument('--skin',choices=['plain','police'],default='police')
     a=p.parse_args()
     root=Path('docs/evidence/milestone5')/a.label
     root.mkdir(parents=True,exist_ok=False)
     rows=[]
+    previous_reflections=None
     try:
         for i in range(a.rounds):
             if a.restart:
                 subprocess.run([sys.executable,'tools/dev.py','restart','--game-arg=-gfx','--game-arg='+a.renderer],check=True)
                 dev._port_cache=None
+            if a.reflections_off:
+                if previous_reflections is None:
+                    previous_reflections=json.loads(dev.lua('return jsonEncode(settings.getValue("GraphicDynReflectionEnabled"))'))
+                dev.lua('settings.setValue("GraphicDynReflectionEnabled",false);return true')
             dev.lua('simTimeAuthority.pause(false);core_vehicle_partmgmt.setSkin('+json.dumps('' if a.skin=='plain' else 'police')+');return true')
             time.sleep(3)
             bench.ensure_bench()
@@ -47,5 +53,7 @@ def main():
                 rows.append(row)
                 (root/'summary.json').write_text(json.dumps(rows,indent=2))
     finally:
+        if previous_reflections is not None:
+            dev.lua('settings.setValue("GraphicDynReflectionEnabled",'+str(previous_reflections).lower()+');return true')
         dev.lua('scratches_paint.setProjectionBudget(6);local v=getPlayerVehicle(0);if v then v:queueLuaCommand("if scratches_detect then scratches_detect.setPaintEnabled(true) end") end;return true')
 if __name__=='__main__':main()

@@ -35,7 +35,7 @@ The following engine metrics row reports Lua 654.5434 ms, consistent with the
 metrics API's one-frame delay. LuaGC was approximately 0.06-0.08 ms; sampled
 physics and renderer CPU sections were small. No growing Lua backlog explains
 this event. This localizes the wait inside native projection, **not** its C++
-root cause: these CPU timers cannot distinguish GPU synchronization, driver
+root cause: these main-thread elapsed timers cannot distinguish GPU synchronization, driver
 allocation, shader work or native resource contention. No GPU trace attribution
 is claimed, and no shader cache was purged.
 
