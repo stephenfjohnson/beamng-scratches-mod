@@ -37,7 +37,7 @@ INCLUDE_DIRS = ["lua", "art"]
 
 # Brush textures need a sidecar to load; these are ordinary material maps and
 # do not (see restoreFactoryMR in paint.lua).
-SIDECAR_EXEMPT = {"_paint_roughness.png"}
+SIDECAR_EXEMPT = {"_paint_roughness.png", "soil_relief_detail.normal.png"}
 
 # Never ship editor/OS debris even from inside an included tree.
 EXCLUDE_NAMES = {".DS_Store", "Thumbs.db", "desktop.ini", ".gitkeep"}

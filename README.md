@@ -106,6 +106,13 @@ Milestone 3 evidence predates the milestone 4 polish described above.
 
 ## Milestone 2: progressive surface deposits
 
+Soil now has a masked detail normal for small lumps and grain that catch the
+light. It preserves the factory body normal and fades with soil opacity during
+washing. This is lighting relief, not displacement or raised splash outlines.
+Mud, dirt and snow share this detail because they share the soil layer; it does
+not fix cross-panel splash continuity. See the [before/after evidence and
+reproduction steps](docs/evidence/soil-relief/report.md).
+
 Wheel mud/dirt now uses discrete droplet heads with tapered tails, aligned
 against local travel rather than randomly rotated coverage patches. Faster
 travel produces longer, flatter trails; reversing flips their direction. This

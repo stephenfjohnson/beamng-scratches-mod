@@ -202,6 +202,12 @@ function M.create(veh,part)
   mat:setField("baseColorMap",3,"@ScratchesSoilBaseColor")
   mat:setField("baseColorFactor",3,"1 1 1 1")
   mat:setField("opacityMap",3,"@ScratchesSoilBaseColor")
+  -- Static micro-relief is blended by this stage's dynamic soil opacity.
+  -- Retain the factory normalMap; no unsupported dynamic-normal binding.
+  mat:setField("detailNormalMap",3,"/art/dynamicDecals/textures/soil_relief_detail.normal.png")
+  mat:setField("normalDetailMapUseUV",3,"1")
+  mat:setField("detailScale",3,"8 8")
+  mat:setField("detailNormalMapStrength",3,"0.65")
   mat:setField("activeLayers",0,tostring(count+2))
   mat:flush(); mat:reload()
   -- Material is selected at construction via the flexbody override.
