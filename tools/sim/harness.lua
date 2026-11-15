@@ -545,6 +545,21 @@ check(paint.getSurfaceState().lastSample.wheel == 1,
   "wheel sample takes priority over earlier body contact")
 paint.clearStamps()
 local scratchBeforeSoil = paint.getStats().stamp.streamsBaked
+local beforeSoft = detStats()
+for _, name in ipairs({'MUD','SNOW','GRASS'}) do
+  for step=1,8 do
+    obj.simTime = obj.simTime + 0.04
+    _G.onNodeCollision(10,vec3(100+step*.02,0,0.3),vec3(0,0,1),vec3(0,5,0),3,
+      vec3(0,5,0),8,0,12000,0.01,particles.getMaterialIDByName(mats,name),METAL)
+  end
+end
+surfaceTick(false)
+local afterSoft = detStats()
+check(afterSoft.filteredCalls==beforeSoft.filteredCalls and afterSoft.impactEvents==beforeSoft.impactEvents,
+  'high-force body contacts on mud, snow and grass never trigger abrasion')
+check(paint.getSurfaceState().mud>0 and paint.getSurfaceState().snow>0,
+  'soft body contacts still deliver mud and snow deposits')
+paint.clearStamps()
 for i=1,1000 do soil(30,18) end -- tire MUD, no body scratch
 surfaceTick(false)
 check(paint.getStats().stamp.streamsBaked == scratchBeforeSoil, "tire soil creates no scratch streams")

@@ -189,8 +189,10 @@ local SURFACE_MATERIAL_NAMES = {
   -- Anything you might smash into on a typical map:
   "WOOD", "PLASTIC", "RUBBER",
   -- Off-road:
-  "DIRT", "DIRT_DUSTY", "GRASS", "MUD", "SAND",
-  "ICE", "SNOW",
+  "DIRT", "DIRT_DUSTY", "SAND", "ICE",
+  -- Soft MUD/SNOW/GRASS can load body nodes heavily without abrading paint.
+  -- Surface exposure is collected independently before this scratch filter.
+  -- Rocks/gravel embedded in terrain still scratch when reported as such.
 }
 
 -- Part-name substring deny-list. Matched against node.partOrigin (case-insensitive).

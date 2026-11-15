@@ -284,6 +284,12 @@ nodes touching a hard surface, with glass, wheels, and internal/mechanical
 parts rejected. Each node's verdict is computed once and cached, so the
 per-contact cost on the physics tick is a table lookup.
 
+Mud, snow and grass contacts no longer emit scratch damage, even when a sunk
+body node carries a large force. Mud/snow deposits are collected independently
+and still accumulate. Dirt, sand, gravel and hard surfaces remain abrasive;
+the reported contact material determines the result. This prevents new soft-
+ground scratches; existing baked scratches remain until cleared/reset.
+
 Surviving contacts split into two event kinds:
 
 - **Impacts** — single hard hits past a normal-force threshold.
