@@ -10,13 +10,21 @@ def prepare():
  bench.ensure_bench()
 def environment(path):
  meta=json.loads(dev.lua(livery_probe.LUA));path.write_text(json.dumps(meta,indent=2))
- assert meta['compatibility']['ready'] and not meta['comparison']['differences'], 'adapter/material regression; evidence retained'
+ hashes={str(f):hashlib.sha256((Path(dev.mount_dir())/f).read_bytes()).hexdigest() for f in (x.relative_to(Path(dev.mount_dir())) for x in (Path(dev.mount_dir())/'lua').rglob('*.lua'))}
+ path.with_suffix('.source-sha256.json').write_text(json.dumps(hashes,indent=2))
+ source=out/'source-sha256.json'
+ if source.exists():assert json.loads(source.read_text())==hashes,'mounted runtime changed within cohort'
+ else:source.write_text(json.dumps(hashes,indent=2))
+ if not meta['compatibility']['ready'] or meta['comparison']['differences']:
+  (out/'error.txt').write_text('adapter/material readiness guard failed before measured fixture; environment retained')
+  raise AssertionError('adapter/material regression; evidence retained')
 if not a.restart:prepare()
 tuning=bench.parse_tuning(['detect.setPaintEnabled='+str(not a.disabled).lower(),'paint.setDamageResolution='+str(a.width),'paint.setBakeBudget='+str(a.bake),'paint.setFlushInterval='+str(a.flush),'paint.setProjectionBudget='+str(a.projects),'paint.setLayerBudget='+str(a.layers)])
 tuning+=bench.parse_tuning(['paint.setCoverageCoalescing='+str(a.coalesce).lower(),'paint.setPanelGrouping='+str(a.group).lower()])
-(out/'source-sha256.json').write_text(json.dumps({str(f):hashlib.sha256((Path(dev.mount_dir())/f).read_bytes()).hexdigest() for f in (x.relative_to(Path(dev.mount_dir())) for x in (Path(dev.mount_dir())/'lua').rglob('*.lua'))},indent=2))
 if not a.restart:environment(out/'environment.json')
-(out/'settings.json').write_text(json.dumps(vars(a),indent=2))
+settings=dict(vars(a));settings['restartRenderer']=settings.pop('renderer') if a.restart else None
+settings['actualRendererEvidence']='engine*.txt; --renderer only selects the backend when --restart is used'
+(out/'settings.json').write_text(json.dumps(settings,indent=2))
 (out/'engine.txt').write_text('\n'.join(l for l in (Path(dev.user_dir())/'beamng.log').read_text(errors='replace').splitlines() if 'Log started' in l or 'Attempting to create GFX' in l))
 try:
  for rep in range(1,a.repeat+1):

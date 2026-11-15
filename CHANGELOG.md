@@ -11,7 +11,12 @@
   stream layer when grouping; do not present representative brushes as pixel-equivalent.
 - Correct sustained fixture velocity forcing, reject mid-run cosmetic resets, record
   queue ages and native outlier timestamps, and add continuous circular endurance.
-- 254 mock checks pass. Historical 148-run cohort remains separately documented;
+- Fix merged stream segment aliasing that duplicated later bands in the first band's
+  haze/path; count partial native capture loss and verify full-layer conservation.
+- Repair identical ETK spawns whose cached construction bundle contained another
+  vehicle's clone. Invalidate that cache on the existing one-shot reload retry;
+  reclaim marked private materials only after their owner and all mesh references are gone.
+- 264 mock checks pass. Historical 148-run cohort remains separately documented;
   new corrected-fixture cohorts, invalid old runs and traced diagnostics are distinguished.
 - Capture a 426 ms native call with a correlated 423 ms graphics paging packet.
   WPR CPU profiling remains unavailable; no unsupported shader/driver attribution.

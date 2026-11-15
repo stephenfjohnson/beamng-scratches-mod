@@ -1,0 +1,1 @@
+Measured asphalt fixture generation 10 became 11 on mud placement. Engine log 1238.39741 reports instability for vehicle 87560 followed by onReset and clearStamps. Original asphalt scratch persistence is invalid; retain dirty-to-dry state results separately.

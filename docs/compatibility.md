@@ -3,13 +3,43 @@
 **Development branch; milestone 5 acceptance failed, stable release blocked.**
 The table records actual tests, not a promise of all configurations or hardware.
 [Resumed quality/throughput implementation and current evidence](../investigations/11-quality-throughput.md).
-The matrix below identifies the original full-resolution cohort; new quality-preset
-results are recorded separately, not silently applied to every row.
+The historical matrix below remains separate from the resumed-build checks.
 
 Exact installed engine: **BeamNG.drive 0.40.5.0 x64 build 302427**, Windows 11,
 RTX 3090 / Ryzen 9 3900XT. Settings: 3840x2160 Custom, Ultra lighting, High shader,
 Normal texture, SMAA, dynamic reflections enabled except the named diagnostic.
 Process-cold tests retain shader caches. No other build, GPU or OS is certified.
+
+## Resumed construction-hook build
+
+Vulkan full-detail checks use 4096x2048 damage, bake3, flush0.05, grouping enabled
+and representative coalescing disabled. The final D3D12 regression is recorded
+separately when complete; the historical D3D12 rows are not promoted automatically.
+
+| Exact configuration / boundary | Resumed Vulkan result |
+| --- | --- |
+| `rennspecht_8r_A.pc` + `etk800_skin_police` | Nine fresh-process, nine warm and 39 endurance fixtures; visible side/roof marks and unchanged original fields. Native 508 ms and completed-layer age 1012 ms fail performance gates. |
+| Stock `844_150_A.pc` plain / `844_police_A.pc` Police | One real sideslide each, matched damaged/original/reset captures; original material fields unchanged. No config-specific endurance claim. |
+| Stock `854_police_A.pc` Polizei, ETK Heritage, stock unicycle | Skipped; ETK Police return ready. |
+| Installed Scintilla GT3 `gt3_balanced.pc` / `scintilla_skin_exblue` | Skipped; prior mod activation restored. No Scintilla support claim. |
+| Two identical background ETKs plus selected player | Distinct private clones; only selected player's damage/soil stages active. |
+| Three moving `simple_traffic` NPCs | Zero NPC detector calls/impacts/streams during the player scrape. |
+| Lifecycle | 20 switches, 10 vehicle reloads, five extension reloads, four Automation/Gridmap transitions; ready and original fields retained. Experimental controls reapplied after extension/map changes. |
+| Dynamic Decals editor | Sentinel artwork retained across clear/reload. |
+| Actual mud/water/drying | Guarded retry preserved one cosmetic generation through asphalt damage, mud, washing, drying and fresh mud; original scuffs visibly persisted. Initial transfer-reset trial is retained as invalid persistence evidence. |
+
+[Functional snapshots and checks](evidence/milestone5/resumed-full-vk-func),
+[stock captures](evidence/milestone5/resumed-full-vk-func-stock),
+[guarded washing captures](evidence/milestone5/resumed-full-vk-wash-safe),
+[final-build performance cohorts](evidence/milestone5/resumed-summary.md).
+
+Ten clean-process spawn/delete cycles returned to one live private material after
+each deletion. Cleanup requires explicit ownership and no live owner or mesh
+reference. ETK construction invalidates the entire JBeam bundle cache, which can
+increase spawn/reload work. These are scoped object-lifetime observations, not
+a proof that all engine/GPU allocations are leak-free over multi-hour sessions.
+
+## Historical full-resolution cohort
 
 | Exact configuration / fixture | D3D12 evidence | Vulkan evidence | Boundary |
 | --- | --- | --- | --- |

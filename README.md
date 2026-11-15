@@ -12,14 +12,25 @@ it paints texture damage on top of whatever the physics already did.
 ## Milestone 5: performance investigation (release blocked)
 
 The private ETK projection is reused across attachments, and captured layers drain
-before more projection work. Experimental controls now offer half-resolution
-private damage, three-layer native bake batches, same-panel grouping and explicitly
-counted representative coalescing. Original paint/livery and the separate washable
-soil target retain their resolution and materials. Default damage remains 4096x2048.
+before more projection work. The full-detail experiment uses three-layer native
+bake batches, faster flushing and same-panel grouping, with explicit conservation
+of every accepted layer. Optional lower-resolution targets and representative
+coalescing remain documented quality tradeoffs. Original paint/livery and the
+separate washable soil target retain their resolution and materials. Default
+damage remains 4096x2048.
+
+Merged stream bands no longer duplicate later paths in the first band's haze.
+ETK construction now prevents cached private materials from reaching another
+vehicle, and unreferenced owned clones are reclaimed after destruction. This
+requires invalidating the engine's JBeam construction cache for ETK spawns/reloads;
+it can increase construction cost and does not run during steady scraping.
 
 The corrected sustained fixture preserves internal vehicle motion and rejects
-mid-run resets. Half-resolution grouped warm runs drained without queue losses,
-but native stalls still reached **613 ms projection and 402 ms bake**. A separate
+mid-run resets. The final full-resolution Vulkan build still reproduced a
+**508 ms native projection** and a separate **965 ms frame interval** during
+endurance, despite favorable cold and warm runs. The latter pushed completed-layer
+age to 1,012 ms, failing the one-second gate. Half-resolution D3D12 runs previously reached
+**613 ms projection and 402 ms bake**. A separate
 ETW diagnostic captured a graphics paging packet spanning about 423 ms of a
 426 ms native call; the engine/driver root cause remains unresolved. The prior
 6.52-second delays came from an older, physically unstable stress fixture and
@@ -81,7 +92,7 @@ resource measurements and limits](investigations/07-progressive-deposits.md).
 
 This is a cosmetic coverage approximation, not volumetric snow or simulated
 spray. Projection/bake spikes remain: the rolling cap run peaked at 27.3 ms
-painter CPU time. Broad performance/vehicle certification remains future work.
+painter main-thread elapsed time, including native waits. Broad performance/vehicle certification remains future work.
 Milestone 3 adds selective visual washing and wetness for this ETK scope.
 Reset clears soil and scratches together.
 

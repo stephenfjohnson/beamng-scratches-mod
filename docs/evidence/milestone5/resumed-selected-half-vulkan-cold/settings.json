@@ -1,0 +1,21 @@
+{
+  "label": "resumed-selected-half-vulkan-cold",
+  "width": 2048,
+  "bake": 3,
+  "repeat": 3,
+  "coalesce": true,
+  "group": true,
+  "flush": 0.05,
+  "projects": 6,
+  "layers": 24,
+  "scenarios": [
+    "sideslide",
+    "roofdrop",
+    "sustained"
+  ],
+  "capture": false,
+  "restart": true,
+  "renderer": "vk",
+  "disabled": false,
+  "skin": "police"
+}

@@ -1,0 +1,118 @@
+{
+  "error": "mud placement reset cosmetics; not persistence evidence",
+  "initialGeneration": 13,
+  "state": {
+    "surface": {
+      "waterSupported": true,
+      "soilRemaining": 1,
+      "visualWetnessSupported": true,
+      "wetness": 0,
+      "dirt": 0,
+      "snow": 0,
+      "deposits": 0,
+      "waterFraction": 0,
+      "visualCleaningSupported": true,
+      "mud": 0
+    },
+    "velocity": {
+      "x": 0.005172566511,
+      "y": -0.0345995836,
+      "z": -1.033819079
+    },
+    "pos": {
+      "x": -312.9986877,
+      "y": -364.9966736,
+      "z": 99.96083069
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 12,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "latency": {
+        "oldestMs": 0
+      },
+      "coverage": {
+        "enabled": false
+      },
+      "config": {
+        "aggregateCap": 160,
+        "coverageCoalescing": false,
+        "flushInterval": 0.05,
+        "panelGrouping": true,
+        "bakeBudget": 3,
+        "projBudget": 6,
+        "fullRateCombine": false,
+        "clusterRadius": 0.65,
+        "layerBudget": 24,
+        "damageWidth": 4096
+      },
+      "generation": 14,
+      "nativeEvents": {},
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 118,
+        "streamLayersMissed": 0,
+        "rebinds": 2,
+        "streamsBaked": 47,
+        "stampsEnqueued": 148,
+        "jobsDropped": 0,
+        "layersLost": 0,
+        "streamLayersExpected": 170,
+        "framesDeferred": 1,
+        "spotsSkipped": 34,
+        "framesTicked": 878,
+        "streamsMerged": 38,
+        "clusterJobsMerged": 1,
+        "framesFlushed": 116,
+        "jobsFailed": 0,
+        "foreignDropped": 0,
+        "projectsIssued": 84,
+        "streamSubstrokesTotal": 170,
+        "bakeFailures": 0,
+        "bakesIssued": 116,
+        "clustersTotal": 37,
+        "aggregateDropped": 0,
+        "stampsAttempted": 148
+      },
+      "perf": {
+        "flushMsTotal": 588.49729999997,
+        "combineMsMax": 0.82109999993918,
+        "framesOver1ms": 141,
+        "framesOver4ms": 74,
+        "msMax": 41.687299999921,
+        "projectMsTotal": 541.40199999915,
+        "bakeMsTotal": 453.97579999917,
+        "flushMsMax": 41.661700000077,
+        "projectCalls": 84,
+        "inputToProjectMaxMs": 210.56569999996,
+        "lastMs": 0.0086000000010245,
+        "msTotal": 1060.3281000031,
+        "bakeLayersTotal": 318,
+        "bakeCalls": 116,
+        "layerCalls": 318,
+        "layerMsTotal": 10.399200001757,
+        "bakeMsMax": 21.088400000053,
+        "combineMsTotal": 7.5251000009757,
+        "projectMsMax": 33.461999999872,
+        "frames": 878,
+        "inputToBakeMaxMs": 292.3143999999
+      }
+    }
+  }
+}

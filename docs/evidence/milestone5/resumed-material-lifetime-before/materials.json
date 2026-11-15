@@ -1,0 +1,176 @@
+[
+  {
+    "materials": [
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_33151_police",
+        "id": 34607
+      }
+    ],
+    "vehicles": [
+      {
+        "id": 33151,
+        "materials": [
+          "scratches_etk800_33151_police"
+        ]
+      }
+    ],
+    "phase": "before"
+  },
+  {
+    "materials": [
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_33151_police",
+        "id": 34607
+      },
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_37886_police",
+        "id": 37889
+      }
+    ],
+    "vehicles": [
+      {
+        "id": 33151,
+        "materials": [
+          "scratches_etk800_33151_police"
+        ]
+      },
+      {
+        "id": 37886,
+        "materials": [
+          "scratches_etk800_37886_police"
+        ]
+      }
+    ],
+    "phase": "spawn-0"
+  },
+  {
+    "materials": [
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_33151_police",
+        "id": 34607
+      },
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_37886_police",
+        "id": 37889
+      }
+    ],
+    "vehicles": [
+      {
+        "id": 33151,
+        "materials": [
+          "scratches_etk800_33151_police"
+        ]
+      }
+    ],
+    "phase": "delete-0"
+  },
+  {
+    "materials": [
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_33151_police",
+        "id": 34607
+      },
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_37886_police",
+        "id": 37889
+      }
+    ],
+    "vehicles": [
+      {
+        "id": 33151,
+        "materials": [
+          "scratches_etk800_33151_police"
+        ]
+      },
+      {
+        "id": 37959,
+        "materials": [
+          "scratches_etk800_37886_police"
+        ]
+      }
+    ],
+    "phase": "spawn-1"
+  },
+  {
+    "materials": [
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_33151_police",
+        "id": 34607
+      },
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_37886_police",
+        "id": 37889
+      }
+    ],
+    "vehicles": [
+      {
+        "id": 33151,
+        "materials": [
+          "scratches_etk800_33151_police"
+        ]
+      }
+    ],
+    "phase": "delete-1"
+  },
+  {
+    "materials": [
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_33151_police",
+        "id": 34607
+      },
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_37886_police",
+        "id": 37889
+      }
+    ],
+    "vehicles": [
+      {
+        "id": 33151,
+        "materials": [
+          "scratches_etk800_33151_police"
+        ]
+      },
+      {
+        "id": 38100,
+        "materials": [
+          "scratches_etk800_37886_police"
+        ]
+      }
+    ],
+    "phase": "spawn-2"
+  },
+  {
+    "materials": [
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_33151_police",
+        "id": 34607
+      },
+      {
+        "parent": "MissionCleanup",
+        "name": "scratches_etk800_37886_police",
+        "id": 37889
+      }
+    ],
+    "vehicles": [
+      {
+        "id": 33151,
+        "materials": [
+          "scratches_etk800_33151_police"
+        ]
+      }
+    ],
+    "phase": "delete-2"
+  }
+]

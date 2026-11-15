@@ -1,0 +1,11 @@
+{
+  "label": "resumed-selected-half-vulkan-endurance",
+  "minutes": 10.0,
+  "width": 2048,
+  "bake": 3,
+  "flush": 0.05,
+  "coalesce": true,
+  "group": true,
+  "continuous": false,
+  "disabled": false
+}

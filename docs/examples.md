@@ -99,7 +99,7 @@ D3D12 mud/dirt/snow driving evidence for the same narrow ETK adapter.
 | Changes do not load | Remove duplicate ZIP/unpacked installations, restart; check active user folder |
 | Terrain does not dirty the car | Collision material, slip threshold, deposit cap and approximate wheel projection |
 | Water does not clean the car | Check supported ETK design, body immersion and pause; allow eight simulated seconds at full immersion |
-| Stutters when scraping | Record a bench run; lower projection budget in the debug panel and compare; no guaranteed FPS target yet |
+| Stutters when scraping | Record native worst time and queue age with the experimental presets below; smaller budgets can increase backlog, and native hitches remain unresolved |
 
 For bug reports, include game build, renderer, vehicle/configuration, map,
 reproduction steps, installed version/commit and the panel's Copy debug report.
@@ -309,7 +309,14 @@ conditions, not guaranteed FPS recommendations.
 Use this **development branch**, BeamNG 0.40.5.0 build 302427, Gridmap v2 and the
 verified ETK 800 main body with empty Paint Design or `etk800_skin_police`.
 These controls are experiments, not a stable preset or a renderer recommendation.
-From the repo in PowerShell, deploy the dev mount first:
+For an isolated checkout of the published milestone branch, use PowerShell:
+
+```powershell
+git clone --branch t3/milestone5-projection-stall-perf https://github.com/stephenfjohnson/beamng-scratches-mod.git beamng-scratches-m5
+cd beamng-scratches-m5
+```
+
+With the game running and its local MCP server available, deploy the dev mount:
 
 ```powershell
 python tools/dev.py deploy
@@ -325,9 +332,11 @@ python tools/dev.py lua 'scratches_paint.setDamageResolution(2048);scratches_pai
 Changing damage resolution or coalescing mode clears existing cosmetics. The
 2048x1024 damage target has one quarter of the texels of 4096x2048, so small marks
 can soften. It does not resize the original livery/PBR maps or 1024x512 soil.
+The installed API initially constructs its default target before resizing; this
+is not proof of a quarter-sized peak allocation or suitability for low-VRAM GPUs.
 Allowed damage widths are 4096, 2048 and 1024. Quarter width is a tested tradeoff,
 not an accepted quality recommendation. Bake budget is layers per native call,
-clamped to 1–24. The scheduler cannot interrupt a slow native call.
+clamped to 1â€“24. The scheduler cannot interrupt a slow native call.
 
 Grouping shares cameras but retains layers. Discrete coalescing intentionally
 represents contained same-family/severity footprints with an existing brush;
@@ -378,3 +387,55 @@ Restore the developer defaults explicitly if an interrupted experiment left them
 ```powershell
 python tools/dev.py lua 'scratches_paint.setDamageResolution(4096);scratches_paint.setBakeBudget(6);scratches_paint.setFlushInterval(0.2);scratches_paint.setProjectionBudget(6);scratches_paint.setLayerBudget(24);scratches_paint.setCoverageCoalescing(false);scratches_paint.setPanelGrouping(false);return jsonEncode(scratches_paint.getStats())'
 ```
+
+
+For the retained local ETW diagnostic, the exact sanitized export can be regenerated
+on this workspace (the system-wide ETL is intentionally not published):
+
+```powershell
+$q = "*[System[TimeCreated[@SystemTime >= '2026-11-15T01:37:50.557Z' and @SystemTime <= '2026-11-15T01:37:51.083Z']]]"
+Get-WinEvent -Path bench/resumed-native-ring.etl -Oldest -FilterXPath $q | ForEach-Object { $_.ToXml() } | Set-Content -Encoding utf8 bench/m5-stall-events.xml
+python tools/perf_trace_report.py --xml bench/m5-stall-events.xml --out docs/evidence/milestone5/resumed-native-ring --run docs/evidence/milestone5/resumed-native-ring/20261114-183730_sustained_resumed-native-ring_r3/result.json --pid 578736
+python tools/perf_trace_plot.py
+```
+
+For a new recording, use its actual game PID, outlier interval and clock-sync metadata
+instead of those retained values. The script matches kernel packet completions by
+queue, packet and sequence; it removes graphics addresses and unrelated process events.
+The graph shows elapsed call/packet intervals and event timestamps, not CPU stacks or
+GPU execution durations.
+
+Full-detail grouped experiments keep every accepted layer (coalescing off):
+
+```powershell
+python tools/dev.py lua 'scratches_paint.setDamageResolution(4096);scratches_paint.setBakeBudget(3);scratches_paint.setFlushInterval(0.05);scratches_paint.setProjectionBudget(6);scratches_paint.setLayerBudget(24);scratches_paint.setCoverageCoalescing(false);scratches_paint.setPanelGrouping(true);return jsonEncode(scratches_paint.getStats())'
+python tools/perf_candidate.py --label my-fixed-full-warm --width 4096 --bake 3 --flush .05 --group --repeat 3 --capture
+python tools/perf_candidate.py --label my-fixed-full-cold --width 4096 --bake 3 --flush .05 --group --repeat 3 --restart --renderer vk
+python tools/perf_endurance.py --label my-fixed-full-endurance --width 4096 --bake 3 --flush .05 --group --minutes 10
+python tools/perf_material_lifetime.py --label my-material-lifetime --cycles 10
+```
+
+The backend is unchanged unless `--restart --renderer ...` is specified. For dry
+collision runs, check `stamp.streamLayersExpected == stamp.streamSubstrokesTotal`,
+`stamp.stampsAttempted == stamp.stampsEnqueued == perf.bakeLayersTotal -
+stamp.streamSubstrokesTotal`, zero failures/misses/drops and empty final queues.
+The report records full-layer conservation separately from representative coverage.
+This does not waive detector/spot saturation, native timing or visual checks.
+
+Functional regression can be repeated with an explicit preset on each backend:
+
+```powershell
+python tools/dev.py restart --game-arg=-gfx --game-arg=d3d12
+python tools/perf_functional_candidate.py --label my-half-d3d12-functional --width 2048 --coalesce
+python tools/dev.py restart --game-arg=-gfx --game-arg=vk
+python tools/perf_functional_candidate.py --label my-full-vulkan-functional --width 4096
+```
+
+It uses the requested width, bake3/flush0.05/grouping and optional coalescing, exact stock configs, 20 player
+switches and 10 vehicle reloads, three traffic NPCs, extension reloads, editor
+isolation, map changes, the installed GT3 safe skip and actual mud/water fixtures.
+The GT3 check requires the existing `mods/repo/scintilla_gt3.zip`; it restores its
+prior activation state. The editor check refuses to replace existing user artwork.
+Water state checks do not replace inspection of the genuine PNGs for scratch
+persistence and material fidelity. Fixtures restore their temporary objects; the
+suite leaves the verified ETK and full-resolution developer defaults selected.

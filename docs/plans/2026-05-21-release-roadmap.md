@@ -14,13 +14,15 @@
 ## Release readiness update — 2026-11-14
 
 Status: development branch; no public release. Milestone 5 acceptance is blocked.
-Milestone 5 reproduced 738 ms native projection and 663 ms bake batches,
-with lost/delayed sustained marks; [final acceptance
-gates and experiments](../../investigations/10-performance-compatibility.md).
+Historical full-resolution trials reproduced 738 ms native projection and 663 ms
+bake batches. The corrected fixture and explicit quality/grouping experiments
+improve measured delivery, but D3D12 and Vulkan native stalls remain (including
+508 ms in the final full-detail Vulkan endurance build); [current criteria,
+trace evidence and limits](../../investigations/11-quality-throughput.md).
 
 Integrated surface cosmetics prototype (mud/dirt/snow color deposits and internal
 water exposure state), now extended with separate ETK soil composition and
-wet/dry appearance. Current preflight: 226 mock checks, Lua syntax/global
+wet/dry appearance. Current preflight: 264 mock checks, Lua syntax/global
 checks and brush sidecars. See investigation 08 for water validation and limits.
 See [milestone 2](../../investigations/07-progressive-deposits.md) for current
 soil scope, real captures and engine checks.
@@ -40,7 +42,7 @@ Procedural cosmetic scratches for BeamNG.drive. Body contact creates scrape
 streaks and impact chips, with marks accumulating as you drive. Includes
 adjustable intensity presets, a diagnostic panel and reset-to-clean behavior.
 Preserves ETK 800 plain paint and stock Police material under scratches; other
-liveries are skipped. Other plain vehicles use Dynamic Textures. Applies to the
+liveries are skipped. The legacy plain-vehicle path remains unverified. Applies to the
 player vehicle only and does not change physics.
 
 Development preview: experimental mud, dirt and snow contact deposits are also

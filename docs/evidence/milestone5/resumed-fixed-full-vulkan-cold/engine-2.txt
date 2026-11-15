@@ -1,0 +1,2 @@
+  0.00376|D|logging| -- Log started - v 0.40.5.0 - x64 - build 302427 - 2026-11-14 20:02:28 -0700 -----
+  1.64298|D|gfx| Attempting to create GFX device 0: NVIDIA GeForce RTX 3090 (Vulkan) [with output \\.\DISPLAY1]

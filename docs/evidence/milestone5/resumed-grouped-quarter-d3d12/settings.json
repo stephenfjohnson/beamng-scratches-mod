@@ -1,0 +1,21 @@
+{
+  "label": "resumed-grouped-quarter-d3d12",
+  "width": 1024,
+  "bake": 3,
+  "repeat": 3,
+  "coalesce": true,
+  "group": true,
+  "flush": 0.05,
+  "projects": 6,
+  "layers": 24,
+  "scenarios": [
+    "sideslide",
+    "roofdrop",
+    "sustained"
+  ],
+  "capture": true,
+  "restart": false,
+  "renderer": "d3d12",
+  "disabled": false,
+  "skin": "police"
+}

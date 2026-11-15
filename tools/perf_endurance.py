@@ -45,7 +45,13 @@ def poll(status):
 def archive():
  for run in Path(bench.RUNS_DIR).glob('*_'+a.label+'*'):
   if not (out/run.name).exists():shutil.copytree(run,out/run.name)
+
+def engine_resources(name):
+ # Outside measured fixtures: retain the engine API's raw VRAM value, without
+ # assuming this is a per-target allocation count or a native leak measurement.
+ (out/('engine-resources-'+name+'.json')).write_text(dev.lua('local r={luaKiB=collectgarbage("count"),vramAvailable=Engine.Render and Engine.Render.getVRAMUsage~=nil or false};if r.vramAvailable then local ok,v=pcall(Engine.Render.getVRAMUsage);r.vramCallOK=ok;r.vramRaw=(type(v)=="table" or type(v)=="number") and v or tostring(v) end;return jsonEncode(r)'))
 try:
+ engine_resources('start')
  sample('start');i=0
  if a.continuous:
   bench.SCENARIOS['circle']=dict(bench.SCENARIOS['sustained'],maxTime=a.minutes*60,circleRadius=25,requireInverted=True,desc='continuous additive roof scrape in a 25 m radius circle; no mid-run reset')
@@ -57,6 +63,7 @@ try:
   if a.continuous:break
  (out/'environment-end.json').write_text(dev.lua(livery_probe.LUA))
  dev.lua('collectgarbage("collect");return true');time.sleep(3);sample('after-gc')
+ engine_resources('end')
 except Exception as e:
  (out/'error.txt').write_text(str(e));archive();raise
 finally:

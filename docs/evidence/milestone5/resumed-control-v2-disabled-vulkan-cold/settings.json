@@ -1,0 +1,20 @@
+{
+  "label": "resumed-control-v2-disabled-vulkan-cold",
+  "width": 4096,
+  "bake": 6,
+  "repeat": 3,
+  "coalesce": false,
+  "group": false,
+  "flush": 0.2,
+  "projects": 6,
+  "layers": 24,
+  "scenarios": [
+    "sustained",
+    "baseline"
+  ],
+  "capture": false,
+  "restart": true,
+  "renderer": "vk",
+  "disabled": true,
+  "skin": "police"
+}

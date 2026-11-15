@@ -12,9 +12,10 @@ def lua(s):return dev.lua(s)
 def state():return {'state':soil_probe.state(),'config':json.loads(lua(livery_probe.LUA))}
 def snap(name):
     lua('simTimeAuthority.pause(true);return true')
-    result[name]=state();soil_probe.shot(out/(name+'.png'), side=-1 if a.left else 1)
+    result[name]=state();assert result[name]['state']['stats']['generation']==generation,'cosmetic reset during water fixture';soil_probe.shot(out/(name+'.png'), side=-1 if a.left else 1)
     lua('simTimeAuthority.pause(false);return true')
 result={}
+generation=int(lua('return scratches_paint.getStats().generation'))
 previous=json.loads(lua('return jsonEncode(settings.getValue("fpsLimitBackgroundEnabled"))'))
 created=json.loads(lua('if scenetree.findObject("WaterBlock_1") then return "false" end;local w=createObject("WaterBlock");w:setField("scale",0,"35 100 10");w:setField("density",0,"1000");w:setField("viscosity",0,"0.001");w:setField("liquidType",0,"Water");w:setPosition(vec3(0,0,-100));w.canSave=false;w:registerObject("WaterBlock_1");scenetree.MissionGroup:addObject(w);return "true"'))
 result['waterFixture']={'temporary':created,'class':'WaterBlock','scale':'35 100 10'}
@@ -37,10 +38,10 @@ try:
     assert soil_probe.state()['surface']['wetness']==0, 'drying timed out'
     snap('dry')
     if a.redirty_x is not None:
-        lua('local v=getPlayerVehicle(0);v:setClusterPosRelRot(v:getRefNodeId(),'+str(a.redirty_x)+',-365,100.3,0,0,0,1);v:applyClusterVelocityScaleAdd(v:getRefNodeId(),0,0,0,0);return true')
+        lua('local v=getPlayerVehicle(0);spawn.safeTeleport(v,vec3('+str(a.redirty_x)+',-365,101.2),quat(0,0,0,1),true,nil,false,false,false);return true')
     lua('getPlayerVehicle(0):queueLuaCommand([[input.event("parkingbrake",0,1)]]);return true')
     for i in range(24):
-        lua('local v=getPlayerVehicle(0);v:applyClusterVelocityScaleAdd(v:getRefNodeId(),0,0,'+('2' if a.redirty_x is not None else '-2')+',0);return true')
+        lua('local v=getPlayerVehicle(0);local c=v:getVelocity();v:applyClusterVelocityScaleAdd(v:getRefNodeId(),1,-c.x,'+('2' if a.redirty_x is not None else '-2')+'-c.y,0);return true')
         time.sleep(.25)
     lua('getPlayerVehicle(0):queueLuaCommand([[input.event("parkingbrake",1,1)]]);return true')
     time.sleep(3);snap('redirty')

@@ -1,0 +1,21 @@
+{
+  "label": "resumed-control-v2-full-vulkan",
+  "width": 4096,
+  "bake": 6,
+  "repeat": 3,
+  "coalesce": false,
+  "group": false,
+  "flush": 0.2,
+  "projects": 6,
+  "layers": 24,
+  "scenarios": [
+    "sideslide",
+    "roofdrop",
+    "sustained"
+  ],
+  "capture": true,
+  "restart": false,
+  "renderer": "d3d12",
+  "disabled": false,
+  "skin": "police"
+}

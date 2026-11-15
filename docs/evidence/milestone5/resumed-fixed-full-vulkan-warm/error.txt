@@ -1,0 +1,1 @@
+Readiness guard failed before any measured fixture after the material lifetime probe. Cached construction referenced a deleted fixture clone; see environment.json and investigation 11. This cohort is not performance acceptance evidence.
