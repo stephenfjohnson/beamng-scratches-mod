@@ -13,7 +13,7 @@ local function material(name)
   function m:reload() end
   return m
 end
-for _,name in ipairs({'etk800_main','etk800.skin.police'}) do
+for _,name in ipairs({'etk800_main','etk800.skin.police','etk800_extra','etk800_extra.skin.police'}) do
   local m=material(name);objects[name]=m
   m:setField('activeLayers',0,'2');m:setField('version',0,'1.5')
   m:setField('baseColorMap',1,'vehicles/etk800/etk800_skin_police_b.color.png')
@@ -28,7 +28,7 @@ function veh:getId() return 42 end
 function veh:getRefNodeMatrix() return identity end
 function veh:getDecalProjectionShape() return {} end
 function veh:setTextureSet() end
-function veh:getMaterialNames() return {'scratches_etk800_42_police','scratches_etk800_42_plain'} end
+function veh:getMaterialNames() return {'scratches_etk800_42_police','scratches_etk800_42_plain','scratches_etk800_42_police_extra','scratches_etk800_42_plain_extra'} end
 createObject=function() return material() end
 scenetree={findObject=function(name) return objects[name] end,findObjectById=function() return veh end}
 vec3=function() return {} end
@@ -51,7 +51,7 @@ local function engineAPI()
   api.setTextureResolution=function(r) width=r.x end
   api.setup=function() api.updateVehicleMaterials() end
   api.updateVehicleMaterials=function() error('unsafe heuristic called') end
-  api.getShapeMaterialNames=function() return {[5]='etk800',[7]='scratches_etk800_42_police',[8]='scratches_etk800_42_plain'} end
+  api.getShapeMaterialNames=function() return {[5]='etk800',[7]='scratches_etk800_42_police',[8]='scratches_etk800_42_plain',[9]='scratches_etk800_42_police_extra',[10]='scratches_etk800_42_plain_extra'} end
   api.setMaterialIdx=function(i) api.index=i end
   api.addMaterialIdx=function() end
   api.clearMaterialIdx=function() api.index=nil end
@@ -82,6 +82,16 @@ check(cfg.partsTree.chosenPartName=='etk800_skin_police','configured livery unto
 check(data.flexbodies[1].materialOverride[1][2]=='custom-wheel','unrelated override retained')
 local a=adapter.create(veh,'etk800_skin_police')
 check(a.api.index==7,'bind exact clone index, not base material')
+check(#a.indices==2 and a.indices[2]==9,'projection includes the separate rear-quarter material')
+check(data.flexbodies[1].materialOverride[3][1]=='etk800_extra','extra body material receives its own override')
+check(a.materials[2].sourceName=='etk800_extra.skin.police','rear quarter retains its correct stock Police material')
+for _,entry in ipairs(a.materials) do
+  for field in pairs(entry.source:getFields()) do
+    if field~='activeLayers' then
+      for stage=0,1 do check(entry.material:getField(field,stage)==entry.source:getField(field,stage),'both body materials preserve stock stage '..stage..' '..field) end
+    end
+  end
+end
 check(a.material:getField('activeLayers',0)=='4','separate damage and soil stages enabled')
 check(a.material:getField('baseColorFactor',2)=='1 1 1 1','damage keeps authored diffuse response')
 check(a.material:getField('baseColorFactor',3)=='1 1 1 1','soil retains original color response')
@@ -99,6 +109,7 @@ check(a.material:getField('baseColorFactor',2)=='1.00 1.00 1.00 1','Police mixed
 local original=a.source:getField('clearCoatFactor',0)
 a:appearance(1,0.5)
 check(a.material:getField('opacityFactor',3)=='0.5','washing fades only soil stage')
+check(a.materials[2].material:getField('opacityFactor',3)=='0.5','washing fades rear quarter soil too')
 check(a.material:getField('opacityFactor',2)=='1.6','washing preserves stronger damage opacity')
 check(a.source:getField('clearCoatFactor',0)==original,'wetness never writes shared source')
 a:appearance(0,1)
@@ -107,6 +118,7 @@ a:appearance(1,0.25);a:detach()
 check(a.material:getField('clearCoatFactor',0)==original,'detach restores wet clone')
 local before=clears;a:clear();check(clears==before+2,'clear both private projections')
 a:detach();check(a.material:getField('activeLayers',0)=='2','detach original stages only')
+check(a.materials[2].material:getField('activeLayers',0)=='2','detach disables rear quarter overlays too')
 check(a.source:getField('activeLayers',0)=='2','source material never modified')
 local reload=realDofile('lua/ge/extensions/scratches/etkAdapter.lua')
 local adopted=reload.create(veh,'etk800_skin_police')
@@ -119,6 +131,9 @@ local conflict={model='etk800',flexbodies={{materialOverride={{'etk800','user-bo
 adapter.prepare(nil,42,conflict,nil,cfg)
 check(not pcall(adapter.create,veh,'etk800_skin_police'),'conflicting body override rejected')
 check(conflict.flexbodies[1].materialOverride[1][2]=='user-body','conflicting override not changed')
+local extraConflict={model='etk800',flexbodies={{materialOverride={{'etk800_extra','user-quarter'}}}}}
+adapter.prepare(nil,42,extraConflict,nil,cfg)
+check(not pcall(adapter.create,veh,'etk800_skin_police'),'custom rear-quarter override also rejected')
 cfg.partsTree.chosenPartName=''
 local plain={model='etk800',flexbodies={{}}};adapter.prepare(nil,42,plain,nil,cfg)
 local p=adapter.create(veh,'')
@@ -162,6 +177,8 @@ function orphan:delete() objects[self.name]=nil end
 scenetree.findClassObjects=function() local names={};for name in pairs(objects) do names[#names+1]=name end;return names end
 getAllVehicles=function() return {veh} end
 local originalNames=veh.getMaterialNames
+veh.getMaterialNames=function() return {'scratches_etk800_42_plain'} end
+check(adapter.create(veh,'')==nil,'old main-only construction cannot silently omit rear-quarter binding')
 veh.getMaterialNames=function() return {'scratches_etk800_99_plain'} end
 check(adapter.create(veh,'')==nil,'prepared state cannot bind a foreign cached clone after reload')
 adapter.collectUnusedMaterials()

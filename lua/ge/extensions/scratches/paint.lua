@@ -1519,6 +1519,7 @@ local function enqueueStamp(localPos, localNormal, opts, vid)
     r = r, g = g, b = b, a = a,
     scale       = scale,
     width       = opts.width,
+    depth       = opts.depth,
     flow        = opts.flow,
     rot         = rot,
     roughness   = roughness,
@@ -1922,18 +1923,18 @@ local function runClusterJob(cluster, projM, bakeList)
       api.setRoughnessIntensity(s.roughness)
     end
     api.setDecalColor(Point4F(s.r, s.g, s.b, s.a or 1))
-    api.setDecalScale(vec3(s.scale, 1, s.width or s.scale))
+    api.setDecalScale(vec3(s.scale, s.depth or 1, s.width or s.scale))
     local angle = s.rot
     if s.flow then
-      -- Match the stream path's screen-UV convention so the same local flow
-      -- points downstream on both sides, including when reversing.
-      local probe = decalProjection:getDecalData(camLocal, projM)
-      if probe and probe.cursorPosScreenUv then
-        api.setDecalLocalPos(probe, s.localPos)
-        local x,y = probe.cursorPosScreenUv.x,probe.cursorPosScreenUv.y
-        api.setDecalLocalPos(probe, s.localPos+s.flow)
-        local dx,dy = probe.cursorPosScreenUv.x-x,probe.cursorPosScreenUv.y-y
-        if math.abs(dx)+math.abs(dy)>1e-5 then angle=math.atan2(dy,dx) end
+      -- Match decal.cs.hlsl's surface-normal basis directly. Screen-space
+      -- angles vary with camera perspective; a shared body-space basis keeps
+      -- one long splash aligned across all mesh/UV islands it intersects.
+      local n = anchorNormal(s.localPos,s.localNormal)
+      local right = n:cross(vec3(0,0,1))
+      if vecLen(right)>1e-5 then
+        right=right:normalized()
+        local up=right:cross(n):normalized()
+        angle=math.atan2(-s.flow:dot(up),s.flow:dot(right))
       end
     end
     api.setDecalRotation(angle)
@@ -2273,7 +2274,7 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
       surfaceState[e[1]] = math.min(1, surfaceState[e[1]] + 0.025)
       local p = inv:mulP3F(vec3(e[2],e[3],e[4]))
       local normal = rot:mulP3F(vec3(e[5],e[6],e[7]))
-      local flow, spraySpeed
+      local flow, spraySpeed, trailLength, projectionDepth
       if e[8] == 1 then
         if e[1] ~= "snow" then
           local velocity = veh:getVelocity()
@@ -2283,26 +2284,40 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
           spraySpeed = math.abs(localVelocity.y)
           if spraySpeed > 0.5 then
             flow = vec3(0, localVelocity.y > 0 and -1 or 1,
-                        math.max(0.12, 0.55-spraySpeed*0.02)):normalized()
+                        math.max(0.08, 0.28-spraySpeed*0.008)):normalized()
+            trailLength=1.8+math.min(spraySpeed,20)*0.05
           end
         end
         local box = getSpawnAabb()
         if box then
           local lo, hi = box.minExtents, box.maxExtents
           local side = p.x >= (lo.x+hi.x)*0.5 and 1 or -1
+          -- The spawn box includes mirrors. Reach the recessed quarter/body
+          -- from its outer face, but keep the slab short of the centerline
+          -- (half-depth < half-width), so it cannot paint the opposite flank.
+          projectionDepth=math.min(1.8,(hi.x-lo.x)*0.9)
           -- Lift wheel-ground samples onto the lower exterior flank, with
           -- bounded deterministic spread; never aim upward through the floor.
           local phase = surfaceState.deposits % 8
           p.x = side > 0 and hi.x or lo.x
-          local inward = flow and flow.y*0.4 or (p.y > (lo.y+hi.y)*0.5 and -0.65 or 0.65)
-          p.y = math.max(lo.y+0.3, math.min(hi.y-0.3,
-            p.y + inward + (phase%4-1.5)*0.24))
-          p.z = lo.z + (hi.z-lo.z)*(0.38 + math.floor(phase/4)*0.10)
+          if flow then
+            -- One elongated projection spans adjacent panels. The authored
+            -- heads sit left of texture center; move that center downstream
+            -- so the spray starts near the wheel, not ahead of it. Do not
+            -- restart the brush at a door seam or clamp its tail to a panel.
+            p.y=p.y+flow.y*trailLength*0.28+(phase%4-1.5)*0.08
+            p.z=lo.z+(hi.z-lo.z)*(0.32+math.floor(phase/4)*0.06)
+              +flow.z*trailLength*0.28
+          else
+            local inward=p.y>(lo.y+hi.y)*0.5 and -0.65 or 0.65
+            p.y=math.max(lo.y+0.3,math.min(hi.y-0.3,p.y+inward+(phase%4-1.5)*0.24))
+            p.z=lo.z+(hi.z-lo.z)*(0.38+math.floor(phase/4)*0.10)
+          end
           normal = vec3(side,0,0)
         end
       end
       surfaceState.lastSample = {kind=e[1],wheel=e[8],x=p.x,y=p.y,z=p.z,
-        flowY=flow and flow.y,flowZ=flow and flow.z}
+        flowY=flow and flow.y,flowZ=flow and flow.z,trailLength=trailLength,depth=projectionDepth}
       local key = e[1]..":"..math.floor(p.x*3)..":"..math.floor(p.y*3)..":"..math.floor(p.z*3)
       if surfaceState.deposits < 96 and (surfaceSpots[key] or 0) < 12
           and surfaceWaterAge > 0.5 then
@@ -2310,8 +2325,10 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
         surfaceState.deposits = surfaceState.deposits+1
         enqueueStamp(p, normal, {
           soil=true,r=c[1],g=c[2],b=c[3],a=0.95,
-          scale=flow and (0.38+math.min(spraySpeed,20)*0.009) or 0.65,
-          width=flow and 0.30 or nil,flow=flow,skipMetal=true,noJitter=true,
+          scale=trailLength or 0.65,
+          width=flow and 0.48 or nil,flow=flow,skipMetal=true,noJitter=true,
+          depth=projectionDepth,
+          dist=flow and trailLength*2.2 or nil,
           colorTex="/art/dynamicDecals/textures/soil_"..e[1]..
             (flow and ("_splash_"..(surfaceState.deposits%2+1)..".png") or "_coverage.png"),
           rot=flow and 0 or (surfaceState.deposits%4)*math.pi/2},vid)

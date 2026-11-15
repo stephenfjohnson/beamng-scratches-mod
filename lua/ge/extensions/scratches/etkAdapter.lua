@@ -9,6 +9,7 @@ local clones = {}
 local privateApi -- reuse the private damage target across attachments
 local damageWidth = 4096
 local soilTarget -- one reusable soil projection for this painter, not per vehicle
+local bodyMaterialAliases = {etk800=true,etk800_extra=true}
 
 function M.editorActive()
   return (editor and editor.active) or (DecalShapeRenderApp and DecalShapeRenderApp.getActiveApp and DecalShapeRenderApp:getActiveApp()) or false
@@ -22,9 +23,10 @@ local function getUpvalue(fn,wanted)
   error("engine API changed: missing " .. wanted)
 end
 
-local function cloneMaterial(veh,part)
+local function cloneMaterial(veh,part,extra)
   assert(veh.JBeam == "etk800" and (part == "" or part == "etk800_skin_police"))
   local sourceName = part == "" and "etk800_main" or "etk800.skin.police"
+  if extra then sourceName=part=="" and "etk800_extra" or "etk800_extra.skin.police" end
   local source = assert(scenetree.findObject(sourceName), "source material missing")
   local count = tonumber(source:getField("activeLayers",0))
   assert(count == 2 and tonumber(source:getField("version",0)) == 1.5, "unexpected stock material layout")
@@ -32,6 +34,7 @@ local function cloneMaterial(veh,part)
     assert(source:getField("baseColorMap",1) == "vehicles/etk800/etk800_skin_police_b.color.png", "non-stock police material")
   end
   local name = "scratches_etk800_" .. veh:getId() .. (part == "" and "_plain" or "_police")
+  if extra then name=name.."_extra" end
   local mat = scenetree.findObject(name) or createObject("Material")
   local registered = mat:getName() == name
   for field in pairs(source:getFields()) do
@@ -66,6 +69,14 @@ local function cloneMaterial(veh,part)
   return {material=mat,source=source,sourceName=sourceName,stage=count,part=part}
 end
 
+local function cloneBodyMaterials(veh,part)
+  -- Sedan quarter panels/pillars use a distinct atlas/material. Preserve its
+  -- stock stages rather than routing that geometry through the main atlas.
+  local prep=cloneMaterial(veh,part)
+  prep.extra=cloneMaterial(veh,part,true)
+  return prep
+end
+
 function M.prepare(_,vid,vdata,_,cfg)
   prepared[vid] = nil
   rejected[vid] = nil
@@ -81,21 +92,22 @@ function M.prepare(_,vid,vdata,_,cfg)
   local veh=scenetree.findObjectById(vid)
   for _,flex in pairs(vdata.flexbodies or {}) do
     for _,override in pairs(flex.materialOverride or {}) do
-      if override[1] == "etk800" and not tostring(override[2]):match("^scratches_etk800_") then
+      if bodyMaterialAliases[override[1]] and not tostring(override[2]):match("^scratches_etk800_") then
         rejected[vid] = "existing ETK body override; adapter skipped"
         return
       end
     end
   end
-  local ok,prep=pcall(cloneMaterial,veh,part)
+  local ok,prep=pcall(cloneBodyMaterials,veh,part)
   if not ok then rejected[vid]=tostring(prep); return end
   prepared[vid]=prep
   for _,flex in pairs(vdata.flexbodies or {}) do
     local overrides={}
     for _,override in ipairs(flex.materialOverride or {}) do
-      if override[1] ~= "etk800" then overrides[#overrides+1]=override end
+      if not bodyMaterialAliases[override[1]] then overrides[#overrides+1]=override end
     end
     overrides[#overrides+1]={"etk800",prep.material:getName()}
+    overrides[#overrides+1]={"etk800_extra",prep.extra.material:getName()}
     flex.materialOverride=overrides
   end
 end
@@ -137,13 +149,13 @@ function M.create(veh,part)
   assert(not rejected[veh:getId()], rejected[veh:getId()])
   local prep=prepared[veh:getId()]
   local expected="scratches_etk800_" .. veh:getId() .. (part=="" and "_plain" or "_police")
-  local present=false
-  for _,name in pairs(veh:getMaterialNames()) do if name==expected then present=true end end
-  if not present then return nil end
+  local present={}
+  for _,name in pairs(veh:getMaterialNames()) do present[name]=true end
+  if not present[expected] or not present[expected.."_extra"] then return nil end
   if not prep or prep.part~=part then
     -- A hot reload can adopt an already constructed private material without
     -- respawning/repairing the car. No editor-owned design is eligible here.
-    prep=cloneMaterial(veh,part)
+    prep=cloneBodyMaterials(veh,part)
     prepared[veh:getId()]=prep
   end
   local source, sourceName, count=prep.source,prep.sourceName,prep.stage
@@ -173,12 +185,14 @@ function M.create(veh,part)
   api.onVehicleSwitched = function() app:onUpdate() end
   app:onUpdate()
   local mat = prep.material
-  local name = mat:getName()
+  local entries={prep,prep.extra}
+  local names={[mat:getName()]=true,[prep.extra.material:getName()]=true}
   local indices = {}
   for idx, materialName in pairs(api.getShapeMaterialNames()) do
-    if materialName == name then indices[#indices+1] = idx end
+    if names[materialName] then indices[#indices+1] = idx end
   end
-  assert(#indices > 0,"ETK body material not in projection shape")
+  assert(#indices >= 2,"ETK main/extra body materials not in projection shape")
+  table.sort(indices)
   api.clearMaterialIdx()
   api.setMaterialIdx(indices[1])
   for i=2,#indices do api.addMaterialIdx(indices[i]) end
@@ -198,6 +212,8 @@ function M.create(veh,part)
   soil:clearMaterialIdx(); soil:setMaterialIdx(indices[1])
   for i=2,#indices do soil:addMaterialIdx(indices[i]) end
   soil:clearBakedTextures(); soil:flushDynamicTextures(); soil:combineTextures(soilSet)
+  for _,entry in ipairs(entries) do
+    local mat=entry.material
   for f in pairs(mat:getFields()) do mat:setField(f,3,mat:getField(f,2)) end
   mat:setField("baseColorMap",3,"@ScratchesSoilBaseColor")
   mat:setField("baseColorFactor",3,"1 1 1 1")
@@ -210,9 +226,10 @@ function M.create(veh,part)
   mat:setField("detailNormalMapStrength",3,"0.65")
   mat:setField("activeLayers",0,tostring(count+2))
   mat:flush(); mat:reload()
+  end
   -- Material is selected at construction via the flexbody override.
   local result = {api=api,projection=projection,material=mat,source=source,
-    sourceName=sourceName,stage=count,part=part,indices=indices,vid=veh:getId()}
+    sourceName=sourceName,stage=count,part=part,indices=indices,vid=veh:getId(),materials=entries}
   function result:setDamageWidth(width)
     assert(width==4096 or width==2048 or width==1024, "unsupported damage resolution")
     assert(not M.editorActive(), "editor owns rendering")
@@ -223,12 +240,15 @@ function M.create(veh,part)
     damageWidth=width
   end
   function result:getDamageWidth() return api.getTextureResolution().x end
-  local originalWet = {}
-  for st=0,count-1 do
-    originalWet[st]={}
-    for _,f in ipairs({"clearCoatFactor","clearCoatRoughnessFactor"}) do
-      originalWet[st][f]=source:getField(f,st)
+  for _,entry in ipairs(entries) do
+    local originalWet = {}
+    for st=0,count-1 do
+      originalWet[st]={}
+      for _,f in ipairs({"clearCoatFactor","clearCoatRoughnessFactor"}) do
+        originalWet[st][f]=entry.source:getField(f,st)
+      end
     end
+    entry.originalWet=originalWet
   end
   local wetBucket, soilBucket = 0, 20
   function result:bakeSoil(layers)
@@ -243,25 +263,31 @@ function M.create(veh,part)
     local w,s = math.floor(wet*10+0.5), math.floor(remaining*20+0.5)
     if w==wetBucket and s==soilBucket then return end
     wetBucket,soilBucket=w,s
-    for st=0,count-1 do
-      for _,f in ipairs({"clearCoatFactor","clearCoatRoughnessFactor"}) do
-        local original=originalWet[st][f]
-        local value=tonumber(original) or (f=="clearCoatFactor" and 0 or 0.1)
-        local target=f=="clearCoatFactor" and 1 or 0.025
-        mat:setField(f,st,w==0 and original or tostring(value+(target-value)*w/10))
+    for _,entry in ipairs(entries) do
+      local mat,originalWet=entry.material,entry.originalWet
+      for st=0,count-1 do
+        for _,f in ipairs({"clearCoatFactor","clearCoatRoughnessFactor"}) do
+          local original=originalWet[st][f]
+          local value=tonumber(original) or (f=="clearCoatFactor" and 0 or 0.1)
+          local target=f=="clearCoatFactor" and 1 or 0.025
+          mat:setField(f,st,w==0 and original or tostring(value+(target-value)*w/10))
+        end
       end
+      mat:setField("roughnessFactor",3,tostring(0.65-0.45*w/10))
+      mat:setField("opacityFactor",3,tostring(s/20))
+      mat:flush(); mat:reload()
     end
-    mat:setField("roughnessFactor",3,tostring(0.65-0.45*w/10))
-    mat:setField("opacityFactor",3,tostring(s/20))
-    mat:flush(); mat:reload()
   end
   function result:damageTone(luminance)
     -- Plain light paint needs darker exposed coating. Police contains both
     -- light and dark texels, so keep its neutral compromise. Setup/reset only.
     local factor = self.part == "" and luminance and luminance >= 0.5 and 0.15 or 1
     local value = string.format("%.2f %.2f %.2f 1",factor,factor,factor)
-    if mat:getField("baseColorFactor",count) ~= value then
-      mat:setField("baseColorFactor",count,value); mat:flush(); mat:reload()
+    for _,entry in ipairs(entries) do
+      local mat=entry.material
+      if mat:getField("baseColorFactor",count) ~= value then
+        mat:setField("baseColorFactor",count,value); mat:flush(); mat:reload()
+      end
     end
   end
   function result:clear()
@@ -269,19 +295,20 @@ function M.create(veh,part)
     projection:clearBakedTextures(); projection:flushDynamicTextures()
     projection:combineTextures(textureSet)
   end
-  local materialName = mat:getName()
   function result:detach()
     -- Disable only our appended stage. Original channels in the clone remain
     -- identical, even if its mesh instance outlives this extension.
-    local live = scenetree.findObject(materialName)
-    if live then
-      for st=0,count-1 do
-        for _,f in ipairs({"clearCoatFactor","clearCoatRoughnessFactor"}) do
-          live:setField(f,st,originalWet[st][f])
+    for _,entry in ipairs(entries) do
+      local live = scenetree.findObject(entry.material:getName())
+      if live then
+        for st=0,count-1 do
+          for _,f in ipairs({"clearCoatFactor","clearCoatRoughnessFactor"}) do
+            live:setField(f,st,entry.originalWet[st][f])
+          end
         end
+        live:setField("activeLayers",0,tostring(count))
+        live:flush(); live:reload()
       end
-      live:setField("activeLayers",0,tostring(count))
-      live:flush(); live:reload()
     end
   end
   return result

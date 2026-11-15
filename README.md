@@ -109,8 +109,7 @@ Milestone 3 evidence predates the milestone 4 polish described above.
 Soil now has a masked detail normal for small lumps and grain that catch the
 light. It preserves the factory body normal and fades with soil opacity during
 washing. This is lighting relief, not displacement or raised splash outlines.
-Mud, dirt and snow share this detail because they share the soil layer; it does
-not fix cross-panel splash continuity. See the [before/after evidence and
+Mud, dirt and snow share this detail because they share the soil layer. See the [before/after evidence and
 reproduction steps](docs/evidence/soil-relief/report.md).
 
 Wheel mud/dirt now uses discrete droplet heads with tapered tails, aligned
@@ -120,6 +119,17 @@ is baked splash art, not ongoing fluid movement. Snow and direct body contacts
 keep their coverage brushes. A [real mud-strip capture](docs/evidence/directional-soil/mud-close.png)
 shows the first directional pass; dirt artwork and reverse motion still need
 their own live visual validation.
+
+Wheel splashes now span adjacent panels with one elongated projection and a
+body-space direction. Both stock body materials are supported, including the
+separate `etk800_extra` quarter panels and their Police skin; each retains its
+own factory paint, normals and livery. Mud, scratches, washing and detail relief
+reach both materials. [Panel-seam captures and reproduction steps](docs/evidence/soil-continuity/report.md)
+cover plain and Police paint. This fixes the previously clean rear quarters.
+
+Soil colors are still fixed by kind, not sampled from the ground texture. Mud
+can look too orange against gray-brown terrain. Terrain-matched color remains
+unfinished; collision material IDs alone do not provide the visible surface RGB.
 
 Driving over real MUD, DIRT or SNOW collision materials adds overlapping soil
 patches around the wheels and lower side panels. Rolling tires work without

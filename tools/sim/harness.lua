@@ -125,9 +125,11 @@ function decalProjection:projectDynamicDecals()
   counters.projectsThisFrame = counters.projectsThisFrame + 1
 end
 function decalProjection:getDecalData()
-  return { cursorPosScreenUv = {x = 0.5, y = 0.5}, decalPos = {x = 0, y = 0, z = 0} }
+  return { cursorPosScreenUv = {x = 0.5, y = 0.5}, decalPos = {x = 0, y = 0, z = 0},
+    decalRotation=counters.rotation,decalScale=counters.scale }
 end
 function decalProjection:bakeLayers(list)
+  for _,layer in ipairs(list) do if layer.name=='soil' then counters.lastSoilLayer=layer end end
   counters.bakes = counters.bakes + 1
   counters.bakeLayers = counters.bakeLayers + #list
   counters.bakesThisFrame = (counters.bakesThisFrame or 0) + 1
@@ -166,6 +168,8 @@ for _, n in ipairs({"setDecalTexturePath", "setMetallicIntensity", "setRoughness
   api[n] = function() end
 end
 api.setDecalLocalPos = function(decal) decal.cursorPosScreenUv = {x = 0.5, y = 0.5} end
+api.setDecalRotation = function(value) counters.rotation=value end
+api.setDecalScale = function(value) counters.scale=value end
 
 local partConfig = { partsTree = { id = "root", children = { { id = "paint_design", chosenPartName = "" } } } }
 extensions = {
@@ -539,6 +543,26 @@ paint.clearStamps(); soil(30,18); surfaceTick(false)
 check(paint.getSurfaceState().lastSample.flowY > 0,
   "reversing reverses wheel spray flow rather than rotating randomly")
 obj.getVelocity = movingVelocity
+paint.clearStamps()
+for _,side in ipairs({-1,1}) do
+  for _,speed in ipairs({-5,5}) do
+    paint.clearStamps()
+    obj.getVelocity=function() return vec3(0,speed,0) end
+    paint.ingestSurface(playerVid,{{'mud',100+side,-1,0.3,0,0,1,1}},false,true)
+    for _=1,5 do frame(0.26) end
+    local sample=paint.getSurfaceState().lastSample
+    local layer=counters.lastSoilLayer
+    -- Reconstruct +texture X in the engine's surface-normal decal basis.
+    local alignment=(-side*math.cos(layer.decalRotation))*sample.flowY
+      -math.sin(layer.decalRotation)*sample.flowZ
+    check(alignment>0.999,'splash follows flow on side '..side..' at speed '..speed)
+    check(layer.decalScale.x>=1.8 and layer.decalScale.z<layer.decalScale.x,
+      'splash is long enough to cross panels with a bounded narrow width')
+    check(layer.decalScale.y>1 and layer.decalScale.y<2,
+      'soil slab reaches recessed bodywork but stays short of the vehicle centerline')
+  end
+end
+obj.getVelocity=movingVelocity
 paint.clearStamps()
 soil(10,18); soil(30,18); surfaceTick(false)
 check(paint.getSurfaceState().lastSample.wheel == 1,

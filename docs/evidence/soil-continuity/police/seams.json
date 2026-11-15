@@ -1,0 +1,105 @@
+{
+  "compatibility": {
+    "skipped": false,
+    "owned": true,
+    "material": "scratches_etk800_33151_police",
+    "ready": true,
+    "part": "etk800_skin_police",
+    "pending": false,
+    "adapter": "etk800.skin.police"
+  },
+  "stats": {
+    "detect": {
+      "filteredCalls": 0,
+      "impactEvents": 0,
+      "paintCool": 0.003,
+      "perp": 0.8,
+      "totalCalls": 9235,
+      "slip": 0.6,
+      "minForce": 10,
+      "maxNormalForce": 0,
+      "impForce": 800,
+      "impCool": 0.025,
+      "streamsFlushed": 0
+    },
+    "ready": true,
+    "latency": {
+      "oldestMs": 0
+    },
+    "coverage": {
+      "enabled": false
+    },
+    "config": {
+      "aggregateCap": 160,
+      "coverageCoalescing": false,
+      "flushInterval": 0.2,
+      "panelGrouping": false,
+      "fullRateCombine": false,
+      "bakeBudget": 6,
+      "projBudget": 6,
+      "syntheticAnchors": true,
+      "clusterRadius": 0.65,
+      "layerBudget": 24,
+      "damageWidth": 4096
+    },
+    "generation": 8,
+    "nativeEvents": {},
+    "anchors": {
+      "synthesized": 49
+    },
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "stamp": {
+      "stampsSkippedMissed": 0,
+      "combinesRun": 14,
+      "streamLayersMissed": 0,
+      "rebinds": 5,
+      "streamsBaked": 0,
+      "stampsEnqueued": 49,
+      "jobsDropped": 0,
+      "layersLost": 0,
+      "streamLayersExpected": 0,
+      "framesDeferred": 0,
+      "spotsSkipped": 0,
+      "framesTicked": 2773,
+      "streamsMerged": 0,
+      "clusterJobsMerged": 0,
+      "framesFlushed": 9,
+      "jobsFailed": 0,
+      "foreignDropped": 0,
+      "projectsIssued": 13,
+      "streamSubstrokesTotal": 0,
+      "bakeFailures": 0,
+      "bakesIssued": 9,
+      "clustersTotal": 13,
+      "aggregateDropped": 0,
+      "stampsAttempted": 49
+    },
+    "perf": {
+      "flushMsTotal": 5.2344000005178,
+      "combineMsMax": 0.90760000011869,
+      "framesOver1ms": 14,
+      "framesOver4ms": 6,
+      "msMax": 11.987300000328,
+      "projectMsTotal": 0,
+      "bakeMsTotal": 28.332799999589,
+      "flushMsMax": 2.4191000002247,
+      "projectCalls": 0,
+      "inputToProjectMaxMs": 15.217900000152,
+      "lastMs": 0.006299999768089,
+      "msTotal": 84.127099997659,
+      "bakeLayersTotal": 49,
+      "bakeCalls": 9,
+      "layerCalls": 49,
+      "layerMsTotal": 1.5763999999763,
+      "bakeMsMax": 6.2039999997978,
+      "combineMsTotal": 3.9881000011519,
+      "projectMsMax": 0,
+      "frames": 2773,
+      "inputToBakeMaxMs": 81.505399999969
+    }
+  }
+}

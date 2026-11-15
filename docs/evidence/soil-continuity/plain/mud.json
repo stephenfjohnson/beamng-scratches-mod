@@ -1,0 +1,999 @@
+{
+  "config": {
+    "graphics": {
+      "GraphicDisplayResolutions": "3840 2160",
+      "GraphicLightingQuality": "Ultra",
+      "GraphicDynReflectionEnabled": true,
+      "GraphicTextureQuality": "Normal",
+      "GraphicShaderQuality": "High",
+      "GraphicOverallQuality": "Custom",
+      "GraphicAntialiasType": "smaa"
+    },
+    "paints": [
+      {
+        "baseColor": [
+          0.08,
+          0.18,
+          0.105,
+          1.2
+        ],
+        "roughness": 0.65,
+        "clearcoat": 1,
+        "metallic": 0.8,
+        "clearcoatRoughness": 0.05
+      },
+      {
+        "baseColor": [
+          0.623,
+          0.623,
+          0.623,
+          1.2
+        ],
+        "roughness": 0.65,
+        "clearcoat": 1,
+        "metallic": 0.8,
+        "clearcoatRoughness": 0.05
+      },
+      {
+        "baseColor": [
+          0.08,
+          0.18,
+          0.105,
+          1.2
+        ],
+        "roughness": 0.65,
+        "clearcoat": 1,
+        "metallic": 0.8,
+        "clearcoatRoughness": 0.05
+      }
+    ],
+    "vehicle": "etk800",
+    "config": "vehicles/etk800/rennspecht_8r_A.pc",
+    "compatibility": {
+      "skipped": false,
+      "owned": true,
+      "material": "scratches_etk800_33151_plain",
+      "ready": true,
+      "part": "",
+      "pending": false,
+      "adapter": "etk800_main"
+    },
+    "materials": {
+      "etk800": {
+        "activeLayers": "1",
+        "stages": [
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "0",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "0.445299804",
+            "metallicMap": "",
+            "metallicFactor": "0",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "vehicles/etk800/etk800_n.dds",
+            "opacityMap": "",
+            "colorPaletteMap": "",
+            "baseColorMap": "",
+            "roughnessMap": ""
+          },
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "0",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "0.607767701",
+            "metallicMap": "",
+            "metallicFactor": "0",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "vehicles/etk800/etk800_n.dds",
+            "opacityMap": "",
+            "colorPaletteMap": "",
+            "baseColorMap": "vehicles/etk800/etk800_d.dds",
+            "roughnessMap": ""
+          },
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "0",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "0.842635155",
+            "metallicMap": "",
+            "metallicFactor": "0",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "vehicles/etk800/etk800_n.dds",
+            "opacityMap": "",
+            "colorPaletteMap": "",
+            "baseColorMap": "vehicles/etk800/etk800_c.dds",
+            "roughnessMap": ""
+          },
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "0",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "1",
+            "metallicMap": "",
+            "metallicFactor": "0",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "",
+            "opacityMap": "",
+            "colorPaletteMap": "",
+            "baseColorMap": "",
+            "roughnessMap": ""
+          }
+        ]
+      },
+      "etk800_main": {
+        "activeLayers": "2",
+        "stages": [
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "1",
+            "clearCoatMap": "/vehicles/etk800/etk800_main_cc.data.png",
+            "detailScale": "128 64",
+            "roughnessFactor": "1",
+            "metallicMap": "",
+            "metallicFactor": "1",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "0.150000006",
+            "detailNormalMap": "/vehicles/common/orange_peel_n.normal.png",
+            "normalMap": "vehicles/etk800/etk800_main_n.normal.png",
+            "opacityMap": "",
+            "colorPaletteMap": "/vehicles/common/nullcolormaskR.color.png",
+            "baseColorMap": "",
+            "roughnessMap": ""
+          },
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "1",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "1",
+            "metallicMap": "/vehicles/etk800/etk800_main_m.data.png",
+            "metallicFactor": "1",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "/vehicles/etk800/etk800_main_n.normal.png",
+            "opacityMap": "/vehicles/etk800/etk800_main_o.data.png",
+            "colorPaletteMap": "",
+            "baseColorMap": "/vehicles/etk800/etk800_main_b.color.png",
+            "roughnessMap": "/vehicles/etk800/etk800_main_r.data.png"
+          },
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "0",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "1",
+            "metallicMap": "",
+            "metallicFactor": "0",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "",
+            "opacityMap": "",
+            "colorPaletteMap": "",
+            "baseColorMap": "",
+            "roughnessMap": ""
+          },
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "0",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "1",
+            "metallicMap": "",
+            "metallicFactor": "0",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "",
+            "opacityMap": "",
+            "colorPaletteMap": "",
+            "baseColorMap": "",
+            "roughnessMap": ""
+          }
+        ]
+      },
+      "etk800.skin.dynamicTextures": {
+        "activeLayers": "2",
+        "stages": [
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "0",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "1",
+            "metallicMap": "/vehicles/etk800/etk800_main_m.data.png",
+            "metallicFactor": "1",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "vehicles/etk800/etk800_main_n.normal.png",
+            "opacityMap": "",
+            "colorPaletteMap": "",
+            "baseColorMap": "/vehicles/etk800/etk800_main_b.color.png",
+            "roughnessMap": "/vehicles/etk800/etk800_main_r.data.png"
+          },
+          {
+            "clearCoatRoughnessFactor": "0.0599999987",
+            "clearCoatFactor": "1",
+            "clearCoatMap": "/vehicles/etk800/etk800_main_cc.data.png",
+            "detailScale": "2 2",
+            "roughnessFactor": "1",
+            "metallicMap": "@DynamicTextureMetallic",
+            "metallicFactor": "1",
+            "diffuseMapUseUV": "1",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "vehicles/etk800/etk800_main_n.normal.png",
+            "opacityMap": "/vehicles/etk800/etk800_main_c.data.png",
+            "colorPaletteMap": "@DynamicTextureColorPalette",
+            "baseColorMap": "@DynamicTextureBaseColor",
+            "roughnessMap": "@DynamicTextureRoughness"
+          },
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "0",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "1",
+            "metallicMap": "",
+            "metallicFactor": "0",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "",
+            "opacityMap": "",
+            "colorPaletteMap": "",
+            "baseColorMap": "",
+            "roughnessMap": ""
+          },
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "0",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "1",
+            "metallicMap": "",
+            "metallicFactor": "0",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "",
+            "opacityMap": "",
+            "colorPaletteMap": "",
+            "baseColorMap": "",
+            "roughnessMap": ""
+          }
+        ]
+      },
+      "etk800.skin.police": {
+        "activeLayers": "2",
+        "stages": [
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "0",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "1",
+            "metallicMap": "/vehicles/etk800/etk800_main_m.data.png",
+            "metallicFactor": "1",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "/vehicles/etk800/etk800_main_n.normal.png",
+            "opacityMap": "",
+            "colorPaletteMap": "",
+            "baseColorMap": "/vehicles/etk800/etk800_main_b.color.png",
+            "roughnessMap": "/vehicles/etk800/etk800_main_r.data.png"
+          },
+          {
+            "clearCoatRoughnessFactor": "0.0299999993",
+            "clearCoatFactor": "1",
+            "clearCoatMap": "/vehicles/etk800/etk800_main_cc.data.png",
+            "detailScale": "128 64",
+            "roughnessFactor": "0.5",
+            "metallicMap": "",
+            "metallicFactor": "0.5",
+            "diffuseMapUseUV": "1",
+            "detailNormalMapStrength": "0.150000006",
+            "detailNormalMap": "/vehicles/common/orange_peel_n.normal.png",
+            "normalMap": "/vehicles/etk800/etk800_main_n.normal.png",
+            "opacityMap": "/vehicles/etk800/etk800_main_c.data.png",
+            "colorPaletteMap": "",
+            "baseColorMap": "vehicles/etk800/etk800_skin_police_b.color.png",
+            "roughnessMap": ""
+          },
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "0",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "1",
+            "metallicMap": "",
+            "metallicFactor": "0",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "",
+            "opacityMap": "",
+            "colorPaletteMap": "",
+            "baseColorMap": "",
+            "roughnessMap": ""
+          },
+          {
+            "clearCoatRoughnessFactor": "1",
+            "clearCoatFactor": "0",
+            "clearCoatMap": "",
+            "detailScale": "2 2",
+            "roughnessFactor": "1",
+            "metallicMap": "",
+            "metallicFactor": "0",
+            "diffuseMapUseUV": "0",
+            "detailNormalMapStrength": "1",
+            "detailNormalMap": "",
+            "normalMap": "",
+            "opacityMap": "",
+            "colorPaletteMap": "",
+            "baseColorMap": "",
+            "roughnessMap": ""
+          }
+        ]
+      }
+    },
+    "comparison": {
+      "originalStages": 2,
+      "activeStages": "4",
+      "differences": {}
+    },
+    "map": "gridmap_v2",
+    "id": 33151
+  },
+  "start": {
+    "surface": {
+      "waterSupported": false,
+      "soilRemaining": 1,
+      "visualWetnessSupported": true,
+      "wetness": 0,
+      "dirt": 0,
+      "snow": 0,
+      "deposits": 0,
+      "waterFraction": 0,
+      "visualCleaningSupported": true,
+      "mud": 0
+    },
+    "velocity": {
+      "x": 0.0001561949321,
+      "y": -0.001267665997,
+      "z": 0.00119055924
+    },
+    "pos": {
+      "x": -312.999054,
+      "y": -364.9992676,
+      "z": 99.97097778
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 1682,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "latency": {
+        "oldestMs": 0
+      },
+      "coverage": {
+        "enabled": false
+      },
+      "config": {
+        "aggregateCap": 160,
+        "coverageCoalescing": false,
+        "flushInterval": 0.2,
+        "panelGrouping": false,
+        "fullRateCombine": false,
+        "bakeBudget": 6,
+        "projBudget": 6,
+        "syntheticAnchors": true,
+        "clusterRadius": 0.65,
+        "layerBudget": 24,
+        "damageWidth": 4096
+      },
+      "generation": 8,
+      "nativeEvents": {},
+      "anchors": {
+        "synthesized": 0
+      },
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 1,
+        "streamLayersMissed": 0,
+        "rebinds": 1,
+        "streamsBaked": 0,
+        "stampsEnqueued": 0,
+        "jobsDropped": 0,
+        "layersLost": 0,
+        "streamLayersExpected": 0,
+        "framesDeferred": 0,
+        "spotsSkipped": 0,
+        "framesTicked": 3,
+        "streamsMerged": 0,
+        "clusterJobsMerged": 0,
+        "framesFlushed": 0,
+        "jobsFailed": 0,
+        "foreignDropped": 0,
+        "projectsIssued": 0,
+        "streamSubstrokesTotal": 0,
+        "bakeFailures": 0,
+        "bakesIssued": 0,
+        "clustersTotal": 0,
+        "aggregateDropped": 0,
+        "stampsAttempted": 0
+      },
+      "perf": {
+        "flushMsTotal": 0,
+        "combineMsMax": 0.61490000007325,
+        "framesOver1ms": 0,
+        "framesOver4ms": 0,
+        "msMax": 0.62100000013743,
+        "projectMsTotal": 0,
+        "bakeMsTotal": 0,
+        "flushMsMax": 0,
+        "projectCalls": 0,
+        "inputToProjectMaxMs": 0,
+        "lastMs": 0.0061000000641798,
+        "msTotal": 0.6335000002764,
+        "bakeLayersTotal": 0,
+        "bakeCalls": 0,
+        "layerCalls": 0,
+        "layerMsTotal": 0,
+        "bakeMsMax": 0,
+        "combineMsTotal": 0.61490000007325,
+        "projectMsMax": 0,
+        "frames": 3,
+        "inputToBakeMaxMs": 0
+      }
+    }
+  },
+  "early": {
+    "surface": {
+      "waterSupported": true,
+      "soilRemaining": 1,
+      "visualWetnessSupported": true,
+      "wetness": 0,
+      "dirt": 0,
+      "snow": 0,
+      "lastSample": {
+        "trailLength": 2.1183485746384,
+        "flowZ": 0.22328128515045,
+        "x": 1.3400000333786,
+        "flowY": 0.97475405498083,
+        "y": 2.0352335941376,
+        "z": 0.34723647413442,
+        "kind": "mud",
+        "wheel": 1
+      },
+      "deposits": 10,
+      "waterFraction": 0,
+      "visualCleaningSupported": true,
+      "mud": 0.25
+    },
+    "velocity": {
+      "x": -0.1680087894,
+      "y": 6.952976227,
+      "z": 0.04044759274
+    },
+    "pos": {
+      "x": -313.1183472,
+      "y": -355.0657959,
+      "z": 99.93338776
+    },
+    "contacts": {
+      "18": 14000
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 15593,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "latency": {
+        "oldestMs": 0
+      },
+      "coverage": {
+        "enabled": false
+      },
+      "config": {
+        "aggregateCap": 160,
+        "coverageCoalescing": false,
+        "flushInterval": 0.2,
+        "panelGrouping": false,
+        "fullRateCombine": false,
+        "bakeBudget": 6,
+        "projBudget": 6,
+        "syntheticAnchors": true,
+        "clusterRadius": 0.65,
+        "layerBudget": 24,
+        "damageWidth": 4096
+      },
+      "generation": 8,
+      "nativeEvents": {},
+      "anchors": {
+        "synthesized": 10
+      },
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 11,
+        "streamLayersMissed": 0,
+        "rebinds": 1,
+        "streamsBaked": 0,
+        "stampsEnqueued": 10,
+        "jobsDropped": 0,
+        "layersLost": 0,
+        "streamLayersExpected": 0,
+        "framesDeferred": 0,
+        "spotsSkipped": 0,
+        "framesTicked": 343,
+        "streamsMerged": 0,
+        "clusterJobsMerged": 0,
+        "framesFlushed": 10,
+        "jobsFailed": 0,
+        "foreignDropped": 0,
+        "projectsIssued": 10,
+        "streamSubstrokesTotal": 0,
+        "bakeFailures": 0,
+        "bakesIssued": 10,
+        "clustersTotal": 10,
+        "aggregateDropped": 0,
+        "stampsAttempted": 10
+      },
+      "perf": {
+        "flushMsTotal": 2.167599999666,
+        "combineMsMax": 0.61490000007325,
+        "framesOver1ms": 5,
+        "framesOver4ms": 2,
+        "msMax": 4.7208000000865,
+        "projectMsTotal": 0,
+        "bakeMsTotal": 16.543400000501,
+        "flushMsMax": 0.2676999997675,
+        "projectCalls": 0,
+        "inputToProjectMaxMs": 0.24430000030407,
+        "lastMs": 0.0075000002652814,
+        "msTotal": 22.489100002986,
+        "bakeLayersTotal": 10,
+        "bakeCalls": 10,
+        "layerCalls": 10,
+        "layerMsTotal": 0.5669999991369,
+        "bakeMsMax": 4.6673000001647,
+        "combineMsTotal": 0.89680000064618,
+        "projectMsMax": 0,
+        "frames": 343,
+        "inputToBakeMaxMs": 17.140200000085
+      }
+    }
+  },
+  "late": {
+    "surface": {
+      "waterSupported": true,
+      "soilRemaining": 1,
+      "visualWetnessSupported": true,
+      "wetness": 0,
+      "dirt": 0,
+      "snow": 0,
+      "lastSample": {
+        "trailLength": 2.4053420066833,
+        "flowZ": 0.18014890328823,
+        "x": 1.3400000333786,
+        "flowY": 0.98363935090258,
+        "y": 2.2799781547459,
+        "z": 0.41952946230015,
+        "kind": "mud",
+        "wheel": 1
+      },
+      "deposits": 22,
+      "waterFraction": 0,
+      "visualCleaningSupported": true,
+      "mud": 0.55
+    },
+    "velocity": {
+      "x": -0.4267633259,
+      "y": 12.36752129,
+      "z": -0.07282473892
+    },
+    "pos": {
+      "x": -313.9129333,
+      "y": -325.5628052,
+      "z": 99.97080231
+    },
+    "contacts": {
+      "18": 26000
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 27867,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "latency": {
+        "oldestMs": 0
+      },
+      "coverage": {
+        "enabled": false
+      },
+      "config": {
+        "aggregateCap": 160,
+        "coverageCoalescing": false,
+        "flushInterval": 0.2,
+        "panelGrouping": false,
+        "fullRateCombine": false,
+        "bakeBudget": 6,
+        "projBudget": 6,
+        "syntheticAnchors": true,
+        "clusterRadius": 0.65,
+        "layerBudget": 24,
+        "damageWidth": 4096
+      },
+      "generation": 8,
+      "nativeEvents": {},
+      "anchors": {
+        "synthesized": 22
+      },
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 23,
+        "streamLayersMissed": 0,
+        "rebinds": 1,
+        "streamsBaked": 0,
+        "stampsEnqueued": 22,
+        "jobsDropped": 0,
+        "layersLost": 0,
+        "streamLayersExpected": 0,
+        "framesDeferred": 0,
+        "spotsSkipped": 0,
+        "framesTicked": 698,
+        "streamsMerged": 0,
+        "clusterJobsMerged": 0,
+        "framesFlushed": 22,
+        "jobsFailed": 0,
+        "foreignDropped": 0,
+        "projectsIssued": 22,
+        "streamSubstrokesTotal": 0,
+        "bakeFailures": 0,
+        "bakesIssued": 22,
+        "clustersTotal": 22,
+        "aggregateDropped": 0,
+        "stampsAttempted": 22
+      },
+      "perf": {
+        "flushMsTotal": 4.9593999997342,
+        "combineMsMax": 0.61490000007325,
+        "framesOver1ms": 7,
+        "framesOver4ms": 2,
+        "msMax": 4.7208000000865,
+        "projectMsTotal": 0,
+        "bakeMsTotal": 27.552599999581,
+        "flushMsMax": 0.47730000005686,
+        "projectCalls": 0,
+        "inputToProjectMaxMs": 0.24430000030407,
+        "lastMs": 0.0063000002228364,
+        "msTotal": 39.749400010351,
+        "bakeLayersTotal": 22,
+        "bakeCalls": 22,
+        "layerCalls": 22,
+        "layerMsTotal": 1.4935999979571,
+        "bakeMsMax": 4.6673000001647,
+        "combineMsTotal": 1.2001000013697,
+        "projectMsMax": 0,
+        "frames": 698,
+        "inputToBakeMaxMs": 17.140200000085
+      }
+    }
+  },
+  "stationaryStart": {
+    "surface": {
+      "waterSupported": true,
+      "soilRemaining": 1,
+      "visualWetnessSupported": true,
+      "wetness": 0,
+      "dirt": 0,
+      "snow": 0,
+      "lastSample": {
+        "x": 1.3400000333786,
+        "y": -0.45561645507812,
+        "z": 0.4371999245882,
+        "kind": "mud",
+        "wheel": 1
+      },
+      "deposits": 31,
+      "waterFraction": 0,
+      "visualCleaningSupported": true,
+      "mud": 0.775
+    },
+    "velocity": {
+      "x": 0.0001073351159,
+      "y": 0.0001657604444,
+      "z": -0.0001283492893
+    },
+    "pos": {
+      "x": -314.4344788,
+      "y": -312.1217346,
+      "z": 99.98199463
+    },
+    "contacts": {
+      "18": 40000
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 42309,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "latency": {
+        "oldestMs": 0
+      },
+      "coverage": {
+        "enabled": false
+      },
+      "config": {
+        "aggregateCap": 160,
+        "coverageCoalescing": false,
+        "flushInterval": 0.2,
+        "panelGrouping": false,
+        "fullRateCombine": false,
+        "bakeBudget": 6,
+        "projBudget": 6,
+        "syntheticAnchors": true,
+        "clusterRadius": 0.65,
+        "layerBudget": 24,
+        "damageWidth": 4096
+      },
+      "generation": 8,
+      "nativeEvents": {},
+      "anchors": {
+        "synthesized": 31
+      },
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 32,
+        "streamLayersMissed": 0,
+        "rebinds": 1,
+        "streamsBaked": 0,
+        "stampsEnqueued": 31,
+        "jobsDropped": 0,
+        "layersLost": 0,
+        "streamLayersExpected": 0,
+        "framesDeferred": 0,
+        "spotsSkipped": 0,
+        "framesTicked": 1105,
+        "streamsMerged": 0,
+        "clusterJobsMerged": 0,
+        "framesFlushed": 31,
+        "jobsFailed": 0,
+        "foreignDropped": 0,
+        "projectsIssued": 31,
+        "streamSubstrokesTotal": 0,
+        "bakeFailures": 0,
+        "bakesIssued": 31,
+        "clustersTotal": 31,
+        "aggregateDropped": 0,
+        "stampsAttempted": 31
+      },
+      "perf": {
+        "flushMsTotal": 7.0447000002787,
+        "combineMsMax": 0.61490000007325,
+        "framesOver1ms": 10,
+        "framesOver4ms": 3,
+        "msMax": 4.8621999999341,
+        "projectMsTotal": 0,
+        "bakeMsTotal": 39.907499999572,
+        "flushMsMax": 0.47730000005686,
+        "projectCalls": 0,
+        "inputToProjectMaxMs": 0.2545000002101,
+        "lastMs": 0.0088000001596811,
+        "msTotal": 58.414200008428,
+        "bakeLayersTotal": 31,
+        "bakeCalls": 31,
+        "layerCalls": 31,
+        "layerMsTotal": 2.038299997821,
+        "bakeMsMax": 4.7248999999283,
+        "combineMsTotal": 1.5064000003804,
+        "projectMsMax": 0,
+        "frames": 1105,
+        "inputToBakeMaxMs": 17.140200000085
+      }
+    }
+  },
+  "stationaryEnd": {
+    "surface": {
+      "waterSupported": true,
+      "soilRemaining": 1,
+      "visualWetnessSupported": true,
+      "wetness": 0,
+      "dirt": 0,
+      "snow": 0,
+      "lastSample": {
+        "x": 1.3400000333786,
+        "y": -0.45561645507812,
+        "z": 0.4371999245882,
+        "kind": "mud",
+        "wheel": 1
+      },
+      "deposits": 31,
+      "waterFraction": 0,
+      "visualCleaningSupported": true,
+      "mud": 0.775
+    },
+    "velocity": {
+      "x": -0.0001988720614,
+      "y": -0.0001749306975,
+      "z": 0.000129972861
+    },
+    "pos": {
+      "x": -314.4344482,
+      "y": -312.1217346,
+      "z": 99.98207092
+    },
+    "contacts": {
+      "18": 42000
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 44424,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "latency": {
+        "oldestMs": 0
+      },
+      "coverage": {
+        "enabled": false
+      },
+      "config": {
+        "aggregateCap": 160,
+        "coverageCoalescing": false,
+        "flushInterval": 0.2,
+        "panelGrouping": false,
+        "fullRateCombine": false,
+        "bakeBudget": 6,
+        "projBudget": 6,
+        "syntheticAnchors": true,
+        "clusterRadius": 0.65,
+        "layerBudget": 24,
+        "damageWidth": 4096
+      },
+      "generation": 8,
+      "nativeEvents": {},
+      "anchors": {
+        "synthesized": 31
+      },
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 32,
+        "streamLayersMissed": 0,
+        "rebinds": 1,
+        "streamsBaked": 0,
+        "stampsEnqueued": 31,
+        "jobsDropped": 0,
+        "layersLost": 0,
+        "streamLayersExpected": 0,
+        "framesDeferred": 0,
+        "spotsSkipped": 0,
+        "framesTicked": 1334,
+        "streamsMerged": 0,
+        "clusterJobsMerged": 0,
+        "framesFlushed": 31,
+        "jobsFailed": 0,
+        "foreignDropped": 0,
+        "projectsIssued": 31,
+        "streamSubstrokesTotal": 0,
+        "bakeFailures": 0,
+        "bakesIssued": 31,
+        "clustersTotal": 31,
+        "aggregateDropped": 0,
+        "stampsAttempted": 31
+      },
+      "perf": {
+        "flushMsTotal": 7.0447000002787,
+        "combineMsMax": 0.61490000007325,
+        "framesOver1ms": 10,
+        "framesOver4ms": 3,
+        "msMax": 4.8621999999341,
+        "projectMsTotal": 0,
+        "bakeMsTotal": 39.907499999572,
+        "flushMsMax": 0.47730000005686,
+        "projectCalls": 0,
+        "inputToProjectMaxMs": 0.2545000002101,
+        "lastMs": 0.0068000003921043,
+        "msTotal": 60.20290000879,
+        "bakeLayersTotal": 31,
+        "bakeCalls": 31,
+        "layerCalls": 31,
+        "layerMsTotal": 2.038299997821,
+        "bakeMsMax": 4.7248999999283,
+        "combineMsTotal": 1.5064000003804,
+        "projectMsMax": 0,
+        "frames": 1334,
+        "inputToBakeMaxMs": 17.140200000085
+      }
+    }
+  }
+}
