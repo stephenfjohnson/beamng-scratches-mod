@@ -1,0 +1,24 @@
+{
+  "model": "bluebuck",
+  "paint": null,
+  "part": "bluebuck_skin_twotone",
+  "source": "bluebuck.skin.twotone",
+  "keys": [
+    "bluebuck"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261115-102802_sideslide_fleet-bluebuck-livery/report.md",
+    "contacts": "3170",
+    "passed": "94",
+    "impacts": "18",
+    "streams": "17",
+    "stamps": "27",
+    "projections": "22",
+    "bakes": "14",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "2"
+  }
+}

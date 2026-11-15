@@ -1,0 +1,25 @@
+{
+  "model": "moonhawk",
+  "paint": "green",
+  "part": "",
+  "source": "moonhawk_main",
+  "keys": [
+    "moonhawk",
+    "moonhawk_nosecone_alt"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261115-102738_sideslide_fleet-moonhawk-green/report.md",
+    "contacts": "10166",
+    "passed": "2009",
+    "impacts": "15",
+    "streams": "149",
+    "stamps": "41",
+    "projections": "72",
+    "bakes": "57",
+    "missed": "2.4%",
+    "dropped": "0",
+    "deferred": "14"
+  }
+}

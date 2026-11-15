@@ -114,7 +114,9 @@ function skinMat:flush() end
 function skinMat:reload() matReloads = matReloads + 1 end
 scenetree = { findObject = function(name)
   if name == "pickup_body.skin.dynamicTextures" then return skinMat end
-end }
+end, findClassObjects = function() return {} end }
+-- The generic body adapter's orphan sweep runs every session; nothing to collect here.
+getAllVehicles = function() return hasPlayer and {{getId=function() return 1 end,getMaterialNames=function() return {} end}} or {} end
 
 -- Dynamic-decals projection + API mocks.
 local counters = { projects = 0, bakes = 0, bakeLayers = 0, combines = 0, apiUpdates = 0,

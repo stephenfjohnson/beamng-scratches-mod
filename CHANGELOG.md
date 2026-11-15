@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased: material-preserving adapter for every vehicle
+
+- Replace the ETK-only adapter with `bodyAdapter.lua`. Body materials are found
+  the way the game does (mesh keys with a Dynamic Textures variant in the
+  vehicle's own folder), and sources resolve through `mapTo` and the chosen
+  skin, like the renderer. Clones get damage and soil stages after 1–2 original
+  stages. Non-PBR or full materials, foreign overrides and editor designs are skipped.
+- 38/38 stock Dynamic Textures vehicles attach, including every factory livery
+  and the default ETK Rennspecht livery (previously skipped).
+- Ten-vehicle crash validation across six paint colours and four liveries:
+  original stages identical on every clone. New `tools/adapter_survey.py`,
+  `tools/showcase_fleet.py` and fleet gallery images.
+- 375 mock checks (generic discovery, name/mapTo trap, skin fallback, one-stage
+  materials, rejection paths, cleanup of old ETK clones).
+- Known cost: ~+180 ms per supported vehicle spawn from JBeam cache invalidation.
+
 ## v0.1.0-preview — 2026-11-15
 
 First public download, a development preview for the ETK 800 (plain paint or

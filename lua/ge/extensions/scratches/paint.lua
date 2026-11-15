@@ -553,20 +553,21 @@ local function trySetup()
   if vid == skippedVid then pendingSetup = false; return false end
 
   local part = currentPaintDesignPart()
-  if jbeam == "etk800" and (part == "" or part == "etk800_skin_police") then
-    if not adapterModule then adapterModule = dofile("/lua/ge/extensions/scratches/etkAdapter.lua") end
+  if part == nil then return false end -- config not readable yet; retry next tick
+  if not adapterModule then adapterModule = dofile("/lua/ge/extensions/scratches/bodyAdapter.lua") end
+  if adapterModule.wants(veh, part) then
     if adapterModule.editorActive() then
       editorPaused=true; pendingSetup=false; skippedVid=vid; return false
     end
     if not adapter then
       local ok, result = pcall(adapterModule.create, veh, part)
       if not ok then
-        log('E',logTag,"ETK adapter failed: " .. tostring(result))
+        log('E',logTag,"body material adapter failed on " .. jbeam .. ": " .. tostring(result))
         pendingSetup=false; skippedVid=vid; return false
       end
       if not result then
         pendingSetup=false
-        if adapterReloaded[vid] then skippedVid=vid; log('W',logTag,"ETK construction adapter unavailable; leaving original paint"); return false end
+        if adapterReloaded[vid] then skippedVid=vid; log('W',logTag,"body material adapter unavailable on " .. jbeam .. "; leaving original paint"); return false end
         adapterReloaded[vid]=true
         adapterModule.invalidateConstructionCache()
         veh:reload()
@@ -959,7 +960,9 @@ M.getCompatibility = function()
   local vid = veh and veh:getId()
   return {ready = ready, pending = pendingSetup, part = currentPaintDesignPart(),
           owned = adapter ~= nil or (vid and ownedSkins[vid] ~= nil or false), skipped = vid == skippedVid,
-          adapter = adapter and adapter.sourceName or nil, material = adapter and adapter.material:getName() or nil}
+          adapter = adapter and adapter.sourceName or nil, material = adapter and adapter.material:getName() or nil,
+          keys = adapter and adapter.keys or nil, stage = adapter and adapter.stage or nil,
+          rejected = adapterModule and vid and adapterModule.rejection(vid) or nil}
 end
 
 -- ---- public probes ----
@@ -2738,10 +2741,10 @@ M.getLastFrameMs = function() return perfStats.lastMs end
 
 -- Projection passes allowed per frame. Lower = flatter frame times during a
 -- big crash (marks trickle in over a few frames); higher = marks land sooner.
--- Changing quality clears cosmetics explicitly; only our private ETK target changes.
+-- Changing quality clears cosmetics explicitly; only our private damage target changes.
 M.setDamageResolution = function(width)
   width=tonumber(width)
-  assert(adapter and ready, "private ETK adapter required")
+  assert(adapter and ready, "private body material adapter required")
   assert(width==4096 or width==2048 or width==1024, "use 4096, 2048 or 1024")
   if adapter:getDamageWidth()==width then return end
   M.clearStamps()
@@ -3467,15 +3470,16 @@ M.onVehicleSwitched   = onVehicleSwitched
 M.onVehicleSpawned    = onVehicleSpawned
 M.onSpawnCCallback = function(vid)
   local veh=scenetree.findObjectById(vid)
-  if not veh or veh.JBeam~="etk800" then return end
-  if not adapterModule then adapterModule=dofile("/lua/ge/extensions/scratches/etkAdapter.lua") end
+  if not veh then return end
+  if not adapterModule then adapterModule=dofile("/lua/ge/extensions/scratches/bodyAdapter.lua") end
+  if not adapterModule.modelSupported(veh.JBeam) then return end
   if not adapterModule.editorActive() then
     adapterModule.invalidateConstructionCache()
     adapterReloaded[vid]=nil
   end
 end
 M.onJbeamLoadingPhase2 = function(...)
-  if not adapterModule then adapterModule = dofile("/lua/ge/extensions/scratches/etkAdapter.lua") end
+  if not adapterModule then adapterModule = dofile("/lua/ge/extensions/scratches/bodyAdapter.lua") end
   adapterModule.prepare(...)
 end
 M.onVehicleDestroyed  = function(vid)

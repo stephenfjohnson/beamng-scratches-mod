@@ -1,0 +1,25 @@
+{
+  "model": "etk800",
+  "paint": null,
+  "part": "etk800_skin_brushedtrim",
+  "source": "etk800.skin.brushedtrim",
+  "keys": [
+    "etk800",
+    "etk800_extra"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261115-102923_sideslide_fleet-etk800-livery/report.md",
+    "contacts": "2121",
+    "passed": "716",
+    "impacts": "41",
+    "streams": "90",
+    "stamps": "61",
+    "projections": "73",
+    "bakes": "44",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "6"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "model": "etki",
+  "paint": "white",
+  "part": "",
+  "source": "etki_main",
+  "keys": [
+    "etki",
+    "etki_modparts"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261115-102616_sideslide_fleet-etki-white/report.md",
+    "contacts": "2914",
+    "passed": "887",
+    "impacts": "49",
+    "streams": "121",
+    "stamps": "70",
+    "projections": "72",
+    "bakes": "51",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "11"
+  }
+}

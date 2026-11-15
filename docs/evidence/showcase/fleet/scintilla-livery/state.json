@@ -1,0 +1,24 @@
+{
+  "model": "scintilla",
+  "paint": null,
+  "part": "scintilla_skin_blackroof",
+  "source": "scintilla_main.skin.blackroof",
+  "keys": [
+    "scintilla_main"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261115-102826_sideslide_fleet-scintilla-livery/report.md",
+    "contacts": "3255",
+    "passed": "404",
+    "impacts": "80",
+    "streams": "59",
+    "stamps": "95",
+    "projections": "76",
+    "bakes": "46",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "5"
+  }
+}

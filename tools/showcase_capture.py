@@ -68,27 +68,72 @@ return true""")
     time.sleep(1.0)
 
 
+def aim_auto(az: float, elev: float, margin: float = 1.0) -> None:
+    """Frame the whole car: target the body centre, back off by its length."""
+    lua(f"""
+simTimeAuthority.pause(true)
+local v=getPlayerVehicle(0)
+local d=v:getDirectionVector(); local f=vec3(d.x,d.y,0):normalized()
+local u=vec3(0,0,1); local l=u:cross(f):normalized()
+local len=math.min(v:getInitialLength() or 4.5, 14)
+-- Median node position: unlike the world box, detached debris can't drag it off.
+local xs,ys,zs={{}},{{}},{{}}
+for i=0,v:getNodeCount()-1 do local q=v:getNodePosition(i); xs[#xs+1]=q.x; ys[#ys+1]=q.y; zs[#zs+1]=q.z end
+local function med(t) table.sort(t) return t[math.floor(#t/2)+1] or 0 end
+local t=v:getPosition()+vec3(med(xs),med(ys),med(zs))
+local az,el=math.rad({az}),math.rad({elev})
+local h=f*math.cos(az)+l*math.sin(az)
+local p=t+(h*math.cos(el)+u*math.sin(el))*(len*0.72*{margin}+0.9)
+core_camera.setByName(0,'free')
+core_camera.globalCameraFunction('free','setPosition',p)
+core_camera.globalCameraFunction('free','setRotation',quatFromDir((t-p):normalized(),u))
+if ui_visibility then ui_visibility.set(false) end
+return true""")
+    time.sleep(1.0)
+
+
 def restore() -> None:
     lua("if ui_visibility then ui_visibility.set(true) end;simTimeAuthority.pause(false);return true")
 
 
-def closeup(a: argparse.Namespace) -> None:
-    folder = OUT / a.name
+def set_damage_visible(on: bool) -> None:
+    """Toggle the appended damage+soil stages on every clone this car owns."""
+    lua(f"""
+local v=getPlayerVehicle(0); local c=scratches_paint.getCompatibility()
+local stage=tonumber(c.stage); assert(stage,'body adapter not active')
+local prefix='scratches_'..v:getId()..'_'
+for _,n in pairs(v:getMaterialNames()) do
+  if n:sub(1,#prefix)==prefix then
+    local m=scenetree.findObject(n)
+    if m then m:setField('activeLayers',0,tostring(stage+({2 if on else 0}))); m:flush(); m:reload() end
+  end
+end
+return true""")
+
+
+def matched(folder: Path, aim_fn) -> dict:
+    """Damaged and original-stages frames from one frozen camera."""
     folder.mkdir(parents=True, exist_ok=True)
     e = json.loads(lua(livery_probe.LUA))
-    assert e["compatibility"].get("adapter"), "ETK adapter not active"
-    mat = json.dumps(e["compatibility"]["material"])
+    assert e["compatibility"].get("adapter"), "body adapter not active"
     try:
-        aim(a.fwd, a.side, a.up, a.az, a.elev, a.dist)
-        for name, layers in (("damaged", 4), ("original-stages", 2)):
-            lua(f'local m=scenetree.findObject({mat});m:setField("activeLayers",0,"{layers}");m:flush();m:reload();return true')
+        aim_fn()
+        for name, on in (("damaged", True), ("original-stages", False)):
+            set_damage_visible(on)
             time.sleep(0.8)
             capture(folder / f"{name}.jpg")
     finally:
-        lua(f'local m=scenetree.findObject({mat});m:setField("activeLayers",0,"4");m:flush();m:reload();return true')
+        set_damage_visible(True)
         restore()
+    return e
+
+
+def closeup(a: argparse.Namespace) -> None:
+    folder = OUT / a.name
+    e = matched(folder, lambda: aim(a.fwd, a.side, a.up, a.az, a.elev, a.dist))
     state = json.loads(lua("return jsonEncode({stats=scratches_paint.getStats(),camera=getCameraPosition()})"))
     state["camera_args"] = {k: getattr(a, k) for k in ("fwd", "side", "up", "az", "elev", "dist")}
+    state["comparison"] = e.get("comparison")
     (folder / "state.json").write_text(json.dumps(state, indent=2) + "\n")
     print("wrote", folder)
 

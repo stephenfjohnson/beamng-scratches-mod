@@ -1,0 +1,24 @@
+{
+  "model": "covet",
+  "paint": "yellow",
+  "part": "",
+  "source": "covet_main",
+  "keys": [
+    "covet"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261115-102644_sideslide_fleet-covet-yellow/report.md",
+    "contacts": "3107",
+    "passed": "1015",
+    "impacts": "24",
+    "streams": "93",
+    "stamps": "31",
+    "projections": "71",
+    "bakes": "42",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "6"
+  }
+}

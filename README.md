@@ -10,9 +10,12 @@ actually happened and is baked into the car's paint without touching its livery.
 ![Scrapes, mud splashes, snow and washing, all captured in game](docs/showcase/hero.jpg)
 
 > **Status: development preview.** Everything on this page runs in game today on
-> the **ETK 800** (plain paint or the stock Police livery) on BeamNG.drive
-> 0.40.5.0. **[Download v0.1.0-preview](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/tag/v0.1.0-preview)** (MIT licensed), or
-> [build the ZIP yourself](#packaging-for-release).
+> BeamNG.drive 0.40.5.0. On `master` the material-preserving adapter covers **all
+> 38 stock cars, trucks and buses that ship Dynamic Textures**, with any paint
+> colour or factory livery. The published
+> **[v0.1.0-preview](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/tag/v0.1.0-preview)**
+> (MIT licensed) predates that and supports the ETK 800 only; or
+> [build the ZIP yourself](#packaging-for-release) from `master`.
 > Release blockers, open bugs and ideas parked on archived branches live in
 > **[TODO.md](TODO.md)**.
 
@@ -29,6 +32,7 @@ rebuilds them.
 - [Scrapes that follow the slide](#scrapes-that-follow-the-slide)
 - [Impact chips and gouges](#impact-chips-and-gouges)
 - [Your paint and livery stay underneath](#your-paint-and-livery-stay-underneath)
+- [Works across the fleet](#works-across-the-fleet)
 - [Mud, dirt and snow build up as you drive](#mud-dirt-and-snow-build-up-as-you-drive)
 - [Splashes cross panel seams](#splashes-cross-panel-seams)
 - [Mud the color of the ground](#mud-the-color-of-the-ground)
@@ -64,12 +68,39 @@ the body struck the ground.
 
 ![Stock ETK Police livery before and after a slide](docs/showcase/livery-before-after.jpg)
 
-The ETK adapter clones the car's own body materials per vehicle and appends a
-separate damage stage. The original paint, palette, normal and detail maps,
-metallic, roughness, clearcoat and livery artwork all render unchanged beneath
-the marks. The Paint Design slot is never rewritten. Liveries the adapter doesn't
-support are detected and skipped, never overwritten. Both ETK body materials are
-covered, including the separate `etk800_extra` rear quarters.
+The body adapter clones the car's own body materials per vehicle and appends a
+damage stage and a soil stage. The original paint, palette, normal and detail
+maps, metallic, roughness, clearcoat and livery artwork all render unchanged
+beneath the marks. The Paint Design slot is never rewritten. It finds the body
+the same way the game does: every mesh material that has a Dynamic Textures
+variant in the vehicle's own folder (the ETK's main body and separate
+`etk800_extra` rear quarters, the SBR's four body kits, both Semi cabs). It
+clones whichever material the renderer would use for the chosen livery.
+Anything unexpected (non-PBR or already-full materials, another mod's body
+override, your own Dynamic Textures editor design) is skipped, never overwritten.
+
+### Works across the fleet
+
+![Six stock vehicles in six paint colours, each after one sideslide](docs/showcase/fleet-paints.jpg)
+
+The same crash on six different bodies and paints. Each car keeps its own factory
+finish; the scrapes take their colour from the paint layers underneath.
+
+![Four factory liveries after one sideslide](docs/showcase/fleet-liveries.jpg)
+
+Factory liveries survive too: two-tones, race stripes and the city bus's Transit
+artwork stay intact under the damage. Damage on busy liveries is subtler than on
+plain paint.
+
+![Gunmetal Sunburst before and after one sideslide](docs/showcase/fleet-before-after.jpg)
+
+In a sweep of every stock vehicle, **38 of 38** that ship Dynamic Textures attach
+to the adapter ([survey](docs/evidence/adapter-survey/survey.json)). The ten above
+were crashed and checked: every clone matched its source material in every
+original stage, with 0–2.4% of marks missed
+([fleet evidence](docs/evidence/showcase/fleet/README.md)). Mud, snow, washing and
+wet gloss use the same appended stages on every vehicle, but so far they've only
+been driven live on the ETK 800.
 
 ### Mud, dirt and snow build up as you drive
 
@@ -192,11 +223,11 @@ bakes, backlog, composites) and sliders for every threshold and limit. See
 
 | Setup | Result |
 | --- | --- |
-| ETK 800, empty Paint Design | Full feature set (scratches, soil, washing, wet gloss) |
-| ETK 800, stock Police livery | Full feature set, livery preserved |
-| Other ETK liveries (Polizei, Heritage), custom body overrides | Detected and skipped; paint untouched |
-| Other vehicles with a `_skin_dynamicTextures` part | Older legacy path: scratches with lower material fidelity; soil/washing not verified |
-| Vehicles without Dynamic Decals support | Mod stays idle (`NOT READY`) |
+| 38 stock cars, trucks and buses with Dynamic Textures, any paint colour | Material-preserving adapter: scratches over the real paint ([survey](docs/evidence/adapter-survey/survey.json)) |
+| The same vehicles with a factory livery | Livery cloned and preserved under the damage |
+| Mud, snow, washing, wet gloss | Same stages on every vehicle; driven live on the ETK 800 only so far |
+| Your own Dynamic Textures editor design, another mod's body override, non-PBR materials | Detected and skipped; paint untouched |
+| Percheron and vehicles without Dynamic Textures | Mod stays idle (`NOT READY`) |
 | Vulkan | **Recommended.** Meets the native-call and latency targets in measured runs |
 | D3D12 | Works; intermittent ~450 ms bake stalls remain (engine-side, [open](TODO.md#release-blockers)) |
 
@@ -217,7 +248,7 @@ Tested on BeamNG.drive 0.40.5.0 build 302427, Windows 11, RTX 3090 / Ryzen 9
 
 ## Installation
 
-The mod is two Lua extensions, three helper modules (ETK material adapter,
+The mod is two Lua extensions, three helper modules (body material adapter,
 terrain soil color, coverage accounting) and brush/soil art. It targets a
 recent version of BeamNG.drive that includes the **Dynamic Decals** system.
 Development began on 0.38; the current build is tested on 0.40.5.0 build 302427
@@ -337,12 +368,16 @@ call (`scratches_paint.ingest`), tagged with the vehicle id.
 
 ### 2. Painting — game-engine Lua (`scratches_paint.lua`)
 
-Owns a **Dynamic Decals** projection for the player vehicle. The ETK adapter
-copies the original two material stages into a per-vehicle clone and appends a
-damage stage. A construction-time flexbody material override selects the clone;
-the Paint Design slot stays intact. A private instance of the installed decal
-API keeps scratch clearing separate from editor artwork. Other supported plain
-vehicles use the older `dynamicTextures` skin and color-seed path.
+Owns a **Dynamic Decals** projection for the player vehicle. The body adapter
+(`bodyAdapter.lua`) copies each body material's original stages into a
+per-vehicle clone and appends damage and soil stages. Body materials are the
+mesh material keys with a `<key>.skin.dynamicTextures` variant in the vehicle's
+own folder; the source is resolved by `mapTo` exactly like the renderer
+(`<key>.skin.<skinName>`, else `<key>`). A construction-time flexbody material
+override selects the clones; the Paint Design slot stays intact. A private
+instance of the installed decal API keeps scratch clearing separate from editor
+artwork. Vehicles the adapter rejects fall back to the older `dynamicTextures`
+skin and colour-seed path when their paint slot is empty.
 
 Incoming batches become **capture jobs**: the decal layers for one cluster of
 impacts or one slide stream, captured under a synthetic camera aimed at the
@@ -409,12 +444,11 @@ For the full design history, see `docs/plans/` and `investigations/`.
 - **Requires the Dynamic Decals system** and a vehicle that ships a
   `<jbeam>_skin_dynamicTextures` part. Vehicles without it are unsupported and
   the mod cleanly does nothing (the debug panel reports `NOT READY`).
-- **Narrow ETK 800 support:** empty Paint Design and stock Police preserve the
-  original `etk800_main` and `etk800_extra` materials beneath damage and soil.
-  Tested with the Rennspecht 8R config plus stock 844 plain/Police. Custom
-  body overrides are skipped. Other liveries and unowned Dynamic Textures
-  designs remain skipped. See the [compatibility matrix](docs/examples.md#compatibility-evidence).
-- **Editor ownership:** the ETK adapter pauses and clears cosmetic marks during
+- **Material-preserving adapter on every supported vehicle:** any paint colour
+  or factory livery keeps its original materials beneath damage and soil. Your
+  own Dynamic Textures design and other mods' body overrides are skipped. See
+  the [adapter survey](docs/evidence/adapter-survey/survey.json).
+- **Editor ownership:** the adapter pauses and clears cosmetic marks during
   editor use, then resumes. Concurrent editor use on the legacy non-ETK path
   remains unsupported; unload the painter before editing there.
 - **Cosmetic only.** The mod paints texture damage from contact events; it does
@@ -429,7 +463,7 @@ For the full design history, see `docs/plans/` and `investigations/`.
 ```text
 lua/vehicle/extensions/auto/scratches_detect.lua    # VLUA contact detection (impacts, slides, wheel soil, water)
 lua/ge/extensions/scratches/paint.lua               # GELUA dynamic-decal painter + scheduler + debug panel
-lua/ge/extensions/scratches/etkAdapter.lua          # ETK material-preserving adapter (main + extra)
+lua/ge/extensions/scratches/bodyAdapter.lua         # generic material-preserving body adapter
 lua/ge/extensions/scratches/soilColor.lua           # terrain-sampled soil tint with bounded caching
 lua/ge/extensions/scratches/coverage.lua            # request/layer coverage accounting
 lua/ge/extensions/core/input/actions/scratches.json # bindable panel hotkey
@@ -615,9 +649,9 @@ affect you:
   game's own dynamic-decal shader failed to compile under D3D12 and every decal
   draw was dropped (`draw skipped (pipelineBindFailed=1 ... dynamicDecals/decal...)`
   in `beamng.log`). Recorded for that install, not observed on 0.40.5.0.
-- **ETK-only livery preservation.** Other liveries are skipped, never
-  overwritten. Non-ETK vehicles use the older Dynamic Textures path with lower
-  material fidelity.
+- **Slightly slower spawns.** Each supported vehicle gets private materials, so
+  the mod clears the JBeam cache before it spawns: about +180 ms per spawn,
+  traffic included.
 - **Scratches have no metal glint.** Damage reads as colour; the damage stage
   uses fixed roughness and no metallic response, and its opacity follows the red
   channel so very dark marks can look weak.

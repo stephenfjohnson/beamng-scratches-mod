@@ -1,0 +1,24 @@
+{
+  "model": "citybus",
+  "paint": null,
+  "part": "citybus_skin_transit",
+  "source": "citybus.skin.transit",
+  "keys": [
+    "citybus"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261115-102857_sideslide_fleet-citybus-livery/report.md",
+    "contacts": "10706",
+    "passed": "4350",
+    "impacts": "34",
+    "streams": "343",
+    "stamps": "74",
+    "projections": "141",
+    "bakes": "102",
+    "missed": "0.0%",
+    "dropped": "66",
+    "deferred": "27"
+  }
+}

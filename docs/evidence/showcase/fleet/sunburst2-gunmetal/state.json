@@ -1,0 +1,24 @@
+{
+  "model": "sunburst2",
+  "paint": "gunmetal",
+  "part": "",
+  "source": "sunburst2_main",
+  "keys": [
+    "sunburst2_main"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261115-103043_sideslide_fleet-sunburst2-gunmetal/report.md",
+    "contacts": "1952",
+    "passed": "840",
+    "impacts": "78",
+    "streams": "130",
+    "stamps": "110",
+    "projections": "86",
+    "bakes": "65",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "15"
+  }
+}

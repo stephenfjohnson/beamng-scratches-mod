@@ -47,9 +47,9 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 - [ ] Re-shoot the older showcase images HUD-free with `showcase_capture.py`
   (they are still crops that work around the game HUD).
 - [ ] Listing text and screenshots for the BeamNG mod repository.
-- [ ] The default ETK config wears the Rennspecht livery, which the adapter
-  skips, so a fresh install shows no scratches until the player picks plain
-  paint or the Police skin. Say so on the listing, or support that livery.
+- [x] The default ETK Rennspecht livery (and every other factory livery) is now
+  supported, so a fresh install shows scratches immediately.
+- [ ] Cut a v0.2.0-preview release with the generic adapter (v0.1.0 is ETK-only).
 
 ## Visual quality
 
@@ -81,10 +81,20 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 
 ## Compatibility
 
-- [ ] Livery support beyond the ETK 800 (empty Paint Design / stock Police).
-  Other designs are detected and skipped, never overwritten.
-- [ ] Put more vehicles on the material-preserving adapter. Each one needs its
-  material layout and indices verified, as the ETK `etk800_extra` fix showed.
+- [x] Livery support beyond the ETK 800 and Police, and every stock vehicle on
+  the material-preserving adapter: generic `bodyAdapter.lua`, 38/38 stock
+  Dynamic Textures vehicles attach ([survey](docs/evidence/adapter-survey/survey.json)),
+  ten crash-tested with exact original-stage preservation
+  ([fleet](docs/evidence/showcase/fleet/README.md)).
+- [ ] Drive mud, snow and water washing live on non-ETK vehicles (same stages,
+  not yet exercised).
+- [ ] Spawn cost: clearing the JBeam cache before every supported spawn adds
+  ~180 ms (covet: ~850 vs ~710 ms), traffic included. Invalidate only when the
+  same config is already cached with another vehicle's clones.
+- [ ] Clones are made for every supported vehicle, including AI traffic that
+  never gets painted. Measure material memory with heavy traffic.
+- [ ] Mod vehicles: anything shipping `dynamicDecals/` materials should work,
+  but none has been tested.
 - [ ] Concurrent editor use on the legacy non-ETK path is unsupported.
 - [ ] To keep private clones per vehicle, ETK construction invalidates the
   engine's JBeam bundle cache, which can slow spawns and reloads.

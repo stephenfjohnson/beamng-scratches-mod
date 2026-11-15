@@ -158,6 +158,30 @@ def main() -> None:
 
     save(fit(Image.open(EV / "showcase/debug-panel/panel.jpg").convert("RGB"), 1400), "debug-panel.jpg")
 
+    # Fleet: tools/showcase_fleet.py, one bench sideslide each, left flank, 2560x1440.
+    band = (253, 413, 2307, 1187)
+
+    def fleet(name: str, label: str, size: tuple[int, int] = (780, 294)) -> Image.Image:
+        return chip(load(f"showcase/fleet/{name}/left/damaged.jpg", band).resize(size, Image.LANCZOS), label, 20)
+
+    save(grid([
+        fleet("pickup-red", "Pickup · red"), fleet("vivace-blue", "Vivace · blue"),
+        fleet("etki-white", "ETK I · white"), fleet("covet-yellow", "Covet · yellow"),
+        fleet("sunburst2-gunmetal", "Sunburst · gunmetal"), fleet("moonhawk-green", "Moonhawk · green"),
+    ], cols=2, cell_w=780, cell_h=294), "fleet-paints.jpg")
+
+    save(grid([
+        fleet("bluebuck-livery", "Bluebuck · two-tone livery"),
+        fleet("scintilla-livery", "Scintilla · black-roof livery"),
+        fleet("citybus-livery", "City bus · Transit livery"),
+        fleet("etk800-livery", "ETK 800 · brushed-trim livery"),
+    ], cols=2, cell_w=780, cell_h=294), "fleet-liveries.jpg")
+
+    save(stack([
+        chip(load("showcase/fleet/sunburst2-gunmetal/left/original-stages.jpg", band), "Before", 50),
+        chip(load("showcase/fleet/sunburst2-gunmetal/left/damaged.jpg", band), "After one sideslide", 50),
+    ], 1200), "fleet-before-after.jpg")
+
     wash_gif()
 
 

@@ -1,0 +1,475 @@
+[
+  {
+    "model": "atv",
+    "path": "body adapter",
+    "part": "",
+    "source": "atv_body",
+    "keys": [
+      "atv_body"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "autobello",
+    "path": "body adapter",
+    "part": "",
+    "source": "autobello_main",
+    "keys": [
+      "autobello",
+      "autobuggy_main"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "barstow",
+    "path": "body adapter",
+    "part": "",
+    "source": "barstow_main",
+    "keys": [
+      "barstow"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "bastion",
+    "path": "body adapter",
+    "part": "",
+    "source": "bastion_main",
+    "keys": [
+      "bastion"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "bluebuck",
+    "path": "body adapter",
+    "part": "bluebuck_skin_twotone",
+    "source": "bluebuck.skin.twotone",
+    "keys": [
+      "bluebuck"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "bolide",
+    "path": "body adapter",
+    "part": "",
+    "source": "bolide_main",
+    "keys": [
+      "bolide_main"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "burnside",
+    "path": "body adapter",
+    "part": "burnside_skin_twotone",
+    "source": "burnside.skin.twotone",
+    "keys": [
+      "burnside"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "bx",
+    "path": "body adapter",
+    "part": "",
+    "source": "bx_aftermarket",
+    "keys": [
+      "bx_aftermarket",
+      "bx_main"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "citybus",
+    "path": "body adapter",
+    "part": "citybus_skin_transit",
+    "source": "citybus.skin.transit",
+    "keys": [
+      "citybus"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "covet",
+    "path": "body adapter",
+    "part": "",
+    "source": "covet_main",
+    "keys": [
+      "covet"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "etk800",
+    "path": "body adapter",
+    "part": "etk800_skin_brushedtrim",
+    "source": "etk800.skin.brushedtrim",
+    "keys": [
+      "etk800",
+      "etk800_extra"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "etkc",
+    "path": "body adapter",
+    "part": "",
+    "source": "etkc_main",
+    "keys": [
+      "etkc",
+      "etkc_extra"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "etki",
+    "path": "body adapter",
+    "part": "",
+    "source": "etki_main",
+    "keys": [
+      "etki",
+      "etki_modparts"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "fullsize",
+    "path": "body adapter",
+    "part": "",
+    "source": "fullsize_main",
+    "keys": [
+      "fullsize",
+      "fullsize_aftermarket",
+      "fullsize_limo"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "hopper",
+    "path": "body adapter",
+    "part": "",
+    "source": "hopper_main",
+    "keys": [
+      "hopper"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "lansdale",
+    "path": "body adapter",
+    "part": "",
+    "source": "lansdale_main",
+    "keys": [
+      "lansdale_main"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "legran",
+    "path": "body adapter",
+    "part": "",
+    "source": "legran_main",
+    "keys": [
+      "legran"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "md_series",
+    "path": "body adapter",
+    "part": "",
+    "source": "md_series_main",
+    "keys": [
+      "md_series_main",
+      "md_series_main_alt",
+      "md_series_schoolbus_main"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "midsize",
+    "path": "body adapter",
+    "part": "",
+    "source": "midsize_body",
+    "keys": [
+      "midsize_body"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "midtruck",
+    "path": "body adapter",
+    "part": "",
+    "source": "midtruck_main",
+    "keys": [
+      "midtruck_main"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "miramar",
+    "path": "body adapter",
+    "part": "",
+    "source": "miramar_main",
+    "keys": [
+      "miramar",
+      "miramar_raceparts"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "moonhawk",
+    "path": "body adapter",
+    "part": "",
+    "source": "moonhawk_main",
+    "keys": [
+      "moonhawk",
+      "moonhawk_nosecone_alt"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "nine",
+    "path": "body adapter",
+    "part": "nine_skin_twotone",
+    "source": "nine_main",
+    "keys": [
+      "nine_main"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "pessima",
+    "path": "body adapter",
+    "part": "",
+    "source": "pessima_main",
+    "keys": [
+      "pessima",
+      "pessima_aftermarket"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "pickup",
+    "path": "body adapter",
+    "part": "",
+    "source": "pickup_main",
+    "keys": [
+      "pickup"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "pigeon",
+    "path": "body adapter",
+    "part": "",
+    "source": "pigeon_main",
+    "keys": [
+      "pigeon"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "racetruck",
+    "path": "body adapter",
+    "part": "racetruck_skin_dreid",
+    "source": "tt_body.skin.dreid",
+    "keys": [
+      "tt_body"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "roamer",
+    "path": "body adapter",
+    "part": "",
+    "source": "roamer_main",
+    "keys": [
+      "roamer"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "rockbouncer",
+    "path": "body adapter",
+    "part": "rockbouncer_main_skin_team",
+    "source": "rockbouncer_main.skin.team",
+    "keys": [
+      "rockbouncer_main"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "sbr",
+    "path": "body adapter",
+    "part": "",
+    "source": "sbr_main",
+    "keys": [
+      "sbr",
+      "sbr_aftermarket",
+      "sbr_efacelift",
+      "sbr_widebody"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "scintilla",
+    "path": "body adapter",
+    "part": "scintilla_skin_blackroof",
+    "source": "scintilla_main.skin.blackroof",
+    "keys": [
+      "scintilla_main"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "sunburst2",
+    "path": "body adapter",
+    "part": "",
+    "source": "sunburst2_main",
+    "keys": [
+      "sunburst2_main"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "us_semi",
+    "path": "body adapter",
+    "part": "us_semi_skin_breaker",
+    "source": "cabover_main.skin.breaker",
+    "keys": [
+      "cabover_main",
+      "longnose_main"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "utv",
+    "path": "body adapter",
+    "part": "utv_main_skin_factory",
+    "source": "utv_main",
+    "keys": [
+      "utv_main"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true,
+    "note": "first sweep rejected it (design part without skinName); fixed to follow the engine rule and re-surveyed"
+  },
+  {
+    "model": "van",
+    "path": "body adapter",
+    "part": "",
+    "source": "van_main",
+    "keys": [
+      "van"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "vivace",
+    "path": "body adapter",
+    "part": "",
+    "source": "vivace_main",
+    "keys": [
+      "vivace"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "wendover",
+    "path": "body adapter",
+    "part": "",
+    "source": "wendover_main",
+    "keys": [
+      "wendover"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  },
+  {
+    "model": "wigeon",
+    "path": "body adapter",
+    "part": "wigeon_skin_factory2",
+    "source": "wigeon.skin.factory2",
+    "keys": [
+      "wigeon"
+    ],
+    "stage": 2,
+    "rejected": null,
+    "ready": true
+  }
+]

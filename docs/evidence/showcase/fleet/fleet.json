@@ -1,0 +1,249 @@
+[
+  {
+    "entry": "pickup:red",
+    "error": "GE Lua failed: compile error: mcp_run_lua:7: function arguments expected near 'and'"
+  },
+  {
+    "model": "pickup",
+    "paint": "red",
+    "part": "",
+    "source": "pickup_main",
+    "keys": [
+      "pickup"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261115-102521_sideslide_fleet-pickup-red/report.md",
+      "contacts": "9643",
+      "passed": "1259",
+      "impacts": "14",
+      "streams": "84",
+      "stamps": "33",
+      "projections": "63",
+      "bakes": "35",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "7"
+    }
+  },
+  {
+    "model": "vivace",
+    "paint": "blue",
+    "part": "",
+    "source": "vivace_main",
+    "keys": [
+      "vivace"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261115-103111_sideslide_fleet-vivace-blue/report.md",
+      "contacts": "1853",
+      "passed": "577",
+      "impacts": "75",
+      "streams": "94",
+      "stamps": "118",
+      "projections": "82",
+      "bakes": "58",
+      "missed": "0.8%",
+      "dropped": "0",
+      "deferred": "13"
+    }
+  },
+  {
+    "model": "etki",
+    "paint": "white",
+    "part": "",
+    "source": "etki_main",
+    "keys": [
+      "etki",
+      "etki_modparts"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261115-102616_sideslide_fleet-etki-white/report.md",
+      "contacts": "2914",
+      "passed": "887",
+      "impacts": "49",
+      "streams": "121",
+      "stamps": "70",
+      "projections": "72",
+      "bakes": "51",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "11"
+    }
+  },
+  {
+    "model": "covet",
+    "paint": "yellow",
+    "part": "",
+    "source": "covet_main",
+    "keys": [
+      "covet"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261115-102644_sideslide_fleet-covet-yellow/report.md",
+      "contacts": "3107",
+      "passed": "1015",
+      "impacts": "24",
+      "streams": "93",
+      "stamps": "31",
+      "projections": "71",
+      "bakes": "42",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "6"
+    }
+  },
+  {
+    "model": "sunburst2",
+    "paint": "gunmetal",
+    "part": "",
+    "source": "sunburst2_main",
+    "keys": [
+      "sunburst2_main"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261115-103043_sideslide_fleet-sunburst2-gunmetal/report.md",
+      "contacts": "1952",
+      "passed": "840",
+      "impacts": "78",
+      "streams": "130",
+      "stamps": "110",
+      "projections": "86",
+      "bakes": "65",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "15"
+    }
+  },
+  {
+    "model": "moonhawk",
+    "paint": "green",
+    "part": "",
+    "source": "moonhawk_main",
+    "keys": [
+      "moonhawk",
+      "moonhawk_nosecone_alt"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261115-102738_sideslide_fleet-moonhawk-green/report.md",
+      "contacts": "10166",
+      "passed": "2009",
+      "impacts": "15",
+      "streams": "149",
+      "stamps": "41",
+      "projections": "72",
+      "bakes": "57",
+      "missed": "2.4%",
+      "dropped": "0",
+      "deferred": "14"
+    }
+  },
+  {
+    "model": "bluebuck",
+    "paint": null,
+    "part": "bluebuck_skin_twotone",
+    "source": "bluebuck.skin.twotone",
+    "keys": [
+      "bluebuck"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261115-102802_sideslide_fleet-bluebuck-livery/report.md",
+      "contacts": "3170",
+      "passed": "94",
+      "impacts": "18",
+      "streams": "17",
+      "stamps": "27",
+      "projections": "22",
+      "bakes": "14",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "2"
+    }
+  },
+  {
+    "model": "scintilla",
+    "paint": null,
+    "part": "scintilla_skin_blackroof",
+    "source": "scintilla_main.skin.blackroof",
+    "keys": [
+      "scintilla_main"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261115-102826_sideslide_fleet-scintilla-livery/report.md",
+      "contacts": "3255",
+      "passed": "404",
+      "impacts": "80",
+      "streams": "59",
+      "stamps": "95",
+      "projections": "76",
+      "bakes": "46",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "5"
+    }
+  },
+  {
+    "model": "citybus",
+    "paint": null,
+    "part": "citybus_skin_transit",
+    "source": "citybus.skin.transit",
+    "keys": [
+      "citybus"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261115-102857_sideslide_fleet-citybus-livery/report.md",
+      "contacts": "10706",
+      "passed": "4350",
+      "impacts": "34",
+      "streams": "343",
+      "stamps": "74",
+      "projections": "141",
+      "bakes": "102",
+      "missed": "0.0%",
+      "dropped": "66",
+      "deferred": "27"
+    }
+  },
+  {
+    "model": "etk800",
+    "paint": null,
+    "part": "etk800_skin_brushedtrim",
+    "source": "etk800.skin.brushedtrim",
+    "keys": [
+      "etk800",
+      "etk800_extra"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261115-102923_sideslide_fleet-etk800-livery/report.md",
+      "contacts": "2121",
+      "passed": "716",
+      "impacts": "41",
+      "streams": "90",
+      "stamps": "61",
+      "projections": "73",
+      "bakes": "44",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "6"
+    }
+  }
+]
