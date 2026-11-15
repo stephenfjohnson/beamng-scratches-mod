@@ -13,8 +13,7 @@ def environment(path):
  assert meta['compatibility']['ready'] and not meta['comparison']['differences'], 'adapter/material regression; evidence retained'
 if not a.restart:prepare()
 tuning=bench.parse_tuning(['detect.setPaintEnabled='+str(not a.disabled).lower(),'paint.setDamageResolution='+str(a.width),'paint.setBakeBudget='+str(a.bake),'paint.setFlushInterval='+str(a.flush),'paint.setProjectionBudget='+str(a.projects),'paint.setLayerBudget='+str(a.layers)])
-if a.coalesce:tuning+=bench.parse_tuning(['paint.setCoverageCoalescing=true'])
-if a.group:tuning+=bench.parse_tuning(['paint.setPanelGrouping=true'])
+tuning+=bench.parse_tuning(['paint.setCoverageCoalescing='+str(a.coalesce).lower(),'paint.setPanelGrouping='+str(a.group).lower()])
 (out/'source-sha256.json').write_text(json.dumps({str(f):hashlib.sha256((Path(dev.mount_dir())/f).read_bytes()).hexdigest() for f in (x.relative_to(Path(dev.mount_dir())) for x in (Path(dev.mount_dir())/'lua').rglob('*.lua'))},indent=2))
 if not a.restart:environment(out/'environment.json')
 (out/'settings.json').write_text(json.dumps(vars(a),indent=2))
@@ -31,7 +30,10 @@ try:
    args=SimpleNamespace(tag=a.label,repeat=a.repeat,no_shots=not(a.capture and rep==1),shot_scale=.5,optick=False,drain_timeout=15)
    row=bench.run_one(name,args,tuning,bench.homes()['gridmap_v2'],rep)
    shutil.copytree(Path(bench.RUNS_DIR)/row['run'],out/row['run'])
-   r=json.loads((out/row['run']/'result.json').read_text());print('CANDIDATE',json.dumps({'run':row['run'],'config':r['painter']['config'],'latency':r['painter'].get('latency'),'perf':r['painter']['perf'],'drops':r['painter']['stamp']}),flush=True)
+   r=json.loads((out/row['run']/'result.json').read_text())
+   if not a.disabled and name!='baseline':
+    assert r['painter']['perf']['projectCalls']>0 and r['detect']['totalCalls']>0, 'enabled damage fixture produced no contact/projection work; not acceptance evidence'
+   print('CANDIDATE',json.dumps({'run':row['run'],'config':r['painter']['config'],'latency':r['painter'].get('latency'),'perf':r['painter']['perf'],'drops':r['painter']['stamp']}),flush=True)
    if a.capture and rep==1:
     damage_probe.OUT=out;damage_probe.matched(name)
 except Exception as e:

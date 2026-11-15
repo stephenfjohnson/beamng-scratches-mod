@@ -169,7 +169,7 @@ and counts the failed batch/layers, marks requests lost and permits later work.
 It does not retry a potentially partially composited batch. A mock native exception
 verifies failure accounting and subsequent recovery. Explicit custom color/alpha/
 rotation/material overrides no longer share a procedural representative. Bounded
-history/coverage overflow tests exercise 8200 representatives. **254 mock checks**
+history/coverage overflow tests exercise 8200 representatives. **256 mock checks**
 pass; these checks do not waive native/visual acceptance.
 
 Native-call histograms added for the subsequent selected/control cohorts report
@@ -187,3 +187,85 @@ whole-process samples, not a proof of native/GPU allocation bounds. This cohort
 predates the later custom-style/native-failure accounting hardening and call
 histograms; its mounted runtime hashes are retained. Subsequent cold/renderer
 cohorts exercise the hardened implementation.
+
+The old quarter-b1 sideslide had zero detector contacts and zero projections. It
+is not a performance/quality pass; the resumed runner now rejects an enabled
+damage fixture that produces no contact/projection work. New quarter-resolution
+repeats explicitly re-enable paint submission and retain genuine captures.
+
+The first one-variable side-slide ablations (unchanged side-slide fixture) measured:
+full4096/bake6 mean batch 31.93 ms, peak47.34 ms, age826 ms; half2048/bake6 mean10.73 ms,
+peak23.83 ms, age872 ms; half2048/bake1 mean1.00 ms, peak5.34 ms, age3123 ms.
+These are single early exploratory runs with different actual contact counts
+(309/385/467 layers), not repeat-confirmed equal-load comparisons. They explain
+why a one-layer budget was rejected despite lower call cost. The selected bundle
+combines half resolution, three layers, faster flushing and grouping; its gains
+cannot all be attributed to resolution alone. Full-resolution controls in the
+resumed cohort use the M5 resource/scheduler fixes, not the untouched M4 binary.
+
+The D3D12 half-resolution candidate completed three fresh-process sets (nine
+fixtures) without queue loss; their observed native maximum was 37.3 ms and
+completed-layer age maximum 271 ms. This favorable cold cohort does not supersede
+613 ms warm / 411 ms endurance stalls. Quarter-resolution grouped repeats still
+reproduced a **386 ms** native stall, with visibly softer small scuffs. The matched
+original-stage/reset pair retains the source body and Police artwork. Across runs,
+physics contacts, brush variants and cloud reflections vary; images are matched
+within each damaged/original/reset set, not pixel-identical across resolutions.
+
+D3D12 painting-disabled controls: three warm sets and three fresh-process sets,
+sustained plus coasting baseline, six fixtures each. Observed worst frames were
+21.1 ms warm and 20.0 ms cold. They keep the detector/adapter loaded and the full
+resolution target, disabling paint submission; this is not a clean-uninstall
+comparison or proof that the whole engine never stalls.
+
+All stage timings are main-thread elapsed intervals. In particular, short Vulkan
+bake calls can defer work to later synchronization and do not establish lower
+GPU execution cost. Whole-frame tails accompany the call histograms. The retained
+ETW evidence is a D3D12 paging correlation, not Vulkan or shader root-cause proof.
+
+## Full-resolution candidate criteria before its new trials
+
+The corrected Vulkan full-resolution control still reached 1106 ms completed-layer
+age in one side slide. A new full-resolution candidate therefore uses bake3,
+flush0.05 and panel grouping, **without representative coalescing**. The test asks
+whether scheduling/grouping can preserve every accepted brush layer and full detail
+while meeting the same 100 ms native / 1000 ms completed-layer age gates.
+
+For this no-coalescing candidate, request conservation replaces the representative
+proxy ledger: in dry collision fixtures, require `stampsAttempted == stampsEnqueued
+== bakeLayersTotal - streamSubstrokesTotal`, empty queues, and zero aggregate/job
+drops, job/bake failures, lost layers or missed stamps. All accepted discrete and
+stream layers must reach successful native batches. No represented requests are
+substituted or silently counted as retained. Existing detector and spot saturation
+still apply upstream and remain disclosed. Genuine captures are required because
+layer submission alone does not prove visible geometry/pixel coverage. This is a
+stricter retention alternative, not a relaxed native/latency gate.
+
+Before the full-resolution/no-coalescing trials, stream capture accounting was
+strengthened: expected layers (one underlay per accepted band plus each shaped
+segment) and missed layers are now counted even if only part of a stream fails.
+A simulated nil native layer verifies that partial loss is reported while the
+valid remainder bakes. Full retention additionally requires expected stream layers
+to equal captured stream layers. Earlier half-resolution runs lack this new
+partial-stream diagnostic; their zero discrete proxy loss must not be presented
+as proof of every stream layer. This revision adds counters, not a rendering or
+scheduler behavior change. Current preflight: **256 mock checks**.
+
+## Further retention and lifecycle findings
+
+The first full4096/bake3/grouped/no-coalescing warm cohort exposed an existing
+stream table alias: the first band and the aggregate budget list shared the same
+segments array. Merging another band appended its segments to both, duplicating
+those layers and stretching the first haze. Expected-versus-captured counters
+exposed this (222 expected versus 237 captured in one sustained run). This is
+extra, incorrectly styled coverage, not missing work. Separate segment arrays
+now preserve each band exactly; a two-band regression requires exactly four
+layers (two hazes and two segments). That first cohort is diagnostic for retention;
+new fixed cohorts are required. The code preflight now passes 258 mock checks.
+
+A three-cycle material spawn/delete probe stayed at two live private materials,
+but later new vehicle IDs referenced the earlier fixture's clone. Installed
+loader.lua caches the Phase2-mutated bundle by configuration and skips Phase2 on
+a cache hit. A readiness/isolation probe follows; bounded material counts alone
+do not establish correct lifecycle behavior. No speculative deletion of a
+material still referenced by a cached/live mesh is appropriate.

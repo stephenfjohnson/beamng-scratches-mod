@@ -706,6 +706,28 @@ check(paint.getStats().stamp.projectsIssued==2,"opposing normals never share the
 paint.setPanelGrouping(false);paint.setBakeBudget(6)
 local profile=paint.getNativeTimingProfile()
 check(profile.project.calls==paint.getStats().perf.projectCalls and profile.bakeBatch.calls==paint.getStats().perf.bakeCalls,"bounded native histogram accounts every timed call/batch")
+paint.clearStamps();paint.resetPaintStats()
+local captureBeforeFailure=decalProjection.getDecalData
+local captureCalls=0
+decalProjection.getDecalData=function(self,...)
+  captureCalls=captureCalls+1
+  if captureCalls==2 then return nil end
+  return captureBeforeFailure(self,...)
+end
+paint.ingest(playerVid,nil,{{{100,0,.6,0,0,1},{100.4,0,.6,0,0,1}}})
+for _=1,40 do frame(.02) end
+check(paint.getStats().stamp.streamLayersExpected==2 and paint.getStats().stamp.streamLayersMissed==1,"partial stream capture loss is explicit, even when the other layer succeeds")
+check(paint.getStats().perf.bakeLayersTotal==1,"valid remainder of a partially missed stream still bakes")
+decalProjection.getDecalData=captureBeforeFailure
+paint.clearStamps();paint.resetPaintStats();paint.setPanelGrouping(true)
+paint.ingest(playerVid,nil,{
+  {{100,0,.6,0,0,1},{100.4,0,.6,0,0,1}},
+  {{100,.1,.6,0,0,1},{100.4,.1,.6,0,0,1}}})
+for _=1,40 do frame(.02) end
+local streamStats=paint.getStats()
+check(streamStats.stamp.streamsMerged==1,"adjacent stream bands share a projection")
+check(streamStats.stamp.streamLayersExpected==4 and streamStats.stamp.streamSubstrokesTotal==4 and streamStats.perf.bakeLayersTotal==4,"merged bands retain exactly one haze and one segment each without alias duplication")
+paint.setPanelGrouping(false)
 passes = passes + dofile("tools/sim/adapter_harness.lua")
 
 print(string.format("%d passed, %d failed  (projects=%d bakes=%d layers=%d composites=%d)",

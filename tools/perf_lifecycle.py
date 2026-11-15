@@ -17,7 +17,7 @@ def main():
  try:
   snap('start')
   dev.lua('local v=getPlayerVehicle(0);core_vehicles.spawnNewVehicle("etk800",{config=core_vehicle_partmgmt.getConfig(),pos=v:getPosition()+vec3(5,0,0)});return true');time.sleep(4)
-  second=int(dev.lua('return getPlayerVehicle(0):getId()'))
+  second=int(dev.lua('return getPlayerVehicle(0):getId()'));assert second!=original,'spawn did not select its new fixture'
   for i in range(a.cycles):
    for vid in [original,second]:
     dev.lua(f'be:enterVehicle(0,scenetree.findObjectById({vid}));return true');time.sleep(1);snap(f'switch-{i}-{vid}')
@@ -25,5 +25,5 @@ def main():
   dev.lua('collectgarbage("collect");return true');time.sleep(3);snap('after-gc')
  finally:
   dev.lua(f'be:enterVehicle(0,scenetree.findObjectById({original}));return true')
-  if second:dev.lua(f'local v=scenetree.findObjectById({second});if v then v:delete() end;return true')
+  if second and second!=original:dev.lua(f'local v=scenetree.findObjectById({second});if v then v:delete() end;return true')
 if __name__=='__main__':main()

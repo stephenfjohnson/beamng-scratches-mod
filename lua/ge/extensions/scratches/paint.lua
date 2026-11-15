@@ -127,6 +127,8 @@ local stampStats = {
   clusterJobsMerged   = 0,  -- (F) total clusters across flushed frames
   streamsBaked        = 0,
   streamSubstrokesTotal = 0,
+  streamLayersExpected = 0,
+  streamLayersMissed = 0,
   jobsDropped         = 0,  -- projection jobs refused because the backlog was full
   jobsFailed          = 0,  -- projection jobs that threw (logged, then skipped)
   framesDeferred      = 0,  -- frames that hit the projection budget with work left over
@@ -1706,10 +1708,15 @@ local function enqueueStreamLocal(localPos, localNormals, vid, severity)
       end
     end
   end
+  -- Keep the first band's path separate from the aggregate budget list.
+  -- Appending later bands to an aliased table repeated their segments in band 1
+  -- and stretched its haze over unrelated paths.
+  local allSegments = {}
+  for i, sg in ipairs(segments) do allSegments[i] = sg end
   enqueueJob({
     stream   = true,
     bands    = { band },
-    segments = segments,     -- all bands' segments, for layer budgeting
+    segments = allSegments,  -- all bands' segments, for layer budgeting
     centroid = centroid,
     normal   = normal,
   }, vid)
@@ -1978,6 +1985,8 @@ local function flushPendingStamps()
   for i = 1, run do
     local job = batch[i]
     local before = #bakeList
+    local expectedStreamLayers=job.stream and (#job.segments+#job.bands) or 0
+    stampStats.streamLayersExpected=stampStats.streamLayersExpected+expectedStreamLayers
     perfStats.inputToProjectMaxMs = math.max(perfStats.inputToProjectMaxMs,(clockhp()-(job.queuedAt or clockhp()))*1000)
     local ok, err = pcall(job.stream and runStreamJob or runClusterJob, job, projM, bakeList)
     if not ok then
@@ -1990,6 +1999,7 @@ local function flushPendingStamps()
     elseif not job.stream then
       clusters = clusters + 1
     end
+    if job.stream then stampStats.streamLayersMissed=stampStats.streamLayersMissed+math.max(0,expectedStreamLayers-(#bakeList-before)) end
     for k=before+1,#bakeList do bakeList[k]._scratchesQueuedAt=job.queuedAt end
   end
 
@@ -2545,6 +2555,8 @@ M.resetPaintStats = function()
   stampStats.clusterJobsMerged = 0
   stampStats.streamsBaked = 0
   stampStats.streamSubstrokesTotal = 0
+  stampStats.streamLayersExpected = 0
+  stampStats.streamLayersMissed = 0
   stampStats.jobsDropped = 0
   stampStats.jobsFailed = 0
   stampStats.framesDeferred = 0
