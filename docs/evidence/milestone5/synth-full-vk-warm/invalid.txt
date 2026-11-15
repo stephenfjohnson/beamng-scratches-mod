@@ -1,0 +1,6 @@
+Invalid cohort (operator error). tools/ingame/scratches_bench.lua was edited while this
+cohort ran (frame-pause status fields for the ETW tool, 22:13:19); the capture step
+redeployed the mount mid-cohort (bench.lua sha256 6bc09dfa... at start, cb3b17b8... after).
+The sixth fixture (sustained r2) then returned an empty result (status idle, 0 frames).
+The five completed fixtures are retained but the cohort is not acceptance evidence.
+Repeated cleanly as synth-full-vk-warm2. Painter source (paint.lua) was unchanged.

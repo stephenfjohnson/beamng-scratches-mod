@@ -6,10 +6,14 @@ Get-WinEvent -Path bench/resumed-native-ring.etl -Oldest -FilterXPath $q |
 """
 import argparse,json,datetime,xml.etree.ElementTree as ET
 from pathlib import Path
-p=argparse.ArgumentParser(description=__doc__);p.add_argument('--xml',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--run',type=Path,required=True);p.add_argument('--pid',type=int,required=True);a=p.parse_args()
+p=argparse.ArgumentParser(description=__doc__);p.add_argument('--xml',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--run',type=Path,required=True);p.add_argument('--pid',type=int,required=True)
+p.add_argument('--anchor-engine-clock',type=float,help='engine os.clockhp() seconds to use as offset zero (e.g. start of a long frame) instead of the longest native call');a=p.parse_args()
 meta=json.loads((a.out/'trace.json').read_text());sync=next(e for e in meta['events'] if e['phase']=='started')
 offset=(sync['hostBeforeUTCSeconds']+sync['hostAfterUTCSeconds'])/2-sync['engineClockSeconds']
-r=json.loads(a.run.read_text());native=max(r['painter']['nativeEvents'],key=lambda e:e['ms']);start=native['started']+offset
+r=json.loads(a.run.read_text())
+if a.anchor_engine_clock is not None:native={'started':a.anchor_engine_clock,'ms':None,'anchor':'frame'}
+else:native=max(r['painter']['nativeEvents'],key=lambda e:e['ms'])
+start=native['started']+offset
 ns={'e':'http://schemas.microsoft.com/win/2004/08/events/event'};events=[]
 for node in ET.fromstring('<Events>'+a.xml.read_text(encoding='utf-8-sig')+'</Events>'):
  s=node.find('e:System',ns);ex=s.find('e:Execution',ns)
@@ -27,4 +31,4 @@ for e in events:
   q=packets[key(e)];delays.append({'sequence':q['data']['SequenceId'],'vidMmOpType':q['data']['VidMmOpType'],'queuedOffsetMs':ms(q),'completedOffsetMs':ms(e),'queueToCompleteMs':ms(e)-ms(q),'executionTime100ns':e['data'].get('ExecutionTime100ns')})
 (a.out/'stall-owned-events.json').write_text(json.dumps(owned,indent=2))
 (a.out/'paging-delays.json').write_text(json.dumps(sorted(delays,key=lambda e:e['queueToCompleteMs'],reverse=True),indent=2))
-print(json.dumps({'ownedOrCorrelatedEvents':len(owned),'nativeMs':native['ms'],'longestPagingPacket':max(delays,key=lambda e:e['queueToCompleteMs'])},indent=2))
+print(json.dumps({'ownedOrCorrelatedEvents':len(owned),'nativeMs':native['ms'],'anchor':native.get('anchor','native'),'longestPagingPacket':max(delays,key=lambda e:e['queueToCompleteMs'],default=None)},indent=2))

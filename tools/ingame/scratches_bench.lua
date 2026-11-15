@@ -148,6 +148,7 @@ local function sample(veh)
   f.clockSeconds[n]=now
   f.t[n] = run.t
   f.frameMs[n] = run.lastClock and (now - run.lastClock) * 1000 or 0
+  if f.frameMs[n] > (run.frameMaxMs or 0) then run.frameMaxMs = f.frameMs[n]; run.frameMaxClock = now end
   run.lastClock = now
   f.painterMs[n] = scratches_paint and scratches_paint.getLastFrameMs and scratches_paint.getLastFrameMs() or 0
   local cov=stats and stats.coverage or {}
@@ -384,6 +385,7 @@ M.status = function()
   if run then
     return jsonEncode({ phase = run.phase, t = run.t, frames = #run.frames.t,
                         nativeMaxMs=run.lastValidPainterStats and math.max(run.lastValidPainterStats.perf.projectMsMax,run.lastValidPainterStats.perf.bakeMsMax) or 0,
+                        frameMaxMs=run.frameMaxMs or 0, frameMaxClock=run.frameMaxClock or 0,
                         clockSeconds=clockhp(),shot = run.shotIdx, elapsed = clockhp() - run.startedAt })
   end
   return jsonEncode({ phase = result and 'done' or 'idle', error = result and result.error })

@@ -5,7 +5,9 @@ import argparse,json,time,subprocess,hashlib,shutil
 from pathlib import Path
 from types import SimpleNamespace
 import dev,bench,livery_probe
-p=argparse.ArgumentParser();p.add_argument('--label',required=True);p.add_argument('--runs',type=int,default=6);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--label',required=True);p.add_argument('--runs',type=int,default=6)
+p.add_argument('--frame-trigger',type=float,default=0,help='also stop the ring after a whole frame longer than this (ms); 0 disables')
+p.add_argument('--product',action='store_true',help='current product preset (4096, bake3, flush0.05, grouping, synthetic anchors) instead of the investigation-11 half/coalesced preset');a=p.parse_args()
 out=Path('docs/evidence/milestone5')/a.label;out.mkdir(parents=True,exist_ok=False)
 trace=Path('bench')/(a.label+'.etl');session='ScratchesM5Ring'+str(int(time.time()))
 bench.ensure_bench();(out/'environment.json').write_text(dev.lua(livery_probe.LUA))
@@ -26,6 +28,8 @@ def stop(reason):
 
 def poll(status):
  if status.get('nativeMaxMs',0)>100:stop('native-over-100ms')
+ elif a.frame_trigger and status.get('frameMaxMs',0)>a.frame_trigger:
+  metadata['triggerFrameMs']=status['frameMaxMs'];metadata['triggerFrameEngineClock']=status.get('frameMaxClock');stop('frame-over-'+str(a.frame_trigger)+'ms')
 
 try:
  subprocess.run(['logman','start',session,'-p','Microsoft-Windows-Direct3D12','0x484','5','-f','bincirc','-max','128','-bs','64','-nb','64','256','-ets','-o',str(trace)],check=True,capture_output=True)
@@ -33,13 +37,14 @@ try:
  for name,mask in [('Microsoft-Windows-DXGI','0x2'),('Microsoft-Windows-Direct3DShaderCache','0xf'),('Microsoft-Windows-DxgKrnl','0x80c1')]:
   subprocess.run(['logman','update','trace',session,'-p',name,mask,'5','-ets'],check=True,capture_output=True)
  sync('started')
- tuning=bench.parse_tuning(['paint.setDamageResolution=2048','paint.setBakeBudget=3','paint.setFlushInterval=0.05','paint.setCoverageCoalescing=true','paint.setPanelGrouping=true'])
+ tuning=bench.parse_tuning(['paint.setDamageResolution=4096','paint.setBakeBudget=3','paint.setFlushInterval=0.05','paint.setCoverageCoalescing=false','paint.setPanelGrouping=true','paint.setSyntheticAnchors=true'] if a.product else ['paint.setDamageResolution=2048','paint.setBakeBudget=3','paint.setFlushInterval=0.05','paint.setCoverageCoalescing=true','paint.setPanelGrouping=true'])
  for rep in range(1,a.runs+1):
   args=SimpleNamespace(tag=a.label,repeat=a.runs,no_shots=True,shot_scale=.5,optick=False,drain_timeout=15,on_poll=poll)
   row=bench.run_one('sustained',args,tuning,bench.homes()['gridmap_v2'],rep)
   shutil.copytree(Path(bench.RUNS_DIR)/row['run'],out/row['run'])
   data=json.loads((out/row['run']/'result.json').read_text())
   if max(data['painter']['perf'][k] for k in ['projectMsMax','bakeMsMax'])>100:stop('native-over-100ms-at-result')
+  if a.frame_trigger and max(data['frames']['frameMs'],default=0)>a.frame_trigger:stop('frame-over-trigger-at-result')
   if triggered:break
 finally:
  stop('limit')

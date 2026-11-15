@@ -14,11 +14,11 @@ corrected={'resumed-v2-full-control','resumed-v2-half-b3'}
 
 def distribution(xs):
  return {'p95':bench.pct(xs,95),'p99':bench.pct(xs,99),'worst':max(xs,default=0),'samples':len(xs)}
-for p in sorted(root.glob('resumed-*/*/result.json')):
+for p in sorted([*root.glob('resumed-*/*/result.json'),*root.glob('synth-*/*/result.json')]):
  r=json.loads(p.read_text());f=r.get('frames') or {};xs=f.get('frameMs',[])
  if not xs:continue
  group=p.parent.parent.name;painter=r.get('painter') or r.get('lastValidPainterStats') or {};perf=painter.get('perf',{});stamp=painter.get('stamp',{});coverage=painter.get('coverage',{})
- fixture='functional' if '-func' in group else 'v2' if group in corrected or any(k in group for k in ['grouped','circle','selected','control-v2','fixed']) else 'v1'
+ fixture='functional' if '-func' in group else 'v2' if group in corrected or any(k in group for k in ['grouped','circle','selected','control-v2','fixed','synth-']) else 'v1'
  diagnostic=group in ['resumed-native-ring','resumed-grouped-half-warm','resumed-selected-full-fast-vulkan-warm'] or (p.parent.parent/'invalid.txt').exists()
  stages={}
  for field in ['projectTotalMs','bakeTotalMs']:
@@ -31,9 +31,9 @@ for p in sorted(root.glob('resumed-*/*/result.json')):
  row['runSeconds']=r.get('runSeconds')
  row['orientation']={'upZmin':min(f.get('upZ',[0])),'upZmax':max(f.get('upZ',[0]))}
  row['measurementNote']='Frame wall intervals and engine-reported phase timings may overlap or be offset by a frame; not GPU execution durations. Layer age begins at GE queue admission, not raw collision or pixel presentation.'
- row['noContactWork']=bool(row['scenario']!='baseline' and not row['paintingDisabled'] and (not perf.get('projectCalls') or not (r.get('detect') or {}).get('totalCalls')))
+ row['noContactWork']=bool(row['scenario']!='baseline' and not row['paintingDisabled'] and (not stamp.get('projectsIssued') or not perf.get('bakeLayersTotal') or not (r.get('detect') or {}).get('totalCalls')))
  row['fullLayerRetention']=bool(not painter.get('config',{}).get('coverageCoalescing') and 'streamLayersExpected' in stamp and stamp['streamLayersExpected']==stamp.get('streamSubstrokesTotal') and stamp.get('stampsAttempted')==stamp.get('stampsEnqueued')==perf.get('bakeLayersTotal',0)-stamp.get('streamSubstrokesTotal',0))
- row['throughputPass']=bool(fixture=='v2' and not diagnostic and not r.get('error') and group not in invalid and (coverage.get('requests',0)>0 or (row['fullLayerRetention'] and perf.get('projectCalls',0)>0)) and not any(coverage.get(k,0) for k in ['lostRequests','pendingRequests','failedRepresentatives','unrepresentedCells','trackingOverflow']) and not any(stamp.get(k,0) for k in ['aggregateDropped','jobsDropped','jobsFailed','stampsSkippedMissed','bakeFailures','layersLost','streamLayersMissed']) and row['inputToBakeMax']<=1000 and not any((painter.get('queue') or {}).values()))
+ row['throughputPass']=bool(fixture=='v2' and not diagnostic and not r.get('error') and group not in invalid and (coverage.get('requests',0)>0 or (row['fullLayerRetention'] and stamp.get('projectsIssued',0)>0)) and not any(coverage.get(k,0) for k in ['lostRequests','pendingRequests','failedRepresentatives','unrepresentedCells','trackingOverflow']) and not any(stamp.get(k,0) for k in ['aggregateDropped','jobsDropped','jobsFailed','stampsSkippedMissed','bakeFailures','layersLost','streamLayersMissed']) and row['inputToBakeMax']<=1000 and not any((painter.get('queue') or {}).values()))
  rows.append(row)
 (root/'resumed-runs.json').write_text(json.dumps(rows,indent=2))
 selected=[r for r in rows if r['fixture']=='v2' and not r['diagnostic'] and not r['error'] and not r['invalidLegacyReset'] and not r['noContactWork']]

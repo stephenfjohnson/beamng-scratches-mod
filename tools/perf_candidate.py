@@ -39,8 +39,9 @@ try:
    row=bench.run_one(name,args,tuning,bench.homes()['gridmap_v2'],rep)
    shutil.copytree(Path(bench.RUNS_DIR)/row['run'],out/row['run'])
    r=json.loads((out/row['run']/'result.json').read_text())
+   assert 'painter' in r, 'bench returned no result (run never started or was torn down); fixture not measured'
    if not a.disabled and name!='baseline':
-    assert r['painter']['perf']['projectCalls']>0 and r['detect']['totalCalls']>0, 'enabled damage fixture produced no contact/projection work; not acceptance evidence'
+    assert r['painter']['stamp']['projectsIssued']>0 and r['painter']['perf']['bakeLayersTotal']>0 and r['detect']['totalCalls']>0, 'enabled damage fixture produced no contact/capture work; not acceptance evidence'
    print('CANDIDATE',json.dumps({'run':row['run'],'config':r['painter']['config'],'latency':r['painter'].get('latency'),'perf':r['painter']['perf'],'drops':r['painter']['stamp']}),flush=True)
    if a.capture and rep==1:
     damage_probe.OUT=out;damage_probe.matched(name)
