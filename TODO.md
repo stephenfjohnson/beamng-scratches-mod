@@ -41,7 +41,7 @@ not started. See [the release plan](docs/plans/release-sequence.md).
   brand-new user folder or another machine.
 - [x] MIT license (`LICENSE`, also shipped inside the ZIP).
 - [x] v0.1.0-preview GitHub pre-release with `scratches_mod.zip` and its SHA-256.
-- [ ] Anonymous (signed-out) download check of the release asset.
+- [x] Signed-out download of the release asset matches its SHA-256 (2026-11-15).
 - [x] Impact close-up and debug-panel screenshot, captured HUD-free with
   [`tools/showcase_capture.py`](tools/showcase_capture.py).
 - [ ] Re-shoot the older showcase images HUD-free with `showcase_capture.py`
