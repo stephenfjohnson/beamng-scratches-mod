@@ -39,6 +39,7 @@ def main():
             meta['processCold']=a.restart
             meta['paintingDisabled']=a.disabled
             (root/f'environment-{i+1}.json').write_text(json.dumps(meta,indent=2))
+            assert meta['compatibility']['ready'] and not meta.get('comparison',{}).get('differences'), 'adapter not ready or original material changed; environment retained'
             log=Path(dev.user_dir())/'beamng.log'
             (root/f'engine-{i+1}.txt').write_text('\n'.join(l for l in log.read_text(errors='replace').splitlines() if any(k in l for k in ['Log started','name:NVIDIA','Attempting to create GFX','shader cache','Shader compilation'])))
             sets=['detect.setPaintEnabled='+str(not a.disabled).lower()]

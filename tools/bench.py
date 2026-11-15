@@ -209,7 +209,7 @@ def write_report(out_dir: str, s: dict, res: dict, scenario: dict) -> None:
     L = [f"# {s['scenario']} - {s['run']}", "", f"_{scenario.get('desc', '')}_", ""]
     if res.get("error"):
         L += [f"**Run error:** `{res['error']}`", ""]
-    queue = res.get("painter", {}).get("queue", {})
+    queue = (res.get("painter") or {}).get("queue", {})
     L += ["Remaining queues: `" + json.dumps(queue, sort_keys=True) + "`", ""]
     if any(queue.values()):
         L += ["**Incomplete drain: rendering backlog remains. This run is not a latency acceptance pass.**", ""]
@@ -253,7 +253,10 @@ def write_report(out_dir: str, s: dict, res: dict, scenario: dict) -> None:
     if shots:
         L += ["## Screenshots", ""] + [f"![{n}]({n})" for n in shots] + [""]
     if res.get("optick"):
-        L += ["Optick capture: `capture.opt` (open with Optick, Ctrl+Alt+O in game)", ""]
+        if os.path.isfile(os.path.join(out_dir, "capture.opt")):
+            L += ["Optick capture: `capture.opt` (open with Optick)", ""]
+        else:
+            L += ["**Optick was requested but no capture file was found. No native/GPU trace attribution is available from this run.**", ""]
     with open(os.path.join(out_dir, "report.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(L))
 
@@ -338,6 +341,8 @@ def run_one(name: str, args, tuning: list[dict], home: dict, rep: int) -> dict:
           f"painter avg {s['painter_ms_avg']} / max {s['painter_ms_max']} ms | "
           f"frame p95 {s['frame_ms_p95']} ms | detector {s['detect_us_per_contact']} us/contact")
     print(f"  -> {os.path.relpath(out_dir, ROOT)}{os.sep}report.md")
+    if res.get("error"):
+        raise dev.DeployError(f"{name}: engine run failed; evidence retained in {out_dir}")
     return s
 
 
@@ -442,7 +447,7 @@ def main() -> int:
     r.add_argument("--tag", default="", help="label for the run (shows in `list`)")
     r.add_argument("--repeat", type=int, default=1)
     r.add_argument("--drain-timeout", type=float, default=3, help="maximum drain seconds; record remaining queues even on timeout")
-    r.add_argument("--optick", action="store_true", help="save an Optick capture of each run")
+    r.add_argument("--optick", action="store_true", help="request an Optick capture (requires a working profiling build)")
     r.add_argument("--no-shots", action="store_true", help="skip screenshots")
     r.add_argument("--shot-scale", type=float, default=0.5, help="screenshot scale (default 0.5)")
     r.add_argument("--keep", action="store_true", help="leave --set overrides in place afterwards")

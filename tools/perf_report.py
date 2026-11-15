@@ -10,8 +10,8 @@ rows=[]
 for p in sorted(root.rglob('result.json')):
  r=json.loads(p.read_text()); f=r.get('frames',{}); xs=f.get('frameMs',[])
  if not xs:continue
- perf=r['painter']['perf']; stamp=r['painter']['stamp']
- rows.append({'run':str(p.relative_to(root)), 'p95':bench.pct(xs,95),'p99':bench.pct(xs,99),'max':max(xs),'projectionMax':perf['projectMsMax'],'bakeMax':perf['bakeMsMax'],'queue':r['painter']['queue'],'drops':stamp['jobsDropped'],'aggregateDrops':stamp['aggregateDropped'],'config':r['painter']['config'],'failures':stamp['jobsFailed'],'drainSeconds':r.get('drainSeconds'),'frames':len(xs)})
+ painter=r.get('painter') or {};perf=painter.get('perf') or {};stamp=painter.get('stamp') or {}
+ rows.append({'run':str(p.relative_to(root)), 'p95':bench.pct(xs,95),'p99':bench.pct(xs,99),'max':max(xs),'projectionMax':perf.get('projectMsMax',0),'bakeMax':perf.get('bakeMsMax',0),'queue':painter.get('queue',{}),'drops':stamp.get('jobsDropped',0),'aggregateDrops':stamp.get('aggregateDropped',0),'config':painter.get('config',{}),'failures':stamp.get('jobsFailed',0),'drainSeconds':r.get('drainSeconds'),'drainWallSeconds':r.get('drainWallSeconds'),'frames':len(xs)})
 (root/'all-runs.json').write_text(json.dumps(rows,indent=2))
 fig,ax=plt.subplots(figsize=(12,max(5,len(rows)*.22)))
 y=list(range(len(rows)))
@@ -31,5 +31,24 @@ for name in ['original-lifecycle','candidate-lifecycle']:
  if not p.exists():continue
  data=json.loads(p.read_text());t0=data[0]['time']
  ax.plot([(x['time']-t0)/60 for x in data],[x['privateBytes']/2**30 for x in data],marker='.',label=name)
-ax.set(xlabel='Elapsed automation time (minutes, includes MCP/host waits)',ylabel='Process-private memory (GiB)',title='20 player switches + 10 vehicle reloads; final point after Lua collection')
+ax.set(xlabel='Elapsed automation time (minutes, includes MCP/host waits)',ylabel='Sampled process-private memory (GiB)',title='20 player switches + 10 vehicle reloads; final point after Lua collection')
 ax.legend();fig.tight_layout();fig.savefig(root/'lifecycle-memory.png',dpi=160)
+
+p=root/'candidate-d3d12-endurance/memory.json'
+if p.exists():
+ data=json.loads(p.read_text())
+ fig,ax=plt.subplots(figsize=(9,4))
+ ax.plot([x['elapsed']/60 for x in data],[x['privateBytes']/2**30 for x in data],marker='.')
+ ax.set(xlabel='Elapsed wall time (minutes)',ylabel='Process-private memory (GiB)',title='D3D12: repeated scraping without painter reload; final point after Lua GC')
+ fig.tight_layout();fig.savefig(root/'endurance-memory.png',dpi=160)
+
+groups=['original-d3d12-cold','candidate-d3d12-cold','candidate-d3d12-disabled-cold','d3d12-painter-unloaded','sustained','candidate-d3d12-endurance','candidate-vulkan-cold','candidate-vulkan-disabled-warm','vulkan-sustained']
+fig,ax=plt.subplots(figsize=(10,5))
+for i,g in enumerate(groups):
+ rs=[r for r in rows if Path(r['run']).parts[0]==g]
+ ax.scatter([r['projectionMax'] for r in rs],[i]*len(rs),s=24,color='#b34228',alpha=.65,label='Per-run worst native projection' if i==0 else None)
+ ax.scatter([r['max'] for r in rs],[i+.17]*len(rs),s=18,color='#216b9a',alpha=.6,label='Per-run worst frame' if i==0 else None)
+ ax.scatter([r['bakeMax'] for r in rs],[i-.17]*len(rs),s=16,color='#378055',alpha=.6,label='Per-run worst bake batch' if i==0 else None)
+ax.axvline(100,color='#555',linestyle=':',label='100 ms native gate')
+ax.set_yticks(range(len(groups)),groups,fontsize=8);ax.invert_yaxis();ax.set_xlabel('Wall time (ms); sampled run maxima, not GPU-only timings')
+ax.legend(fontsize=8);fig.tight_layout();fig.savefig(root/'native-and-frame-peaks.png',dpi=160)
