@@ -103,8 +103,8 @@ end
 function M.invalidateConstructionCache()
   assert(not M.editorActive(), "editor owns rendering")
   -- Installed loader caches Phase2 flexbody overrides by config, not vehicle ID.
-  -- The existing one-shot reload must rebuild that bundle to get a private clone.
-  -- Use its public invalidation entry point only on this exceptional retry.
+  -- Invalidate before ETK construction, including background spawns. Retrying
+  -- only the selected vehicle leaves inactive meshes sharing an active clone.
   require("jbeam/loader").onFileChanged()
 end
 
@@ -136,13 +136,13 @@ function M.create(veh,part)
   assert(not M.editorActive(), "editor owns rendering; adapter skipped")
   assert(not rejected[veh:getId()], rejected[veh:getId()])
   local prep=prepared[veh:getId()]
+  local expected="scratches_etk800_" .. veh:getId() .. (part=="" and "_plain" or "_police")
+  local present=false
+  for _,name in pairs(veh:getMaterialNames()) do if name==expected then present=true end end
+  if not present then return nil end
   if not prep or prep.part~=part then
     -- A hot reload can adopt an already constructed private material without
     -- respawning/repairing the car. No editor-owned design is eligible here.
-    local expected="scratches_etk800_" .. veh:getId() .. (part=="" and "_plain" or "_police")
-    local present=false
-    for _,name in pairs(veh:getMaterialNames()) do if name==expected then present=true end end
-    if not present then return nil end
     prep=cloneMaterial(veh,part)
     prepared[veh:getId()]=prep
   end

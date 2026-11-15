@@ -17,6 +17,7 @@ def snapshot(name):
 try:
  bench.ensure_bench();snapshot('start')
  (out/'engine.txt').write_text('\n'.join(l for l in (Path(dev.user_dir())/'beamng.log').read_text(errors='replace').splitlines() if 'Log started' in l or 'Attempting to create GFX' in l))
+ run('perf_cached_npcs.py','--label',a.label+'-cached-npcs')
  run('perf_stock_configs.py','--label',a.label+'-stock','--experimental-width',str(a.width),*(['--coalesce'] if a.coalesce else []))
  dev.lua(tune);run('perf_lifecycle.py','--label',a.label+'-lifecycle','--cycles','10')
  states=json.loads((root/(a.label+'-lifecycle')/'lifecycle.json').read_text())

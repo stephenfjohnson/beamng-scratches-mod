@@ -3358,6 +3358,15 @@ M.onExtensionUnloaded = onExtensionUnloaded
 M.onUpdate            = onUpdate
 M.onVehicleSwitched   = onVehicleSwitched
 M.onVehicleSpawned    = onVehicleSpawned
+M.onSpawnCCallback = function(vid)
+  local veh=scenetree.findObjectById(vid)
+  if not veh or veh.JBeam~="etk800" then return end
+  if not adapterModule then adapterModule=dofile("/lua/ge/extensions/scratches/etkAdapter.lua") end
+  if not adapterModule.editorActive() then
+    adapterModule.invalidateConstructionCache()
+    adapterReloaded[vid]=nil
+  end
+end
 M.onJbeamLoadingPhase2 = function(...)
   if not adapterModule then adapterModule = dofile("/lua/ge/extensions/scratches/etkAdapter.lua") end
   adapterModule.prepare(...)

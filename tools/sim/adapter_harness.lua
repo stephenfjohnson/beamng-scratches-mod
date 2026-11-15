@@ -160,6 +160,7 @@ scenetree.findClassObjects=function() local names={};for name in pairs(objects) 
 getAllVehicles=function() return {veh} end
 local originalNames=veh.getMaterialNames
 veh.getMaterialNames=function() return {'scratches_etk800_99_plain'} end
+check(adapter.create(veh,'')==nil,'prepared state cannot bind a foreign cached clone after reload')
 adapter.collectUnusedMaterials()
 check(objects[orphan:getName()]~=nil,'cached clone referenced by another live mesh is retained')
 veh.getMaterialNames=originalNames

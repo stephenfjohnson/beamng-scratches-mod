@@ -18,8 +18,8 @@ for p in sorted(root.glob('resumed-*/*/result.json')):
  r=json.loads(p.read_text());f=r.get('frames') or {};xs=f.get('frameMs',[])
  if not xs:continue
  group=p.parent.parent.name;painter=r.get('painter') or r.get('lastValidPainterStats') or {};perf=painter.get('perf',{});stamp=painter.get('stamp',{});coverage=painter.get('coverage',{})
- fixture='functional' if '-func' in group else 'v2' if group in corrected or any(k in group for k in ['grouped','circle','selected','control-v2']) else 'v1'
- diagnostic=group in ['resumed-native-ring','resumed-grouped-half-warm']
+ fixture='functional' if '-func' in group else 'v2' if group in corrected or any(k in group for k in ['grouped','circle','selected','control-v2','fixed']) else 'v1'
+ diagnostic=group in ['resumed-native-ring','resumed-grouped-half-warm','resumed-selected-full-fast-vulkan-warm']
  stages={}
  for field in ['projectTotalMs','bakeTotalMs']:
   series=f.get(field,[]);delta=[max(0,v-(series[i-1] if i else 0)) for i,v in enumerate(series)]
@@ -72,7 +72,13 @@ for g in groups:
  cs=[r['coverage'] for r in rs]
  total=lambda key:sum(c.get(key,0) for c in cs)
  lines.append(f"| {g} | {total('requests')} / {total('completedRequests')} | {total('mergedQueued')+total('mergedBaked')} | {total('lostRequests')} / {total('pendingRequests')} | {total('unrepresentedCells')} |")
-lines+=['','These are observed bounds, not guarantees. Disabled controls have no painting latency.','Diagnostic traced cohorts and old v1/reset-invalid runs remain in JSON but are excluded above.','![](resumed-native-latency.png)','','![](resumed-frame-tails.png)']
+lines+=['','## Full-layer conservation after the stream alias fix','','No representative coalescing. Each accepted band keeps its own haze and segments.','All measured fixtures below must pass conservation, empty queues, zero losses and <=1000 ms completed-layer age.','The independent <=100 ms native gate is not waived by retention.','','| Cohort | Runs / retention passes / throughput passes | Discrete attempted / enqueued | Stream expected / captured | Lost or missed layers |','| --- | --- | --- | --- | --- |']
+for g in groups:
+ rs=[r for r in selected if r['group']==g and 'fixed' in g and not r['paintingDisabled']]
+ if not rs:continue
+ total=lambda key:sum(r['stamp'].get(key,0) for r in rs)
+ lines.append(f"| {g} | {len(rs)} / {sum(r['fullLayerRetention'] for r in rs)} / {sum(r['throughputPass'] for r in rs)} | {total('stampsAttempted')} / {total('stampsEnqueued')} | {total('streamLayersExpected')} / {total('streamSubstrokesTotal')} | {total('layersLost')+total('streamLayersMissed')} |")
+lines+=['','These are observed bounds, not guarantees. Disabled controls have no painting latency.','Traced, stream-alias diagnostic and old v1/reset-invalid runs remain in JSON but are excluded above.','![](resumed-native-latency.png)','','![](resumed-frame-tails.png)']
 (root/'resumed-summary.md').write_text('\n'.join(lines)+'\n')
 print('Retained',len(rows),'runs;',len(selected),'corrected/untraced')
 for p in root.glob('resumed-*/memory.json'):
