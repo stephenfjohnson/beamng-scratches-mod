@@ -11,6 +11,27 @@ it paints texture damage on top of whatever the physics already did.
 
 ## Milestone 5: performance investigation (release blocked)
 
+**Projection-free synthetic anchors (current default).** The native
+`projectDynamicDecals` pass only read back the plane a decal is baked against; the
+detector already knows each contact point and normal. Captured layers are now
+anchored directly at their own contacts, so the scratch path makes **no native
+projection calls**. On the exact tested setup (BeamNG 0.40.5.0, RTX 3090, ETK 800
+Police, full 4096x2048 detail, every accepted layer kept):
+
+* **Vulkan**: largest native call **35.4 ms** across 57 untraced fixtures including a
+  ten-minute endurance (previously 508 ms); oldest input-to-completed-layer age
+  **318 ms** (previously 1,012 ms). Intermittent ~410 ms engine render-phase frame
+  pauses still occur (2 of 18 short fixtures; none above 250 ms in the endurance).
+* **D3D12**: delivery age passes (max 600 ms), but **446/447 ms bake batches** still
+  occur, so the native-call gate fails on D3D12.
+
+The remaining stall is traced to the engine's native bake: every baked layer creates
+and destroys about 112 MiB of full-resolution transient textures, which Lua cannot
+pool or defer. `scratches_paint.setSyntheticAnchors(false)` restores the legacy
+projected path for comparison. Stable release remains blocked; see
+[investigation 12](investigations/12-synthetic-anchors.md) for measurements,
+captures and the allocation evidence.
+
 The private ETK projection is reused across attachments, and captured layers drain
 before more projection work. The full-detail experiment uses three-layer native
 bake batches, faster flushing and same-panel grouping, with explicit conservation
@@ -26,10 +47,10 @@ requires invalidating the engine's JBeam construction cache for ETK spawns/reloa
 it can increase construction cost and does not run during steady scraping.
 
 The corrected sustained fixture preserves internal vehicle motion and rejects
-mid-run resets. The final full-resolution Vulkan build still reproduced a
+mid-run resets. Before synthetic anchors, the full-resolution Vulkan build reproduced a
 **508 ms native projection** and a separate **965 ms frame interval** during
 endurance, despite favorable cold and warm runs. The latter pushed completed-layer
-age to 1,012 ms, failing the one-second gate. Final D3D12 warm tests still reached
+age to 1,012 ms, failing the one-second gate. D3D12 warm tests of that build reached
 **444 ms projection at full resolution and 184 ms at half resolution**. A separate
 ETW diagnostic captured a graphics paging packet spanning about 423 ms of a
 426 ms native call; the engine/driver root cause remains unresolved. The prior
@@ -38,6 +59,7 @@ must not be presented as directly comparable throughput evidence.
 
 Milestone 5 acceptance remains incomplete and unmerged; last merged baseline is
 c8bcae6. No milestone 6, stable release or all-hardware FPS claim. See the
+[synthetic-anchor results](investigations/12-synthetic-anchors.md),
 [resumed implementation, criteria and limits](investigations/11-quality-throughput.md),
 [measured cohorts and charts](docs/evidence/milestone5/resumed-summary.md),
 [exact compatibility matrix](docs/compatibility.md) and

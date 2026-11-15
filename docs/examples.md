@@ -304,6 +304,69 @@ is blocked despite passing mock checks. These settings are reproducible test
 conditions, not guaranteed FPS recommendations.
 
 
+## Synthetic anchors (current default)
+
+Development branch only; BeamNG 0.40.5.0 build 302427, Gridmap v2, ETK 800 with
+empty Paint Design or `etk800_skin_police`. Synthetic anchors are on by default:
+the painter makes no native `projectDynamicDecals` calls and anchors every
+captured layer at its own contact point. To check, after `python tools/dev.py deploy`:
+
+```powershell
+python tools/dev.py lua 'local s=scratches_paint.getStats() return jsonEncode({config=s.config.syntheticAnchors,anchored=s.anchors.synthesized,nativeProjections=s.perf.projectCalls,captureJobs=s.stamp.projectsIssued})'
+```
+
+After a scrape, `anchored` and `captureJobs` grow while `nativeProjections` stays 0.
+`stamp.projectsIssued` counts capture jobs (one shared camera per job) in both
+modes; only `perf.projectCalls` counts native projections.
+
+The full-detail preset measured in investigation 12, and a matched legacy run:
+
+```powershell
+python tools/dev.py lua 'scratches_paint.setDamageResolution(4096);scratches_paint.setBakeBudget(3);scratches_paint.setFlushInterval(0.05);scratches_paint.setCoverageCoalescing(false);scratches_paint.setPanelGrouping(true);scratches_paint.setSyntheticAnchors(true);return jsonEncode(scratches_paint.getStats().config)'
+python tools/perf_candidate.py --label my-synth-warm --width 4096 --bake 3 --flush .05 --group --repeat 3 --capture
+python tools/perf_candidate.py --label my-synth-cold-vk --width 4096 --bake 3 --flush .05 --group --repeat 3 --restart --renderer vk --capture
+python tools/perf_endurance.py --label my-synth-endurance --width 4096 --bake 3 --flush .05 --group --minutes 10
+# Same fixtures with the legacy native projection per job, for comparison:
+python tools/perf_candidate.py --label my-projected-warm --width 4096 --bake 3 --flush .05 --group --repeat 3 --projected-anchors
+```
+
+Use fresh labels; tools refuse to overwrite evidence. Do not edit or redeploy
+`lua/` or `tools/ingame/` while a cohort runs: the capture step redeploys the mount
+and an edited bench invalidates the cohort (this happened once; see
+`synth-full-vk-warm/invalid.txt`).
+
+Long sessions produce ~50 MB of per-frame data per ten minutes. Summarize and keep
+raw frames local (git-ignored `bench/`) with a hash manifest:
+
+```powershell
+python tools/perf_endurance.py --label my-long --width 4096 --bake 3 --flush .05 --group --minutes 120
+python tools/perf_endurance_summary.py --label my-long --move-raw-to bench/raw
+```
+
+Shell background-task limits can kill a two-hour run before its final snapshots;
+start it detached, for example with PowerShell `Start-Process python -ArgumentList ...`.
+
+To see the per-layer native bake allocations on D3D12 (diagnostic, user-mode ETW,
+no elevation; raw ETLs stay in `bench/`):
+
+```powershell
+python tools/dev.py restart --game-arg=-gfx --game-arg=d3d12
+python tools/dev.py lua "core_vehicle_partmgmt.setSkin('police') return true"
+python tools/perf_alloc_probe.py --label my-alloc-d3d12 --calls 20
+```
+
+To catch a whole-frame pause (not only a slow mod call) in an ETW ring with the
+product preset, then export the window around that frame:
+
+```powershell
+python tools/perf_trace.py --label my-frame-trace --runs 12 --product --frame-trigger 250
+python tools/perf_trace_report.py --xml bench/my-frame-events.xml --out docs/evidence/milestone5/my-frame-trace --run <result.json> --pid <game pid> --anchor-engine-clock <frame start seconds>
+```
+
+Debugging tip for manual probes: the private ETK damage stage takes opacity from
+the canvas red channel, so pure green, blue or cyan test decals are invisible.
+Use red, yellow, magenta or white when checking placement by eye.
+
 ## Resumed quality and throughput experiments
 
 Use this **development branch**, BeamNG 0.40.5.0 build 302427, Gridmap v2 and the

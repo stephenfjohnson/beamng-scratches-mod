@@ -2,6 +2,23 @@
 
 ## Milestone 5: performance investigation — blocked, unmerged
 
+- **Projection-free synthetic anchors (default).** Captured layers are anchored at
+  their own detector contact point and hull-resolved normal instead of reading the
+  anchor back from a native `projectDynamicDecals` pass (30 ms idle, 444–613 ms
+  under load). `setSyntheticAnchors(false)` keeps the legacy path for comparison;
+  `perf_candidate`/`perf_endurance` accept `--projected-anchors`. 271 mock checks.
+- Full-detail Vulkan with every layer retained: native maximum 16.7 / 14.7 / 35.4 ms
+  (process-cold, warm, ten-minute endurance), completed-layer age ≤318 ms. D3D12:
+  delivery ≤600 ms, but 446/447 ms bake batches still fail the native gate.
+  Intermittent ~410 ms Vulkan render-phase frame pauses remain and are recorded.
+- New `perf_alloc_probe.py`: each baked layer makes the engine create and destroy
+  ~112 MiB of full-target transient textures (three RGBA8, two R8 at 4096x2048);
+  composites and projections allocate nothing. Likely trigger of the remaining
+  paging stalls; not poolable from Lua. ETW tool gains a whole-frame trigger;
+  `perf_endurance_summary.py` publishes long sessions compactly.
+- Full-detail D3D12 functional suite passes with synthetic anchors (stock configs,
+  lifecycle, traffic, maps, editor, guarded mud/water/drying with persistent scuffs).
+  [Investigation 12](investigations/12-synthetic-anchors.md).
 - Reuse private ETK projection resources and exact material indices across attachments;
   drain captured layers before further projection to prevent starvation.
 - Add explicit 4096/2048/1024 damage widths and independent native bake batch limits.

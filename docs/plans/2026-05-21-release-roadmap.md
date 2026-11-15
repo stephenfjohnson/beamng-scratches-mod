@@ -9,6 +9,9 @@
 > Milestone 5 is authorized and implementation has resumed; feature acceptance
 > is **blocked and unmerged**. Last merged baseline: c8bcae6. Milestone 6/public
 > release was not started. [Resumed implementation and gates](../../investigations/11-quality-throughput.md).
+> Synthetic anchors removed native projection: Vulkan now meets the native-call and
+> delivery gates in measured cohorts; D3D12 still fails (446/447 ms bakes) because the
+> engine bake churns ~112 MiB of transient textures per layer. [Investigation 12](../../investigations/12-synthetic-anchors.md).
 
 
 ## Release readiness update — 2026-11-14
@@ -19,6 +22,10 @@ bake batches. The corrected fixture and explicit quality/grouping experiments
 improve measured delivery, but D3D12 and Vulkan native stalls remain (including
 508 ms in the final full-detail Vulkan endurance build); [current criteria,
 trace evidence and limits](../../investigations/11-quality-throughput.md).
+Projection-free synthetic anchors (investigation 12) then cut the Vulkan native
+maximum to 35.4 ms and delivery age to 318 ms over a ten-minute endurance, but D3D12
+bakes still reach 447 ms and ~400 ms render-phase frame pauses remain on Vulkan.
+Current preflight: 271 mock checks.
 
 Integrated surface cosmetics prototype (mud/dirt/snow color deposits and internal
 water exposure state), now extended with separate ETK soil composition and

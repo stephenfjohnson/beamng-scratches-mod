@@ -9,6 +9,9 @@
 > Milestone 5 is authorized and implementation has resumed; feature acceptance
 > is **blocked and unmerged**. Last merged baseline: c8bcae6. Milestone 6/public
 > release was not started. [Resumed implementation and gates](../../investigations/11-quality-throughput.md).
+> Synthetic anchors removed native projection: Vulkan now meets the native-call and
+> delivery gates in measured cohorts; D3D12 still fails (446/447 ms bakes) because the
+> engine bake churns ~112 MiB of transient textures per layer. [Investigation 12](../../investigations/12-synthetic-anchors.md).
 
 Run one feature thread at a time. Each starts from the latest merged baseline,
 owns a focused branch, implements and tests, updates documentation/examples,
@@ -41,6 +44,9 @@ explicitly incomplete; a passing mock suite does not establish visual success.
    The resumed run completed final D3D12/Vulkan regressions and concrete resource,
    stream, batching and quality work. Final native outliers (444/508 ms) and a
    1012 ms delivery age still fail the original gates; this feature is incomplete.
+   Synthetic anchors (investigation 12) remove the projection call: Vulkan passes
+   native (35.4 ms) and delivery (318 ms) gates in 57 untraced fixtures, D3D12 still
+   fails with 446/447 ms bake batches. Still incomplete and unmerged.
 6. **Public release.** Clean ZIP-only install/uninstall test, final screenshots,
    version/changelog, credits/license decision, supported matrix, public ZIP,
    checksums and anonymous download verification. Publish as preview if known

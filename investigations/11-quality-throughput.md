@@ -1,5 +1,9 @@
 # Milestone 5 resumed: quality, native batching and coverage throughput
 
+> Continued in [investigation 12](12-synthetic-anchors.md): projection-free synthetic
+> anchors remove the native projection call measured below; the remaining stall is
+> traced to per-layer transient allocations inside the native bake.
+
 Resumed in the same thread from f414136, under explicit user authorization.
 No milestone 6, public release or subagents. Investigation 10 is the prior run's
 blocked verdict, not a reason to stop this implementation.

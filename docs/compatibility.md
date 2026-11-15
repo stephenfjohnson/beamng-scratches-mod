@@ -10,6 +10,25 @@ RTX 3090 / Ryzen 9 3900XT. Settings: 3840x2160 Custom, Ultra lighting, High shad
 Normal texture, SMAA, dynamic reflections enabled except the named diagnostic.
 Process-cold tests retain shader caches. No other build, GPU or OS is certified.
 
+## Synthetic-anchor build (current)
+
+Same engine, hardware and settings as below. Preset: 4096x2048 damage, bake3,
+flush 0.05 s, grouping on, coalescing off, synthetic anchors on (no native
+projection). [Measurements, captures and allocation evidence](../investigations/12-synthetic-anchors.md).
+
+| Exact configuration / boundary | Vulkan | D3D12 |
+| --- | --- | --- |
+| `rennspecht_8r_A.pc` + `etk800_skin_police`, performance | 9 process-cold, 9 warm, 39 endurance fixtures: native max 35.4 ms, layer age max 318 ms, all layers retained. ~410 ms render-phase frame pauses in 2 of 18 short fixtures. | 9 process-cold, 9 warm, 39 endurance: layer age max 600 ms, all layers retained, but 446.0 / 447.2 ms bake batches **fail** the native gate. |
+| Matched damaged/original/reset captures | Side, roof and sustained sets per cohort; Police artwork and original fields unchanged | Same |
+| Stock `844_150_A.pc` / `844_police_A.pc`, `854_police_A.pc`, Heritage, unicycle, installed GT3 | Not rerun on this build | One slide each with matched captures; unsupported configs/mods skipped |
+| Lifecycle, traffic, maps, editor, background clones | Not rerun on this build | 20 switches/10 reloads, three NPCs with zero detector calls, four map changes, editor sentinel kept |
+| Actual mud/water/drying/re-dirty | Not rerun on this build | Physical approach, generation preserved, soil washes off and returns, scuffs persist |
+| Multi-hour session | See investigation 12 (long session) | Not run |
+
+Not certified: other GPUs/drivers, other BeamNG builds, other vehicles or liveries.
+The functional suite ran on D3D12 only for this build; the earlier Vulkan
+functional matrix below used the projected build.
+
 ## Resumed construction-hook build
 
 Vulkan full-detail checks use 4096x2048 damage, bake3, flush0.05, grouping enabled
