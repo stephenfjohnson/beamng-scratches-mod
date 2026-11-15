@@ -12,6 +12,14 @@ Process-cold tests retain shader caches. No other build, GPU or OS is certified.
 
 ## Synthetic-anchor build (current)
 
+The November 15 soil follow-up adds the separate ETK `etk800_extra` material
+alongside the main body, preserving each material's own plain/Police stages.
+Live Vulkan seam fixtures on both paints now cross the fender/door, door/door
+and rear-door/quarter seams. A final real Police mud pass produced 31 deposits
+and zero scratch events. [Evidence and limits](evidence/soil-continuity/report.md).
+This expands material coverage; it does not clear the performance release gates
+or certify D3D12, other skins or all body variants.
+
 Same engine, hardware and settings as below. Preset: 4096x2048 damage, bake3,
 flush 0.05 s, grouping on, coalescing off, synthetic anchors on (no native
 projection). [Measurements, captures and allocation evidence](../investigations/12-synthetic-anchors.md).
