@@ -1,5 +1,17 @@
 # Changelog
 
+## Directional wheel soil
+
+- Replace wheel mud/dirt blobs with two deterministic droplet/tapered-tail
+  variants per material. Align the pattern to vehicle-relative travel with an
+  upward component; faster travel lengthens/flattens it and reversing flips it.
+- Keep one baked layer per deposit and existing caps/washing separation.
+- 275 mock checks and preflight pass, including reverse-flow direction.
+- Live forward mud driving produced 10 early and 22 late deposits, then stopped
+  at 31 after braking. [Close-up](docs/evidence/directional-soil/mud-close.png)
+  and [recorded state](docs/evidence/directional-soil/mud.json). Dirt/reverse live
+  visuals remain unverified. Tails do not animate after deposition.
+
 ## Play-test scratch visibility adjustment
 
 - Increase damage-stage opacity from 1 to 1.6 and remove the 0.75 diffuse

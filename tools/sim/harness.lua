@@ -522,6 +522,7 @@ end
 -- Resting wheels (even with slip) must not produce deposits; zero-slip
 -- translation must. This catches the old slip-only rolling gate.
 local movingVelocity = obj.getVelocity
+vehicle.getVelocity = function() return obj:getVelocity() end
 obj.getVelocity = function() return vec3(0,0,0) end
 soil(30,18); surfaceTick(false)
 check(paint.getSurfaceState().deposits == 0, "stationary tire slip adds no soil")
@@ -531,6 +532,13 @@ _G.onNodeCollision(30,vec3(100,0,0.3),vec3(0,0,1),vec3(0,5,0),0,
 surfaceTick(false)
 check(paint.getSurfaceState().deposits == 1, "rolling without slip adds soil")
 check(paint.getSurfaceState().lastSample.wheel == 1, "rolling packet retains wheel identity")
+check(paint.getSurfaceState().lastSample.flowY < 0 and paint.getSurfaceState().lastSample.flowZ > 0,
+  "wheel spray travels opposite motion and upward from the tire")
+obj.getVelocity = function() return vec3(0,-5,0) end
+paint.clearStamps(); soil(30,18); surfaceTick(false)
+check(paint.getSurfaceState().lastSample.flowY > 0,
+  "reversing reverses wheel spray flow rather than rotating randomly")
+obj.getVelocity = movingVelocity
 paint.clearStamps()
 soil(10,18); soil(30,18); surfaceTick(false)
 check(paint.getSurfaceState().lastSample.wheel == 1,

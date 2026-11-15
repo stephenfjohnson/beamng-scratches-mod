@@ -106,6 +106,14 @@ Milestone 3 evidence predates the milestone 4 polish described above.
 
 ## Milestone 2: progressive surface deposits
 
+Wheel mud/dirt now uses discrete droplet heads with tapered tails, aligned
+against local travel rather than randomly rotated coverage patches. Faster
+travel produces longer, flatter trails; reversing flips their direction. This
+is baked splash art, not ongoing fluid movement. Snow and direct body contacts
+keep their coverage brushes. A [real mud-strip capture](docs/evidence/directional-soil/mud-close.png)
+shows the first directional pass; dirt artwork and reverse motion still need
+their own live visual validation.
+
 Driving over real MUD, DIRT or SNOW collision materials adds overlapping soil
 patches around the wheels and lower side panels. Rolling tires work without
 wheelspin; stationary wheelspin adds nothing. Dedicated mud clumps, fine dirt

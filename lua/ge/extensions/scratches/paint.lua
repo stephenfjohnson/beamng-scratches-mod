@@ -1518,6 +1518,8 @@ local function enqueueStamp(localPos, localNormal, opts, vid)
     alpha       = opts.alphaTex or "/art/dynamicDecals/textures/_one.png",
     r = r, g = g, b = b, a = a,
     scale       = scale,
+    width       = opts.width,
+    flow        = opts.flow,
     rot         = rot,
     roughness   = roughness,
     skipMetal   = opts.skipMetal and true or false,
@@ -1920,8 +1922,21 @@ local function runClusterJob(cluster, projM, bakeList)
       api.setRoughnessIntensity(s.roughness)
     end
     api.setDecalColor(Point4F(s.r, s.g, s.b, s.a or 1))
-    api.setDecalScale(vec3(s.scale, 1, s.scale))
-    api.setDecalRotation(s.rot)
+    api.setDecalScale(vec3(s.scale, 1, s.width or s.scale))
+    local angle = s.rot
+    if s.flow then
+      -- Match the stream path's screen-UV convention so the same local flow
+      -- points downstream on both sides, including when reversing.
+      local probe = decalProjection:getDecalData(camLocal, projM)
+      if probe and probe.cursorPosScreenUv then
+        api.setDecalLocalPos(probe, s.localPos)
+        local x,y = probe.cursorPosScreenUv.x,probe.cursorPosScreenUv.y
+        api.setDecalLocalPos(probe, s.localPos+s.flow)
+        local dx,dy = probe.cursorPosScreenUv.x-x,probe.cursorPosScreenUv.y-y
+        if math.abs(dx)+math.abs(dy)>1e-5 then angle=math.atan2(dy,dx) end
+      end
+    end
+    api.setDecalRotation(angle)
     api.setUseSurfaceNormal(true)
 
     local tl = clockhp()
@@ -2258,7 +2273,19 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
       surfaceState[e[1]] = math.min(1, surfaceState[e[1]] + 0.025)
       local p = inv:mulP3F(vec3(e[2],e[3],e[4]))
       local normal = rot:mulP3F(vec3(e[5],e[6],e[7]))
+      local flow, spraySpeed
       if e[8] == 1 then
+        if e[1] ~= "snow" then
+          local velocity = veh:getVelocity()
+          local localVelocity = rot:mulP3F(velocity)
+          -- Relative airflow opposes travel. Side-panel spray rises from the
+          -- tire; faster travel flattens the trail. Not fluid simulation.
+          spraySpeed = math.abs(localVelocity.y)
+          if spraySpeed > 0.5 then
+            flow = vec3(0, localVelocity.y > 0 and -1 or 1,
+                        math.max(0.12, 0.55-spraySpeed*0.02)):normalized()
+          end
+        end
         local box = getSpawnAabb()
         if box then
           local lo, hi = box.minExtents, box.maxExtents
@@ -2267,22 +2294,27 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
           -- bounded deterministic spread; never aim upward through the floor.
           local phase = surfaceState.deposits % 8
           p.x = side > 0 and hi.x or lo.x
-          local inward = p.y > (lo.y+hi.y)*0.5 and -0.65 or 0.65
+          local inward = flow and flow.y*0.4 or (p.y > (lo.y+hi.y)*0.5 and -0.65 or 0.65)
           p.y = math.max(lo.y+0.3, math.min(hi.y-0.3,
             p.y + inward + (phase%4-1.5)*0.24))
           p.z = lo.z + (hi.z-lo.z)*(0.38 + math.floor(phase/4)*0.10)
           normal = vec3(side,0,0)
         end
       end
-      surfaceState.lastSample = {kind=e[1],wheel=e[8],x=p.x,y=p.y,z=p.z}
+      surfaceState.lastSample = {kind=e[1],wheel=e[8],x=p.x,y=p.y,z=p.z,
+        flowY=flow and flow.y,flowZ=flow and flow.z}
       local key = e[1]..":"..math.floor(p.x*3)..":"..math.floor(p.y*3)..":"..math.floor(p.z*3)
       if surfaceState.deposits < 96 and (surfaceSpots[key] or 0) < 12
           and surfaceWaterAge > 0.5 then
         surfaceSpots[key] = (surfaceSpots[key] or 0)+1
         surfaceState.deposits = surfaceState.deposits+1
         enqueueStamp(p, normal, {
-          soil=true,r=c[1],g=c[2],b=c[3],a=0.95,scale=0.65,skipMetal=true,noJitter=true,
-          colorTex="/art/dynamicDecals/textures/soil_"..e[1].."_coverage.png",rot=(surfaceState.deposits%4)*math.pi/2},vid)
+          soil=true,r=c[1],g=c[2],b=c[3],a=0.95,
+          scale=flow and (0.38+math.min(spraySpeed,20)*0.009) or 0.65,
+          width=flow and 0.30 or nil,flow=flow,skipMetal=true,noJitter=true,
+          colorTex="/art/dynamicDecals/textures/soil_"..e[1]..
+            (flow and ("_splash_"..(surfaceState.deposits%2+1)..".png") or "_coverage.png"),
+          rot=flow and 0 or (surfaceState.deposits%4)*math.pi/2},vid)
       end
     end
   end
