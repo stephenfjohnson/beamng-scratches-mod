@@ -36,17 +36,20 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 
 ## Showcase and release materials
 
-- [ ] Clean ZIP-only install and uninstall on a fresh user folder.
-- [ ] Choose a license and record credits (the repo has no `LICENSE` file yet).
-- [ ] Version number and changelog entry, then a GitHub **pre-release** with
-  `scratches_mod.zip` and SHA-256 checksums, plus an anonymous download check.
-- [ ] Impact-chip close-up for the README. The current
-  [impact captures](docs/evidence/milestone4/impact-police/) are too subtle to
-  show at page size.
-- [ ] Debug-panel screenshot.
-- [ ] HUD-free hero captures. The current showcase images are crops that work
-  around the game HUD ([`tools/make_showcase.py`](tools/make_showcase.py)).
+- [x] ZIP-only install and uninstall in game, 2026-11-15
+  ([test record](docs/evidence/release-v0.1.0/README.md)). Not yet repeated on a
+  brand-new user folder or another machine.
+- [x] MIT license (`LICENSE`, also shipped inside the ZIP).
+- [x] v0.1.0-preview GitHub pre-release with `scratches_mod.zip` and its SHA-256.
+- [ ] Anonymous (signed-out) download check of the release asset.
+- [x] Impact close-up and debug-panel screenshot, captured HUD-free with
+  [`tools/showcase_capture.py`](tools/showcase_capture.py).
+- [ ] Re-shoot the older showcase images HUD-free with `showcase_capture.py`
+  (they are still crops that work around the game HUD).
 - [ ] Listing text and screenshots for the BeamNG mod repository.
+- [ ] The default ETK config wears the Rennspecht livery, which the adapter
+  skips, so a fresh install shows no scratches until the player picks plain
+  paint or the Police skin. Say so on the listing, or support that livery.
 
 ## Visual quality
 
@@ -97,10 +100,15 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 - [ ] **`paint.lua` is near Lua's local limit.** About 3,500 lines and 163
   top-level locals; Lua 5.1 caps a function at 200. Split the scheduler, soil
   and debug panel into modules before it hits the cap.
-- [ ] **Repository weight.** The repo is about 1.2 GB on GitHub, mostly raw
-  per-run JSON/CSV under `docs/evidence/milestone5/`. Keep the summaries and
-  captures in git; move bulky raw runs to release assets or Git LFS. This needs
-  a deliberate history decision first.
+- [x] **Repository weight.** History rewritten on 2026-11-15: raw milestone 5
+  runs moved to the [evidence-milestone5 release](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/tag/evidence-milestone5);
+  the pack went from 1.27 GB to 435 MB.
+- [ ] **Remaining weight** is ~300 MB of lossless 1080p PNG captures in
+  milestones 2–4. Converting them to JPEG would cut most of it, at the cost of
+  lossless evidence.
+- [ ] **Long paths on Windows.** Some milestone 5 run folders exceed 260
+  characters when cloned into a deep directory; enable `core.longpaths` or
+  shorten run names.
 
 ## Ideas parked on archived branches
 

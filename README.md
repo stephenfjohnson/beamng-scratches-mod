@@ -11,7 +11,8 @@ actually happened and is baked into the car's paint without touching its livery.
 
 > **Status: development preview.** Everything on this page runs in game today on
 > the **ETK 800** (plain paint or the stock Police livery) on BeamNG.drive
-> 0.40.5.0. There is no packaged release yet; [build the ZIP yourself](#packaging-for-release).
+> 0.40.5.0. **[Download v0.1.0-preview](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/tag/v0.1.0-preview)** (MIT licensed), or
+> [build the ZIP yourself](#packaging-for-release).
 > Release blockers, open bugs and ideas parked on archived branches live in
 > **[TODO.md](TODO.md)**.
 
@@ -52,10 +53,12 @@ and on light paint the palette shifts darker so damage contrasts the right way.
 
 ### Impact chips and gouges
 
+![Front fender before and after a rollover](docs/showcase/impacts-before-after.jpg)
+
 Single hard hits past a normal-force threshold stamp chipped paint, plus a gouge
 on harder hits, sized by the impact force. Hits in the same frame are clustered
-into one job. Impact marks are deliberately small; a close-up showcase capture is
-[still on the TODO list](TODO.md#showcase-and-release-materials).
+into one job, so a rollover leaves a scatter of chips and dings exactly where
+the body struck the ground.
 
 ### Your paint and livery stay underneath
 
@@ -164,6 +167,8 @@ the car and every mesh reference to them are gone.
 
 ### In-game debug and tuning panel
 
+![The debug panel open after a rollover](docs/showcase/debug-panel.jpg)
+
 A bindable two-pane window. It has a live log merged from both Lua VMs, one-click
 **Copy debug report**, Light→Extreme presets, live counters (impacts, streams,
 bakes, backlog, composites) and sliders for every threshold and limit. See
@@ -205,6 +210,7 @@ Tested on BeamNG.drive 0.40.5.0 build 302427, Windows 11, RTX 3090 / Ryzen 9
 - [Milestone history](docs/milestones.md): what each milestone added, with evidence
 - [Changelog](CHANGELOG.md), [release plan](docs/plans/release-sequence.md)
 - [Examples and troubleshooting](docs/examples.md), [contributing](CONTRIBUTING.md)
+- [MIT license](LICENSE)
 - [`investigations/`](investigations/): BeamNG engine/API research behind each decision
 
 ---
@@ -219,8 +225,8 @@ with both Vulkan and D3D12. Other builds are unverified.
 
 ### Players — packaged mod
 
-1. Get `scratches_mod.zip` (see [Packaging for release](#packaging-for-release)
-   if you are building it yourself).
+1. Download `scratches_mod.zip` from the [latest release](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/tag/v0.1.0-preview) and check it
+   against `scratches_mod.zip.sha256` if you like (or [build it](#packaging-for-release)).
 2. Open the active user folder using the BeamNG launcher and place the ZIP
    in its `mods/` directory without extracting it. The default used by the
    development tools is `%LOCALAPPDATA%\BeamNG\BeamNG.drive\current\mods\`;
@@ -587,7 +593,9 @@ must show successful syntax, globals, harness and sidecar checks.
 To uninstall, remove `scratches_mod.zip` from the active `mods/` folder and
 disable/remove any unpacked copy, then restart the game. If a saved vehicle
 configuration still selects Dynamic Textures, select its desired Paint Design
-again; uninstalling does not rewrite saved configurations.
+again; uninstalling does not rewrite saved configurations. If you bound a key to
+**Toggle Scratches Debug Panel**, the game logs a harmless
+`Couldn't find action scratches_toggle_ui` until you clear that binding.
 
 Then test it: remove the unpacked dev mount (`python tools/dev.py unmount`), drop the zip into `mods/`, restart
 BeamNG, and confirm a [clean install](#players--packaged-mod) works.

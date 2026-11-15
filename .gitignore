@@ -37,3 +37,6 @@ __pycache__/
 
 # Bench runs (tools/bench.py output)
 bench/
+
+# Packaged builds and checksums (tools/package.py)
+dist/

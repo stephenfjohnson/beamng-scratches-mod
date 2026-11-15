@@ -149,6 +149,15 @@ def main() -> None:
     save(chip(load("milestone3/snow-final/dirty.png", (380, 300, 1570, 900)), "Snow buildup"),
          "snow.jpg")
 
+    # HUD-free 3840x2160 captures from tools/showcase_capture.py (after a rollover).
+    impact_box = (900, 760, 2740, 1580)
+    save(stack([
+        chip(load("showcase/rollover-side/original-stages.jpg", impact_box), "Before", 34),
+        chip(load("showcase/rollover-side/damaged.jpg", impact_box), "After a rollover: impact chips and dings", 34),
+    ], 1200), "impacts-before-after.jpg")
+
+    save(fit(Image.open(EV / "showcase/debug-panel/panel.jpg").convert("RGB"), 1400), "debug-panel.jpg")
+
     wash_gif()
 
 

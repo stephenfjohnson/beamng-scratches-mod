@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.1.0-preview — 2026-11-15
+
+First public download, a development preview for the ETK 800 (plain paint or
+stock Police livery) on BeamNG.drive 0.40.5.0.
+
+- MIT license, shipped in the ZIP. The packager now writes a `.sha256` next to it.
+- ZIP-only install and uninstall tested in game
+  ([record](docs/evidence/release-v0.1.0/README.md)).
+- New HUD-free impact close-up and debug-panel screenshots
+  (`tools/showcase_capture.py`).
+- Repository history slimmed from 1.27 GB to 435 MB; raw milestone 5 runs now
+  live in the `evidence-milestone5` release.
+- Known limits: D3D12 bake stalls, ETK-only livery preservation. See [TODO.md](TODO.md).
+
 ## Repository cleanup and feature showcase — 2026-11-15
 
 - Merge the milestone 5 stack (synthetic anchors, directional and terrain-tinted

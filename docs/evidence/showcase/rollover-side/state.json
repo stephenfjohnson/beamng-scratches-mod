@@ -1,0 +1,109 @@
+{
+  "camera": {
+    "x": 90.45814225,
+    "y": 23.11412262,
+    "z": 101.8392205
+  },
+  "stats": {
+    "detect": {
+      "filteredCalls": 103,
+      "impactEvents": 70,
+      "paintCool": 0.003,
+      "perp": 0.8,
+      "totalCalls": 47786,
+      "slip": 0.6,
+      "minForce": 10,
+      "maxNormalForce": 56789,
+      "impForce": 800,
+      "impCool": 0.025,
+      "streamsFlushed": 7
+    },
+    "ready": true,
+    "latency": {
+      "oldestMs": 0
+    },
+    "coverage": {
+      "enabled": false
+    },
+    "config": {
+      "aggregateCap": 160,
+      "coverageCoalescing": false,
+      "flushInterval": 0.2,
+      "panelGrouping": false,
+      "fullRateCombine": false,
+      "bakeBudget": 6,
+      "projBudget": 6,
+      "syntheticAnchors": true,
+      "clusterRadius": 0.65,
+      "layerBudget": 24,
+      "damageWidth": 4096
+    },
+    "generation": 8,
+    "nativeEvents": {},
+    "anchors": {
+      "synthesized": 135
+    },
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "stamp": {
+      "stampsSkippedMissed": 0,
+      "combinesRun": 33,
+      "streamLayersMissed": 0,
+      "rebinds": 0,
+      "streamsBaked": 6,
+      "stampsEnqueued": 121,
+      "jobsDropped": 0,
+      "layersLost": 0,
+      "streamLayersExpected": 14,
+      "framesDeferred": 2,
+      "spotsSkipped": 0,
+      "framesTicked": 4512,
+      "streamsMerged": 1,
+      "clusterJobsMerged": 0,
+      "framesFlushed": 33,
+      "jobsFailed": 0,
+      "foreignDropped": 0,
+      "projectsIssued": 40,
+      "streamSubstrokesTotal": 14,
+      "bakeFailures": 0,
+      "bakesIssued": 33,
+      "clustersTotal": 34,
+      "aggregateDropped": 0,
+      "stampsAttempted": 121
+    },
+    "perf": {
+      "flushMsTotal": 18.178399999442,
+      "combineMsMax": 0.08309999998346,
+      "framesOver1ms": 39,
+      "framesOver4ms": 23,
+      "msMax": 20.222000000103,
+      "projectMsTotal": 0,
+      "bakeMsTotal": 214.39190000046,
+      "flushMsMax": 2.4327999999514,
+      "projectCalls": 0,
+      "inputToProjectMaxMs": 404.94809999996,
+      "lastMs": 0.0069000000166852,
+      "msTotal": 266.74869999533,
+      "bakeLayersTotal": 135,
+      "bakeCalls": 33,
+      "layerCalls": 135,
+      "layerMsTotal": 5.1805999983117,
+      "bakeMsMax": 20.152999999937,
+      "combineMsTotal": 1.5737999997327,
+      "projectMsMax": 0,
+      "frames": 4512,
+      "inputToBakeMaxMs": 460.72679999997
+    }
+  },
+  "camera_args": {
+    "fwd": 0.0,
+    "side": 0.0,
+    "up": 0.4,
+    "az": 90.0,
+    "elev": 15.0,
+    "dist": 4.2
+  }
+}

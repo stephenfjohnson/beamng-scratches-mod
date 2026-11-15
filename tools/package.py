@@ -21,6 +21,7 @@ Run: python tools/package.py            -> dist/scratches_mod.zip
 """
 
 import argparse
+import hashlib
 import os
 import re
 import shutil
@@ -34,6 +35,8 @@ ROOT = os.path.normpath(os.path.join(HERE, ".."))
 # Allow-list of trees that make up the mod. Paths are repo-relative and are
 # written into the zip with exactly these prefixes.
 INCLUDE_DIRS = ["lua", "art"]
+# Single files shipped at the zip root next to the trees.
+INCLUDE_FILES = ["LICENSE"]
 
 # Brush textures need a sidecar to load; these are ordinary material maps and
 # do not (see restoreFactoryMR in paint.lua).
@@ -60,6 +63,10 @@ def collect_files() -> list[tuple[str, str]]:
                 rel = os.path.relpath(abs_path, ROOT)
                 # Forward slashes: zip entries are POSIX paths regardless of host.
                 found.append((abs_path, rel.replace(os.sep, "/")))
+    for name in INCLUDE_FILES:
+        abs_path = os.path.join(ROOT, name)
+        if os.path.isfile(abs_path):
+            found.append((abs_path, name))
     return found
 
 
@@ -187,7 +194,12 @@ def main() -> None:
 
     size_kb = os.path.getsize(out) / 1024.0
     roots = sorted({arc.split("/", 1)[0] for _, arc in files})
+    with open(out, "rb") as fh:
+        digest = hashlib.sha256(fh.read()).hexdigest()
+    with open(out + ".sha256", "w", encoding="ascii", newline="\n") as fh:
+        fh.write(f"{digest}  {os.path.basename(out)}\n")
     print(f"wrote {out} ({size_kb:.1f} KB)")
+    print(f"  sha256: {digest}")
     print(f"  zip root entries: {', '.join(roots)}")
 
 
