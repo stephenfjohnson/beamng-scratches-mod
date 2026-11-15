@@ -66,9 +66,8 @@ additional plain/roof and selected-candidate captures remain required.
 
 Windows Performance Recorder 10.0.26100 is installed. Both GPU+GeneralProfile and
 GPU-only attempts failed with **0xc5585011**, "Failed to enable the policy to profile
-system performance." WPR reports no recording. No ETL was produced. Installed
-Optick attempts in investigation 10 also produced no usable file. Native GPU wait,
-shader and allocation attribution remains unavailable, not inferred as fact.
+system performance." WPR reports no recording. That WPR attempt produced no ETL. A later user-provider ETW capture succeeded (below). Installed
+Optick attempts in investigation 10 also produced no usable file. CPU stacks and native GPU-command attribution remain unavailable; the later trace provides narrower paging evidence.
 
 
 ## Stress-fixture correction
@@ -89,3 +88,47 @@ Per-frame coverage counters expose progress before a failed/reset run; a cleared
 queue is no longer mistaken for successful delivery. Old resumed cold run 1 had
 zero final coverage/detector counters after work, so it is invalid despite lacking
 an old bench error flag. Its raw data remains unchanged.
+
+
+## Native resource trace obtained during resumed implementation
+
+`tools/perf_trace.py` uses a 128 MiB circular user-provider ETW session without
+requesting elevation. D3D12 mask 0x484, DXGI 0x2, Direct3DShaderCache 0xf and
+DxgKrnl 0x80c1 are recorded. WPR system CPU profiling still lacks permission.
+Trace runs are explicitly diagnostic and excluded from untraced acceptance.
+
+Third diagnostic sustained run captured **425.9219 ms** inside native projection.
+The engine clock was aligned to host UTC with approximately +/-2.47 ms initial
+round-trip uncertainty. Game-owned D3D12 event streams pause for about 423 ms.
+DxgKrnl PagingQueuePacket sequence 29480 is submitted 2.30 ms after call start
+and completes 424.94 ms after call start, about 1 ms before projection returns.
+Its queue-to-complete interval is **422.64 ms**. A 256-byte default-heap buffer
+creation is also recorded near the pause start; it is not the damage texture.
+This supports a graphics-resource/paging delay correlated with this stall,
+not a proven driver/engine root cause or evidence of a 423 ms GPU draw.
+The native API remains synchronous and exposes no asynchronous completion handle
+or cancellation mechanism to this scheduler.
+
+No selected shader-cache or pipeline-state-create events occur in this window;
+that absence does not exclude shader work. The recorded packet's numeric
+VidMmOpType 113 is not assigned an undocumented interpretation. No CPU wait stacks
+were collected. The system-wide ETL stays local (128 MiB; SHA256 in trace.json).
+[Sanitized owned-process events](../docs/evidence/milestone5/resumed-native-ring/stall-owned-events.json)
+and [analysis/limits](../docs/evidence/milestone5/resumed-native-ring/stall-analysis.json)
+are retained with the raw mod timings. Graphics addresses and unrelated processes
+are omitted from the public export. Half resolution did not prevent this stall.
+
+## Grouping and continuous-session fixture
+
+Optional panel grouping retains every accepted layer while combining nearby
+same-facing discrete jobs (maximum 24 layers) and up to six stream bands per
+shared projection camera. Camera distance expands with the group. It reduces
+projection passes without describing discarded inputs as equivalent coverage.
+Discrete representative coalescing remains separately counted and optional.
+
+The endurance tool now supports one continuous 25 m radius assisted roof scrape,
+with additive horizontal velocity correction, preserving internal/vertical node
+motion. It does not reset the car or painter during the measured interval.
+Repeated-fixture endurance remains available and is labeled separately. Native
+process-memory sampling replaces spawning PowerShell inside measured windows.
+Any automatic reset, missing car, residual work or lost coverage fails acceptance.

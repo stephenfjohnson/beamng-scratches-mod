@@ -139,6 +139,7 @@ local stampStats = {
 -- to leave on: two clock reads per frame, a few more while there is work. The
 -- debug panel's imgui draw is excluded so opening the panel doesn't skew it.
 local clockhp = os.clockhp or os.clock
+local nativeEvents = {}
 local perfStats = {
   frames = 0, lastMs = 0, msTotal = 0, msMax = 0,
   framesOver1ms = 0, framesOver4ms = 0,
@@ -154,8 +155,13 @@ local perfStats = {
 
 -- Add the time since t0 (os.clockhp seconds) to perfStats[totalKey], track
 -- the max in perfStats[maxKey] if given, bump perfStats[countKey] if given.
-local function perfAdd(t0, totalKey, maxKey, countKey)
-  local ms = (clockhp() - t0) * 1000
+local function perfAdd(t0, totalKey, maxKey, countKey, layers)
+  local ended=clockhp()
+  local ms = (ended - t0) * 1000
+  if ms>=50 and (maxKey=="projectMsMax" or maxKey=="bakeMsMax") then
+    if #nativeEvents>=32 then table.remove(nativeEvents,1) end
+    nativeEvents[#nativeEvents+1]={stage=maxKey=="projectMsMax" and "project" or "bake",started=t0,ended=ended,ms=ms,layers=layers}
+  end
   perfStats[totalKey] = perfStats[totalKey] + ms
   if maxKey and ms > perfStats[maxKey] then perfStats[maxKey] = ms end
   if countKey then perfStats[countKey] = perfStats[countKey] + 1 end
@@ -1673,8 +1679,9 @@ local function enqueueStreamLocal(localPos, localNormals, vid, severity)
   if jobQueueVid == vid then
     for i = #jobQueue, 1, -1 do
       local j = jobQueue[i]
-      if j.stream and #j.bands < STREAM_MERGE_MAX_BANDS
-         and distLocal(j.centroid, centroid) <= STREAM_MERGE_RADIUS
+      if j.stream and #j.bands < (panelGrouping and 6 or STREAM_MERGE_MAX_BANDS)
+         and (not panelGrouping or #j.segments+#j.bands+#segments+1<=MAX_LAYERS_PER_FLUSH)
+         and distLocal(j.centroid, centroid) <= (panelGrouping and .65 or STREAM_MERGE_RADIUS)
          and j.normal:dot(normal) >= 0.8 then
         local k = #j.bands
         j.bands[k + 1] = band
@@ -1706,7 +1713,7 @@ local function runStreamJob(job, projM, bakeList)
     extent = math.max(extent, distLocal(job.centroid, sg.startP), distLocal(job.centroid, sg.endP))
   end
   local camLocal = buildSyntheticCameraLocal(job.centroid, job.normal,
-                                             math.max(0.5, math.min(1.6, (extent + 0.05) * 2.2)))
+                                             math.max(0.5, math.min(panelGrouping and 3 or 1.6, (extent + 0.05) * 2.2)))
   setScratchProjectionFence(true)
   local tp = clockhp()
   decalProjection:projectDynamicDecals(camLocal, projM)
@@ -2008,7 +2015,7 @@ local function bakePending()
   else
     decalProjection:bakeLayers(chunk, veh.JBeam or veh.jbeam)
   end
-  perfAdd(tb, "bakeMsTotal", "bakeMsMax", "bakeCalls")
+  perfAdd(tb, "bakeMsTotal", "bakeMsMax", "bakeCalls", k)
   perfStats.bakeLayersTotal = perfStats.bakeLayersTotal + k
   for _,layer in ipairs(chunk) do
     if coverage then coverage:complete(layer._scratchesCoverage) end
@@ -2520,13 +2527,15 @@ M.resetPaintStats = function()
   stampStats.streamsMerged = 0
   stampStats.framesTicked = 0
   for k in pairs(perfStats) do perfStats[k] = 0 end
+  table.clear(nativeEvents)
   log('I', logTag, "paint stats reset")
 end
 
 -- Machine-readable snapshot of every counter, for tools/bench.py and anything
 -- else that wants numbers rather than log lines. Copies, so callers can keep it.
 M.getStats = function()
-  local stamp, perf = {}, {}
+  local stamp, perf, events = {}, {}, {}
+  for i,v in ipairs(nativeEvents) do events[i]=v end
   for k, v in pairs(stampStats) do stamp[k] = v end
   for k, v in pairs(perfStats) do perf[k] = v end
   local oldest
@@ -2537,7 +2546,7 @@ M.getStats = function()
     end
   end
   return {
-    generation=cosmeticGeneration,
+    generation=cosmeticGeneration, nativeEvents=events,
     coverage = coverage and coverage:snapshot() or {enabled=false},
     latency = {oldestMs=oldest and (clockhp()-oldest)*1000 or 0},
     ready  = ready,

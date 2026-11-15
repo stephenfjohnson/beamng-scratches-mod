@@ -127,7 +127,7 @@ local function finish(err)
 end
 
 local function newFrames()
-  return { t = {}, frameMs = {}, painterMs = {}, projectTotalMs = {}, bakeTotalMs = {}, queuedJobs = {}, queuedLayers = {}, oldestMs = {}, inputToBakeMaxMs = {}, coverageRequests = {}, coverageDelivered = {}, coverageRequired = {}, coverageMerged = {}, coverageLost = {}, speed = {}, upZ = {} }
+  return { t = {}, clockSeconds = {}, frameMs = {}, painterMs = {}, projectTotalMs = {}, bakeTotalMs = {}, queuedJobs = {}, queuedLayers = {}, oldestMs = {}, inputToBakeMaxMs = {}, coverageRequests = {}, coverageDelivered = {}, coverageRequired = {}, coverageMerged = {}, coverageLost = {}, speed = {}, upZ = {} }
 end
 
 -- frameMs is wall time between successive bench updates (os.clockhp): the
@@ -144,6 +144,7 @@ local function sample(veh)
     run.initialGeneration=stats.generation
     run.lastValidPainterStats=stats
   end
+  f.clockSeconds[n]=now
   f.t[n] = run.t
   f.frameMs[n] = run.lastClock and (now - run.lastClock) * 1000 or 0
   run.lastClock = now
@@ -275,6 +276,9 @@ local function step(dtReal)
         -- Scale=0 erased deformation motion every render frame and could cause
         -- physics instability; this fixture never synthesizes contact events.
         local v,current = run.launchVel,veh:getVelocity()
+        if sc.circleRadius then
+          v = rotateAbout(v,vec3(0,0,1),math.deg(run.t*v:length()/sc.circleRadius))
+        end
         veh:applyClusterVelocityScaleAdd(veh:getRefNodeId(), 1, v.x-current.x, v.y-current.y, 0)
       end
       local speed = run.frames.speed[#run.frames.speed]
@@ -373,7 +377,8 @@ end
 M.status = function()
   if run then
     return jsonEncode({ phase = run.phase, t = run.t, frames = #run.frames.t,
-                        shot = run.shotIdx, elapsed = clockhp() - run.startedAt })
+                        nativeMaxMs=run.lastValidPainterStats and math.max(run.lastValidPainterStats.perf.projectMsMax,run.lastValidPainterStats.perf.bakeMsMax) or 0,
+                        clockSeconds=clockhp(),shot = run.shotIdx, elapsed = clockhp() - run.startedAt })
   end
   return jsonEncode({ phase = result and 'done' or 'idle', error = result and result.error })
 end

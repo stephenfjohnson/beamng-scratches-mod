@@ -312,6 +312,7 @@ def run_one(name: str, args, tuning: list[dict], home: dict, rep: int) -> dict:
             st = json.loads(dev.lua("return scratches_bench.status()", read_timeout=30))
         except (ConnectionError, dev.DeployError):
             continue
+        if getattr(args,"on_poll",None):args.on_poll(st)
         if st.get("phase") in ("done", "idle"):
             break
         extra = f" shot {st.get('shot')}/{len(cfg['shots'])}" if st.get("phase") in ("aim", "shoot") else ""

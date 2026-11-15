@@ -19,7 +19,7 @@ Started from c8bcae6. Milestone 6/public release is excluded.
   require separate evidence. Unsupported vehicles remain unverified or skipped,
   not implicitly supported. No claim about all hardware FPS.
 
-**Final run verdict: BLOCKED.** The scoped mitigations and investigation are
+**Prior run verdict at f414136: BLOCKED.** [Same-thread resumed implementation and new evidence](11-quality-throughput.md) supersede this run-completion statement. The scoped mitigations and investigation are
 complete for this run; milestone 5 feature acceptance is incomplete. Do not merge
 this branch or start milestone 6 on the strength of the mock suite. Last merged
 baseline remains c8bcae6.
