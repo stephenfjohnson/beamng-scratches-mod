@@ -1,5 +1,19 @@
 # Changelog
 
+## Repository cleanup and feature showcase — 2026-11-15
+
+- Merge the milestone 5 stack (synthetic anchors, directional and terrain-tinted
+  soil, cross-panel splashes, soil relief, scratch visibility) into `master` as a
+  development preview. Preflight: 358 mock checks, Lua syntax/global and brush
+  sidecar checks pass. D3D12 acceptance gates remain open.
+- Rewrite the README as a feature showcase built from real captures
+  ([`tools/make_showcase.py`](tools/make_showcase.py), `docs/showcase/`); move
+  the milestone narrative to [docs/milestones.md](docs/milestones.md).
+- Add [TODO.md](TODO.md): release blockers, quality, verification,
+  compatibility, tech debt and ideas from archived branches.
+- Retire merged branches; preserve the unmerged realism/accuracy branches as
+  `archive/*` tags.
+
 ## Directional wheel soil
 
 - Replace wheel mud/dirt blobs with two deterministic droplet/tapered-tail
@@ -22,7 +36,7 @@
 - [Actual run and screenshots](docs/evidence/visibility/report.md). Single-run
   rendering verification only; this does not close performance acceptance gates.
 
-## Milestone 5: performance investigation — blocked, unmerged
+## Milestone 5: performance investigation — merged as preview, gates open
 
 - **Projection-free synthetic anchors (default).** Captured layers are anchored at
   their own detector contact point and hull-resolved normal instead of reading the

@@ -1,207 +1,221 @@
-# scratches_mod
+# scratches_mod for BeamNG.drive
 
-Procedural scratches, scrape streaks, and impact chips for BeamNG.drive vehicle
-panels. The mod listens to real physics contact events and bakes cosmetic
-scratch decals onto the body where the car actually touched something — slide
-on your roof and the roof panels get long scrape marks; clip a wall and that
-corner gets a chip cluster.
+**Contact-driven paint damage, mud, snow and washing for BeamNG.drive.**
+Slide along the tarmac and the panels that touched get scrape bands running
+the way the car slid. Clip a wall and that corner chips. Drive through mud or
+snow and it builds up behind the wheels. Drive into deep water and it washes
+off, while the scratches stay. Every mark comes from a physics contact that
+actually happened and is baked into the car's paint without touching its livery.
 
-It is purely cosmetic. It does **not** change BeamNG's soft-body deformation;
-it paints texture damage on top of whatever the physics already did.
+![Scrapes, mud splashes, snow and washing, all captured in game](docs/showcase/hero.jpg)
 
-## Milestone 5: performance investigation (release blocked)
+> **Status: development preview.** Everything on this page runs in game today on
+> the **ETK 800** (plain paint or the stock Police livery) on BeamNG.drive
+> 0.40.5.0. There is no packaged release yet; [build the ZIP yourself](#packaging-for-release).
+> Release blockers, open bugs and ideas parked on archived branches live in
+> **[TODO.md](TODO.md)**.
 
-**Projection-free synthetic anchors (current default).** The native
-`projectDynamicDecals` pass only read back the plane a decal is baked against; the
-detector already knows each contact point and normal. Captured layers are now
-anchored directly at their own contacts, so the scratch path makes **no native
-projection calls**. On the exact tested setup (BeamNG 0.40.5.0, RTX 3090, ETK 800
-Police, full 4096x2048 detail, every accepted layer kept):
+It is purely cosmetic: the mod paints texture damage on top of whatever the
+soft-body physics already did. It never changes deformation.
 
-* **Vulkan**: largest native call **35.4 ms** across 57 untraced fixtures including a
-  ten-minute endurance (previously 508 ms); oldest input-to-completed-layer age
-  **318 ms** (previously 1,012 ms). Intermittent ~410 ms engine render-phase frame
-  pauses still occur (2 of 18 short fixtures; none above 250 ms in the endurance).
-* **D3D12**: delivery age passes (max 600 ms), but **446/447 ms bake batches** still
-  occur, so the native-call gate fails on D3D12.
+All images below are crops of real in-game captures from the
+[evidence folders](docs/evidence/). Before/after pairs come from the same run,
+with the mod's stage switched on and off. `python tools/make_showcase.py`
+rebuilds them.
 
-The remaining stall is traced to the engine's native bake: every baked layer creates
-and destroys about 112 MiB of full-resolution transient textures, which Lua cannot
-pool or defer. `scratches_paint.setSyntheticAnchors(false)` restores the legacy
-projected path for comparison. Stable release remains blocked; see
-[investigation 12](investigations/12-synthetic-anchors.md) for measurements,
-captures and the allocation evidence.
+## Features
 
-The private ETK projection is reused across attachments, and captured layers drain
-before more projection work. The full-detail experiment uses three-layer native
-bake batches, faster flushing and same-panel grouping, with explicit conservation
-of every accepted layer. Optional lower-resolution targets and representative
-coalescing remain documented quality tradeoffs. Original paint/livery and the
-separate washable soil target retain their resolution and materials. Default
-damage remains 4096x2048.
+- [Scrapes that follow the slide](#scrapes-that-follow-the-slide)
+- [Impact chips and gouges](#impact-chips-and-gouges)
+- [Your paint and livery stay underneath](#your-paint-and-livery-stay-underneath)
+- [Mud, dirt and snow build up as you drive](#mud-dirt-and-snow-build-up-as-you-drive)
+- [Splashes cross panel seams](#splashes-cross-panel-seams)
+- [Mud the color of the ground](#mud-the-color-of-the-ground)
+- [Soil that catches the light](#soil-that-catches-the-light)
+- [Water washes soil off; scratches stay](#water-washes-soil-off-scratches-stay)
+- [Soft ground doesn't scratch](#soft-ground-doesnt-scratch)
+- [Stays out of your frame time](#stays-out-of-your-frame-time)
+- [Editor-safe, lifecycle-safe](#editor-safe-lifecycle-safe)
+- [In-game debug and tuning panel](#in-game-debug-and-tuning-panel)
+- [Developer tooling](#developer-tooling)
 
-Merged stream bands no longer duplicate later paths in the first band's haze.
-ETK construction now prevents cached private materials from reaching another
-vehicle, and unreferenced owned clones are reclaimed after destruction. This
-requires invalidating the engine's JBeam construction cache for ETK spawns/reloads;
-it can increase construction cost and does not run during steady scraping.
+### Scrapes that follow the slide
 
-The corrected sustained fixture preserves internal vehicle motion and rejects
-mid-run resets. Before synthetic anchors, the full-resolution Vulkan build reproduced a
-**508 ms native projection** and a separate **965 ms frame interval** during
-endurance, despite favorable cold and warm runs. The latter pushed completed-layer
-age to 1,012 ms, failing the one-second gate. D3D12 warm tests of that build reached
-**444 ms projection at full resolution and 184 ms at half resolution**. A separate
-ETW diagnostic captured a graphics paging packet spanning about 423 ms of a
-426 ms native call; the engine/driver root cause remains unresolved. The prior
-6.52-second delays came from an older, physically unstable stress fixture and
-must not be presented as directly comparable throughput evidence.
+![Dark ETK 800 before and after one sideslide](docs/showcase/scrapes-before-after.jpg)
 
-Milestone 5 acceptance remains incomplete and unmerged; last merged baseline is
-c8bcae6. No milestone 6, stable release or all-hardware FPS claim. See the
-[synthetic-anchor results](investigations/12-synthetic-anchors.md),
-[resumed implementation, criteria and limits](investigations/11-quality-throughput.md),
-[measured cohorts and charts](docs/evidence/milestone5/resumed-summary.md),
-[exact compatibility matrix](docs/compatibility.md) and
-[reproducible experimental settings](docs/examples.md#resumed-quality-and-throughput-experiments).
+Sustained sliding contact is tracked as a stream. Each contact point becomes a
+scrape band aligned with the direction of travel, 30–70 cm long, so neighbouring
+contacts join into one continuous rash instead of a row of stickers. Each band is
+layered like real paint: scuffed clearcoat haze, primer grey, then bare metal on
+harder or longer drags. Four variants per brush family avoid visible repeats,
+and on light paint the palette shifts darker so damage contrasts the right way.
 
-## Milestone 4: scratch and impact polish
+### Impact chips and gouges
 
-Play-test visibility adjustment: the damage stage now uses 1.6 opacity and an
-unmuted diffuse factor on dark/plain and Police paint; light plain paint retains
-its darker coating response. This increases existing baked-mark visibility without
-adding projection work or changing soil. A real Police sideslide confirms visible
-fender/rear-quarter scuffs, but marks across the white doors remain subtle. This is
-a partial visibility improvement, not a completed mixed-livery contrast fix.
-[Test report and screenshots](docs/evidence/visibility/report.md).
+Single hard hits past a normal-force threshold stamp chipped paint, plus a gouge
+on harder hits, sized by the impact force. Hits in the same frame are clustered
+into one job. Impact marks are deliberately small; a close-up showcase capture is
+[still on the TODO list](TODO.md#showcase-and-release-materials).
 
-Smaller, irregular depth-colored scuffs, chips and gouges replace the bright
-single-tone brush marks. Four scrape/chip variants avoid immediate family
-repeats; narrower bands and sub-centimeter jitter keep marks closer to contact.
-The private ETK damage stage adjusts contrast without darkening washable soil.
-Original PBR/livery stages and editor isolation remain intact.
+### Your paint and livery stay underneath
 
-[Matched engine captures, rejected experiments, measured costs and limitations](investigations/09-scratch-impact-polish.md).
-Light-paint scuffs are deliberately subtle; this is cosmetic color/roughness
-approximation, not physical paint-layer fracture or per-mark metal shading.
-Support remains ETK 800 main body, empty Paint Design or stock Police. No stable
-release, generic compatibility, or milestone 5 certification is claimed.
+![Stock ETK Police livery before and after a slide](docs/showcase/livery-before-after.jpg)
 
-## Milestone 3: water, washing and drying
+The ETK adapter clones the car's own body materials per vehicle and appends a
+separate damage stage. The original paint, palette, normal and detail maps,
+metallic, roughness, clearcoat and livery artwork all render unchanged beneath
+the marks. The Paint Design slot is never rewritten. Liveries the adapter doesn't
+support are detected and skipped, never overwritten. Both ETK body materials are
+covered, including the separate `etk800_extra` rear quarters.
 
-On the supported ETK 800 main body (empty Paint Design or stock Police), water
-progressively removes mud, dirt and snow while baked scratches remain. A separate
-bounded soil texture sits above the original paint/livery and lasting damage.
-Wet clearcoat dries back to its exact original values in about 20 simulated seconds.
+### Mud, dirt and snow build up as you drive
 
-Enter water that reaches the body and stay immersed to clean; wheel-only puddles
-may do nothing. Full body immersion takes about eight simulated seconds for a full
-soil cycle. Stationary immersion works, pause freezes progress, and a fully washed
-car can collect fresh soil. This is uniform cosmetic fading, not a waterline mask;
-partial washing also attenuates new deposits until that soil cycle is fully removed.
-Reset, switch, reload and editor suspension still discard all cosmetic marks.
+![Tapered mud splashes on the Police ETK](docs/showcase/mud-splashes.jpg)
 
-[Engine captures, reproducible probes, measured costs and limitations](investigations/08-water-washing.md).
-Milestone 3 evidence predates the milestone 4 polish described above.
+Rolling over real `MUD`, `DIRT` or `SNOW` ground materials deposits soil around
+the wheels and lower panels. No wheelspin is needed, and stationary wheelspin adds
+nothing. Mud and dirt land as droplet heads with tapered tails aligned against
+travel. Faster driving gives longer, flatter trails, and reversing flips them.
+Snow lands as soft coverage patches. Soil lives on its own layer above the paint
+and damage, capped at 96 deposits per cycle and scheduled with the scratches.
 
-## Milestone 2: progressive surface deposits
+![Snow buildup on a dark ETK](docs/showcase/snow.jpg)
 
-Soil now has a masked detail normal for small lumps and grain that catch the
-light. It preserves the factory body normal and fades with soil opacity during
-washing. This is lighting relief, not displacement or raised splash outlines.
-Mud, dirt and snow share this detail because they share the soil layer. See the [before/after evidence and
-reproduction steps](docs/evidence/soil-relief/report.md).
+### Splashes cross panel seams
 
-Wheel mud/dirt now uses discrete droplet heads with tapered tails, aligned
-against local travel rather than randomly rotated coverage patches. Faster
-travel produces longer, flatter trails; reversing flips their direction. This
-is baked splash art, not ongoing fluid movement. Snow and direct body contacts
-keep their coverage brushes. A [real mud-strip capture](docs/evidence/directional-soil/mud-close.png)
-shows the first directional pass; dirt artwork and reverse motion still need
-their own live visual validation.
+![Before: mud stopped at the rear door. After: one splash crosses every panel](docs/showcase/panel-seams-before-after.jpg)
 
-Wheel splashes now span adjacent panels with one elongated projection and a
-body-space direction. Both stock body materials are supported, including the
-separate `etk800_extra` quarter panels and their Police skin; each retains its
-own factory paint, normals and livery. Mud, scratches, washing and detail relief
-reach both materials. [Panel-seam captures and reproduction steps](docs/evidence/soil-continuity/report.md)
-cover plain and Police paint. This fixes the previously clean rear quarters.
+Each wheel splash is a single elongated projection that spans neighbouring
+panels, oriented in body space rather than restarted per panel. The ETK's rear
+quarters use a different material from the doors. The adapter now clones and
+binds that material too, so mud no longer stops dead at the rear door.
 
-Soil tint now follows the contacted terrain material: local base-map color plus
-averaged detail/macro color, converted for the vehicle decal's color space.
-The Gridmap mud strip now deposits gray-brown mud instead of the old orange.
-Mesh surfaces, unreadable maps and unmatched ground models use a fallback.
-This approximates surface albedo; it does not copy shadows, puddles or terrain
-layer blending. [Color captures, limits and reproduction](docs/evidence/terrain-color/report.md).
+### Mud the color of the ground
 
-Driving over real MUD, DIRT or SNOW collision materials adds overlapping soil
-patches around the wheels and lower side panels. Rolling tires work without
-wheelspin; stationary wheelspin adds nothing. Dedicated mud clumps, fine dirt
-coverage and soft snow patches replace the tinted scratch-haze placeholders.
-Deposits stop at 96 attempts per reset and share the bounded scratch scheduler.
+![Before: fixed orange tint. After: sampled from the terrain](docs/showcase/terrain-color-before-after.jpg)
 
-Validated on the isolated ETK 800 main-body adapter, stock Police and plain
-paint, BeamNG 0.40.5.0 build 302427 / D3D12. Gridmap v2 supplied mud/dirt;
-Automation Test Track supplied snow. [Actual captures, exact configuration,
-resource measurements and limits](investigations/07-progressive-deposits.md).
+Soil tint is sampled from the terrain material under the wheel: the local base
+map color plus averaged detail and macro color, converted into the vehicle
+decal's color space. On Gridmap's grey mud strip the result is grey-brown grime
+rather than the old fixed orange, which is why the after image looks so much
+quieter. Mesh surfaces and unreadable maps fall back to a default tint. The
+splash captures above predate this change, so they still show the orange tint.
 
-![Dirt buildup over preserved Police lettering](docs/evidence/milestone2/dirt-capped.png)
-![Snow buildup on plain ETK paint](docs/evidence/milestone2/snow-plain-stationary.png)
+### Soil that catches the light
 
-This is a cosmetic coverage approximation, not volumetric snow or simulated
-spray. Projection/bake spikes remain: the rolling cap run peaked at 27.3 ms
-painter main-thread elapsed time, including native waits. Broad performance/vehicle certification remains future work.
-Milestone 3 adds selective visual washing and wetness for this ETK scope.
-Reset clears soil and scratches together.
+![Close-up: scrape streaks under lumpy mud on the Police livery](docs/showcase/closeup-relief.jpg)
 
-This is a development build, not a stable public release. See
-[compatibility](docs/compatibility.md) and [driving examples](docs/examples.md).
+The soil layer carries a masked detail normal, so lumps and grain pick up
+highlights while the factory body normal stays intact. The relief fades with the
+soil when it washes off. This close-up also shows the white scrape streaks from
+an earlier slide sitting under the mud, with the Police artwork untouched.
 
-## Milestone 1: ETK 800 paint and police livery
+### Water washes soil off; scratches stay
 
-A narrow material-preserving adapter supports the ETK 800 main body with an
-**empty Paint Design or stock Police (`etk800_skin_police`)**. It keeps the
-original paint/livery material channels beneath a separate scratch layer;
-it does not replace the selected design or flatten it into a color image.
-Other liveries and pre-existing Dynamic Textures designs are safely skipped.
+![Seven-step wash cycle: muddy, wading, submerged, washed, wet, dry, fresh mud](docs/showcase/washing-cycle.gif)
 
-Actual scratches, clean/reset fidelity, two-car switching, vehicle/extension
-reload and editor ownership were checked on **0.40.5.0 build 302427 / Vulkan**.
-[Exact scope, matched captures and evidence](investigations/06-etk-material-adapter.md).
-This is a development prototype, not generic livery or renderer certification.
+Submerge the body and the soil fades over about eight simulated seconds. Damage
+lives on a separate layer, so baked scratches survive the wash. Back out of the
+water, the clearcoat stays wet and dries back to its exact original values in
+about 20 s. A fully washed car collects fresh soil again, and pausing the game
+freezes all of it. The wash is a uniform fade rather than a waterline, so
+puddles that only reach the wheels may do nothing.
 
-![Scratches over the preserved stock ETK police livery](docs/evidence/milestone1/adapter-police-sideslide.jpg)
+### Soft ground doesn't scratch
 
-The adapter can reload/repair the current car once on first activation to prepare
-its private material. Reset, switching, reload and editor suspension discard
-cosmetic marks. It pauses while the world/livery editor owns rendering and
-resumes after closure. Save editor work before changing vehicles or designs.
-Non-ETK plain vehicles retain the older Dynamic Textures path and its material
-fidelity limitations. Never remove artwork to force the painter to start.
+Mud, snow and grass never emit scratch damage, even when a sunk body node pushes
+into them hard. They only deposit soil. Dirt, sand, gravel and hard surfaces stay
+abrasive. The contact's ground material decides which applies.
 
-## Start here
+### Stays out of your frame time
 
-- [Examples and troubleshooting](docs/examples.md)
-- [Sequential release plan](docs/plans/release-sequence.md)
-- [Contributing and validation](CONTRIBUTING.md)
-- [Changelog](CHANGELOG.md)
+- **Player car only.** AI traffic and parked cars return immediately; three
+  moving traffic cars produced zero detector calls during a player scrape.
+- **Cheap detection.** Each node's paintable/not-paintable verdict is cached, so
+  the per-contact cost on the physics tick is a table lookup.
+- **No native projection.** Baked layers are anchored directly at their own
+  contact point and hull-resolved normal (*synthetic anchors*) instead of reading
+  the anchor back from a GPU projection pass. Measured on BeamNG 0.40.5.0, RTX 3090,
+  full 4096×2048 detail, every accepted mark kept:
 
-![ETK 800 after an asphalt sideslide](docs/images/etk800-sideslide.png)
+  | Worst case per run | Before (projected) | Now (synthetic anchors) |
+  | --- | ---: | ---: |
+  | Vulkan, native call, 10-minute endurance | 508.5 ms | **35.4 ms** |
+  | Vulkan, contact to finished mark | 1,012 ms | **318 ms** |
+  | D3D12, native call | 443.8 ms | 446–447 ms ([open](TODO.md#release-blockers)) |
 
-Actual in-game development capture, 2026-11-14: ETK 800 on Gridmap v2,
-Dynamic Textures paint design. The bright scrape appearance is still being
-refined. This image demonstrates scratches, not mud, snow or water effects.
-There is no stable release download yet; build the experimental ZIP below.
+- **Composite only when needed.** The canvas is re-composited only on frames
+  that baked or cleared, and the expensive texture-set re-bind (24–55 ms) happens
+  only when the binding can actually be stale.
+- **Bounded everything.** 160 inputs, 64 queued jobs, 6 baked layers per frame,
+  96 soil deposits and per-cell repaint limits.
+
+Details: [investigation 12](investigations/12-synthetic-anchors.md) and the
+[measured cohorts](docs/evidence/milestone5/resumed-summary.md).
+
+### Editor-safe, lifecycle-safe
+
+The painter uses a private instance of the Dynamic Decals API, so clearing
+scratches never wipes your decal-editor artwork. It pauses while the world or
+livery editor owns rendering and resumes afterwards. Reset (`Ctrl+R`), vehicle
+switching, vehicle/extension reloads and map changes are all handled cleanly.
+They clear cosmetic marks; nothing persists across a reset. Two identical ETKs get separate private materials, and those are reclaimed once
+the car and every mesh reference to them are gone.
+
+### In-game debug and tuning panel
+
+A bindable two-pane window. It has a live log merged from both Lua VMs, one-click
+**Copy debug report**, Light→Extreme presets, live counters (impacts, streams,
+bakes, backlog, composites) and sliders for every threshold and limit. See
+[the debug panel](#the-debug-panel).
+
+### Developer tooling
+
+- [`tools/dev.py`](tools/dev.py) deploys and hot-reloads into the running game
+  through BeamNG's built-in MCP server in about 2.5 s, and fails the deploy if
+  the mod logs an error.
+- [`tools/bench.py`](tools/bench.py) runs scripted crash scenarios with
+  per-frame timing and five-angle screenshots.
+- [`tools/sim/harness.lua`](tools/sim/harness.lua) has **358 headless checks**
+  against mocked engine objects. No game is needed.
+- [`tools/package.py`](tools/package.py) builds the release ZIP behind a syntax,
+  stray-global, harness and brush-sidecar preflight.
+- `tools/perf_*.py` covers renderer cohorts, endurance sessions, ETW traces and
+  allocation probes.
+
+## Compatibility at a glance
+
+| Setup | Result |
+| --- | --- |
+| ETK 800, empty Paint Design | Full feature set (scratches, soil, washing, wet gloss) |
+| ETK 800, stock Police livery | Full feature set, livery preserved |
+| Other ETK liveries (Polizei, Heritage), custom body overrides | Detected and skipped; paint untouched |
+| Other vehicles with a `_skin_dynamicTextures` part | Older legacy path: scratches with lower material fidelity; soil/washing not verified |
+| Vehicles without Dynamic Decals support | Mod stays idle (`NOT READY`) |
+| Vulkan | **Recommended.** Meets the native-call and latency targets in measured runs |
+| D3D12 | Works; intermittent ~450 ms bake stalls remain (engine-side, [open](TODO.md#release-blockers)) |
+
+Tested on BeamNG.drive 0.40.5.0 build 302427, Windows 11, RTX 3090 / Ryzen 9
+3900XT. Other builds and hardware are untested. Exact configurations are in the
+[compatibility matrix](docs/compatibility.md).
+
+## Project docs
+
+- **[TODO.md](TODO.md)**: open work, release blockers and archived-branch ideas
+- [Milestone history](docs/milestones.md): what each milestone added, with evidence
+- [Changelog](CHANGELOG.md), [release plan](docs/plans/release-sequence.md)
+- [Examples and troubleshooting](docs/examples.md), [contributing](CONTRIBUTING.md)
+- [`investigations/`](investigations/): BeamNG engine/API research behind each decision
 
 ---
 
 ## Installation
 
-The mod is two Lua extensions, an ETK material helper, and brush art. It targets a recent version of
-BeamNG.drive that includes the **Dynamic Decals** system. Development began on
-0.38; the repository records a later 0.39.4 audit. The ETK adapter was tested
-on 0.40.5.0 build 302427 with Vulkan (milestone 1) and D3D12 (milestone 2);
-other builds/renderers are unverified.
+The mod is two Lua extensions, three helper modules (ETK material adapter,
+terrain soil color, coverage accounting) and brush/soil art. It targets a
+recent version of BeamNG.drive that includes the **Dynamic Decals** system.
+Development began on 0.38; the current build is tested on 0.40.5.0 build 302427
+with both Vulkan and D3D12. Other builds are unverified.
 
 ### Players — packaged mod
 
@@ -239,13 +253,15 @@ Don't also have `scratches_mod.zip` in `mods/`; the two copies fight.
 
 ## Using the mod
 
-Once installed, the mod is automatic — drive, crash, and scratches accumulate.
+Once installed, the mod is automatic: drive, crash, get dirty, wash it off.
 
 | Action | Effect |
 | --- | --- |
 | Slide a panel along a surface | A band of parallel scrape lines over a scuffed haze at each contact, running the way the car slid; longer drags scrape deeper (more bare metal) |
 | Hit something hard | Chipped paint, plus a gouge on harder hits, sized by impact force |
-| **Reset Car** (`Ctrl+R`) | Clears all baked scratches and resets the vehicle |
+| Drive over mud, dirt or snow | Soil builds up behind the wheels and on the lower panels, tinted like the ground |
+| Drive into water deep enough to reach the body | Soil fades off while scratches stay; the clearcoat looks wet, then dries in ~20 s |
+| **Reset Car** (`Ctrl+R`) | Clears all scratches and soil and resets the vehicle |
 | **Toggle Scratches Debug Panel** | Opens/closes the in-game debug + tuning panel |
 
 The panel toggle is a **bindable key**. After first launch, open
@@ -322,8 +338,9 @@ the Paint Design slot stays intact. A private instance of the installed decal
 API keeps scratch clearing separate from editor artwork. Other supported plain
 vehicles use the older `dynamicTextures` skin and color-seed path.
 
-Incoming batches become **projection jobs** — one synthetic-camera projection
-plus the decal layers captured under it:
+Incoming batches become **capture jobs**: the decal layers for one cluster of
+impacts or one slide stream, captured under a synthetic camera aimed at the
+contact:
 
 - **Impacts** → chipped paint (sharp flakes), plus a gouge on harder hits,
   scaled by force. The frame's stamps are spatially clustered; each cluster is
@@ -333,25 +350,29 @@ plus the decal layers captured under it:
   30–70 cm long so neighbouring contacts join into one rash. It's drawn as a
   translucent clear-coat haze under parallel scrape lines, one brush and tone
   per slide, in overlapping segments. Each stream is one job.
+- **Soil** → mud/dirt droplet-and-tail splashes or snow patches from rolling
+  wheel contacts on soft ground, tinted from the terrain under the wheel and
+  baked into a separate 1024×512 soil target that water can fade.
 
 Damage is coloured like layered paint: scuffed clear coat (haze), primer grey,
 and bare metal on harder or longer contacts. On light paint the palette shifts
-darker so damage contrasts the right way. The brushes are generated by
-`tools/generate_brushes.py` at line widths the 4096×2048 canvas can resolve
-(~1.5 mm per texel on a car); finer detail just blurs.
+darker so damage contrasts the right way. Brushes are generated by
+`tools/generate_damage.py`, `generate_brushes.py` and `generate_soil.py` at line
+widths the 4096×2048 canvas can resolve (~1.5 mm per texel on a car).
 
-Work is scheduled around two measured engine costs:
+**Synthetic anchors (default).** A baked decal only needs the plane it sits on
+(`decalPos`/`decalNorm`); the camera data comes from the CPU. So the painter
+anchors every captured layer at its own contact point, with the detector's
+contact normal resolved against the owning hull face, and never calls the
+native `projectDynamicDecals` pass, which cost ~30 ms idle and stalled for
+hundreds of milliseconds under load. `scratches_paint.setSyntheticAnchors(false)`
+restores the legacy projected path for comparison.
 
-- **Projection** has a per-frame toll: the first `projectDynamicDecals` in a
-  frame costs ~14 ms (an engine-side sync, whether or not physics runs), and
-  each further pass ~1.4 ms. So new marks accumulate and are projected in
-  batches every 0.2 s (`setFlushInterval`), up to 6 passes per batch
-  (`setProjectionBudget`). The first mark after a quiet spell goes out on the
-  next frame. Slides within 35 cm of a queued slide on a panel facing the same
-  way share its projection, with the camera backed off to fit every band.
-- **Baking** costs ~0.85 ms per layer with no toll, so captured layers are
-  baked on the frames *between* projection batches, 6 at a time. No frame
-  pays both costs.
+New marks accumulate and flush every 0.2 s (`setFlushInterval`); the first mark
+after a quiet spell goes out on the next frame. Captured layers are baked in
+small batches on later frames (the native bake is the remaining per-layer cost),
+and captured layers drain before more capture work starts so the queue can't
+starve.
 
 A spot that has already been painted twice (8 cm grid) skips further marks
 until the canvas is cleared, so a long slide doesn't pay to repaint the same
@@ -383,8 +404,8 @@ For the full design history, see `docs/plans/` and `investigations/`.
   `<jbeam>_skin_dynamicTextures` part. Vehicles without it are unsupported and
   the mod cleanly does nothing (the debug panel reports `NOT READY`).
 - **Narrow ETK 800 support:** empty Paint Design and stock Police preserve the
-  original main-body material beneath damage. Tested with Rennspecht 8R config;
-  extra-material panels remain original but do not receive scratches. Custom
+  original `etk800_main` and `etk800_extra` materials beneath damage and soil.
+  Tested with the Rennspecht 8R config plus stock 844 plain/Police. Custom
   body overrides are skipped. Other liveries and unowned Dynamic Textures
   designs remain skipped. See the [compatibility matrix](docs/examples.md#compatibility-evidence).
 - **Editor ownership:** the ETK adapter pauses and clears cosmetic marks during
@@ -400,19 +421,24 @@ For the full design history, see `docs/plans/` and `investigations/`.
 ## Repo layout
 
 ```text
-lua/vehicle/extensions/auto/scratches_detect.lua   # VLUA contact detection
-lua/ge/extensions/scratches/paint.lua              # GELUA dynamic-decal painter
-lua/ge/extensions/scratches/etkAdapter.lua         # narrow material-preserving adapter
+lua/vehicle/extensions/auto/scratches_detect.lua    # VLUA contact detection (impacts, slides, wheel soil, water)
+lua/ge/extensions/scratches/paint.lua               # GELUA dynamic-decal painter + scheduler + debug panel
+lua/ge/extensions/scratches/etkAdapter.lua          # ETK material-preserving adapter (main + extra)
+lua/ge/extensions/scratches/soilColor.lua           # terrain-sampled soil tint with bounded caching
+lua/ge/extensions/scratches/coverage.lua            # request/layer coverage accounting
 lua/ge/extensions/core/input/actions/scratches.json # bindable panel hotkey
-art/dynamicDecals/textures/                        # scratch brush PNGs + metadata
-tools/generate_brushes.py                          # brush generation utility
-tools/package.py                                   # release zip builder + preflight
-tools/dev.py                                       # dev loop: deploy + hot-reload via BeamNG MCP
-tools/bench.py                                     # scripted crash scenarios + frame timing + screenshots
-tools/ingame/scratches_bench.lua                   # in-game half of the bench (dev mount only)
-tools/sim/harness.lua                              # headless mocked-engine checks
-docs/plans/                                        # design notes
-investigations/                                    # BeamNG API investigations
+art/dynamicDecals/textures/                         # brush PNGs + .dynDecalTexture.json sidecars
+tools/package.py                                    # release zip builder + preflight
+tools/dev.py                                        # dev loop: deploy + hot-reload via BeamNG MCP
+tools/bench.py                                      # scripted crash scenarios + frame timing + screenshots
+tools/sim/*.lua                                     # headless mocked-engine harnesses (358 checks)
+tools/generate_*.py                                 # damage, brush, soil and soil-normal art generators
+tools/perf_*.py, tools/*_probe.py                   # performance cohorts, traces and live probes
+tools/make_showcase.py                              # rebuilds docs/showcase/ from docs/evidence/
+tools/ingame/scratches_bench.lua                    # in-game half of the bench (dev mount only)
+docs/showcase/                                      # README feature images
+docs/evidence/                                      # in-game captures + state JSON per milestone
+docs/plans/, investigations/                        # design notes and BeamNG engine/API research
 ```
 
 Every brush PNG must have a matching `.png.dynDecalTexture.json` sidecar next
@@ -570,28 +596,24 @@ BeamNG, and confirm a [clean install](#players--packaged-mod) works.
 
 ## Known issues
 
-- **Recorded D3D12 failure on the development installation (BeamNG 0.39.4).** The game's own
-  dynamic-decal shader (`shaders/common/dynamicDecals/decal.ps.hlsl`) fails to
-  compile under D3D12, so every decal draw is dropped
-  (`D3D12 cmd: draw skipped (pipelineBindFailed=1 ... dynamicDecals/decal...)`
-  in `beamng.log`). This also broke the vanilla decal editor in that investigation.
-  This is a recorded environment-specific issue, not a claim about every installation.
-  The mod still
-  detects and queues marks; nothing reaches the paint. Use Vulkan: **Options →
-  Graphics → Vulkan**, or launch with `-gfx vk` for one session
-  (`python tools/dev.py launch --game-arg=-gfx --game-arg=vk`).
-- **Generic livery support remains deferred.** Only the ETK 800 stock Police
-  adapter is enabled. It depends on internal engine APIs and the tested material
-  layout; changed layouts fail closed. Material clones remain disabled in the
-  scene after use for existing mesh references; long-session resource cost is unmeasured.
-- **ETK damage opacity follows its red color channel.** Dark deposits/marks can
-  look weak; the added stage uses fixed roughness and no metallic response.
-  The original paint retains its PBR channels; wetness temporarily changes only
-  cloned clearcoat factors. Per-scratch metal glint remains deferred.
-- **Scratches have no metal glint** — metallic and roughness are served from
-  static factory maps instead of the dynamic canvas (the fix that removed the
-  paint seam), so scratch decals read as colour marks only. Base gloss is
-  uniform on that legacy path, but exact factory PBR fidelity is not verified.
-  The ETK adapter instead preserves the original channels below its damage stage.
+The full, prioritized list is in **[TODO.md](TODO.md)**. The ones most likely to
+affect you:
 
-See `docs/plans/2026-05-21-release-roadmap.md` for the current roadmap.
+- **D3D12 bake stalls.** Each baked layer makes the engine allocate and free
+  ~112 MiB of full-resolution transient textures; on D3D12 this occasionally
+  surfaces as a ~450 ms hitch. Lua cannot pool it. Prefer Vulkan: **Options →
+  Graphics → Vulkan**, or launch with `-gfx vk`.
+- **Older D3D12 shader failure (0.39.4).** On the 0.39.4 development install the
+  game's own dynamic-decal shader failed to compile under D3D12 and every decal
+  draw was dropped (`draw skipped (pipelineBindFailed=1 ... dynamicDecals/decal...)`
+  in `beamng.log`). Recorded for that install, not observed on 0.40.5.0.
+- **ETK-only livery preservation.** Other liveries are skipped, never
+  overwritten. Non-ETK vehicles use the older Dynamic Textures path with lower
+  material fidelity.
+- **Scratches have no metal glint.** Damage reads as colour; the damage stage
+  uses fixed roughness and no metallic response, and its opacity follows the red
+  channel so very dark marks can look weak.
+- **First mud contact hitch.** The first terrain-texture read for soil tint takes
+  about 99 ms; later lookups are cached (~0.03 ms).
+- **Marks don't persist.** Reset, vehicle switch, reload and editor use clear all
+  cosmetic damage and soil.

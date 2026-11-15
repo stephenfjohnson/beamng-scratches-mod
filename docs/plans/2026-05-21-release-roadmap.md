@@ -6,9 +6,10 @@
 > Milestone 3 adds selective water washing and drying within the ETK scope.
 > [Implementation and live evidence](../../investigations/08-water-washing.md).
 > Milestone 4 polish: [scope and evidence](../../investigations/09-scratch-impact-polish.md).
-> Milestone 5 is authorized and implementation has resumed; feature acceptance
-> is **blocked and unmerged**. Last merged baseline: c8bcae6. Milestone 6/public
-> release was not started. [Resumed implementation and gates](../../investigations/11-quality-throughput.md).
+> 2026-11-15: Milestone 5 code (synthetic anchors, soil/terrain work) was merged to
+> `master` at `56ba091` as a development preview. Its acceptance gates remain
+> **open on D3D12**; open items are tracked in [TODO.md](../../TODO.md). Milestone
+> 6/public release was not started. [Resumed implementation and gates](../../investigations/11-quality-throughput.md).
 > Synthetic anchors removed native projection: Vulkan now meets the native-call and
 > delivery gates in measured cohorts; D3D12 still fails (446/447 ms bakes) because the
 > engine bake churns ~112 MiB of transient textures per layer. [Investigation 12](../../investigations/12-synthetic-anchors.md).

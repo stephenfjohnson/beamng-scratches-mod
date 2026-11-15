@@ -1,6 +1,7 @@
 # Compatibility
 
-**Development branch; milestone 5 acceptance failed, stable release blocked.**
+**Development preview on `master`; milestone 5 acceptance gates still open on
+D3D12, stable release blocked.** Open items: [TODO.md](../TODO.md).
 The table records actual tests, not a promise of all configurations or hardware.
 [Resumed quality/throughput implementation and current evidence](../investigations/11-quality-throughput.md).
 The historical matrix below remains separate from the resumed-build checks.
