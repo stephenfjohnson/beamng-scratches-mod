@@ -1,0 +1,12 @@
+{
+  "label": "synth-full-vk-endurance",
+  "minutes": 10.0,
+  "width": 4096,
+  "bake": 3,
+  "flush": 0.05,
+  "coalesce": false,
+  "group": true,
+  "continuous": false,
+  "disabled": false,
+  "projected_anchors": false
+}
