@@ -1,0 +1,1 @@
+Command '['C:\\Program Files\\Python313\\python.exe', 'tools/perf_wash_candidate.py', '--label', 'resumed-half-d3d-func-wash', '--width', '2048', '--coalesce']' returned non-zero exit status 1.

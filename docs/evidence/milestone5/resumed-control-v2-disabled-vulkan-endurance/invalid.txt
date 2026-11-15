@@ -1,0 +1,1 @@
+Aborted deliberately: cohort began while git push was still active. Concurrent packing/upload can contaminate frame timing. Retained only as diagnostic; excluded from acceptance. Replacement label: resumed-control-v2-disabled-vulkan-endurance-clean.

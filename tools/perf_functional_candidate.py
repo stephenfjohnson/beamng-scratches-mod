@@ -31,7 +31,7 @@ try:
  run('perf_maps.py','--label',a.label+'-maps','--experimental-width',str(a.width),*(['--coalesce'] if a.coalesce else []))
  dev.lua(tune);run('perf_mod_config.py','--label',a.label+'-mod')
  dev.lua(tune);snapshot('before-wash-fixture')
- run('perf_wash_candidate.py','--label',a.label+'-wash','--width',str(a.width),*(['--coalesce'] if a.coalesce else []))
+ run('perf_wash_candidate.py','--label',a.label+'-wash','--width',str(a.width),'--near-mud',*(['--coalesce'] if a.coalesce else []))
  (out/'checks.json').write_text(json.dumps({'lifecycleSnapshots':len(states),'trafficNPCs':len(traffic['npcStats']),'waterStateChecks':True,'scratchGenerationPreserved':True,'renderingRequiresImageReview':True},indent=2))
  snapshot('end')
 except Exception as e:

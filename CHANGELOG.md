@@ -14,7 +14,8 @@
 - Fix merged stream segment aliasing that duplicated later bands in the first band's
   haze/path; count partial native capture loss and verify full-layer conservation.
 - Repair identical ETK spawns whose cached construction bundle contained another
-  vehicle's clone. Invalidate that cache on the existing one-shot reload retry;
+  vehicle's clone. Invalidate that cache before ETK construction, including background
+  spawns (the retry-only approach was insufficient); this increases construction work.
   reclaim marked private materials only after their owner and all mesh references are gone.
 - 264 mock checks pass. Historical 148-run cohort remains separately documented;
   new corrected-fixture cohorts, invalid old runs and traced diagnostics are distinguished.
@@ -24,6 +25,15 @@
   stalls (613 ms projection / 402 ms bake in untraced warm runs). Stable release and
   milestone 5 merge remain blocked; no milestone 6/public release.
   [Resumed implementation and evidence](investigations/11-quality-throughput.md).
+- Final full-resolution Vulkan endurance retains all accepted layers but reproduces
+  a 508 ms projection and a separate 965 ms frame pause / 1012 ms layer age. Both
+  original performance gates remain failed. Guarded real washing preserves the
+  same scratch generation; invalid transfer-reset fixtures remain disclosed.
+- Final D3D12 warm regressions retain accepted full-detail layers and tracked
+  half-detail representative coverage, but still reproduce 444/184 ms projections.
+  Nine fresh Vulkan six-layer ablations improve observed drainage; they are not
+  an endurance-qualified cure. A clean ten-minute disabled control peaks at 25.5 ms
+  per frame and does not establish the cause of enabled outliers.
 
 ## Milestone 4: scratch and impact polish — 2026-11-14
 

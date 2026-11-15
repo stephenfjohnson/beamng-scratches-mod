@@ -13,8 +13,9 @@ Process-cold tests retain shader caches. No other build, GPU or OS is certified.
 ## Resumed construction-hook build
 
 Vulkan full-detail checks use 4096x2048 damage, bake3, flush0.05, grouping enabled
-and representative coalescing disabled. The final D3D12 regression is recorded
-separately when complete; the historical D3D12 rows are not promoted automatically.
+and representative coalescing disabled. D3D12 repeats the final full-detail preset
+and an explicit 2048x1024/coalesced preset; its functional matrix below uses the
+latter. Historical D3D12 rows are not promoted automatically.
 
 | Exact configuration / boundary | Resumed Vulkan result |
 | --- | --- |
@@ -38,6 +39,25 @@ each deletion. Cleanup requires explicit ownership and no live owner or mesh
 reference. ETK construction invalidates the entire JBeam bundle cache, which can
 increase spawn/reload work. These are scoped object-lifetime observations, not
 a proof that all engine/GPU allocations are leak-free over multi-hour sessions.
+
+| Exact configuration / boundary | Resumed D3D12 result |
+| --- | --- |
+| `rennspecht_8r_A.pc` + `etk800_skin_police`, full detail | Nine warm fixtures; all accepted layers retained, original fields identical and matched side/overhead captures. Native 444 ms fails the gate. No final-build D3D12 endurance claim; earlier endurance has its own hashes. |
+| Same configuration, half detail/coalesced | Three slides and three sustained fixtures; 670 requests completed including 14 deliberate merges, 1460 stream layers retained, zero proxy/queue losses. Native 184 ms still fails. Fine details softer; no pixel-equivalence claim. |
+| Stock `844_150_A.pc` plain / `844_police_A.pc` Police | One actual slide each at half detail, matched damaged/original/reset images and unchanged original fields. No config-specific endurance certification. |
+| Stock `854_police_A.pc` Polizei, ETK Heritage, unicycle | Skipped; return to Police ready. |
+| Installed Scintilla GT3 `gt3_balanced.pc` / `scintilla_skin_exblue` | Skipped; previous disabled mod activation restored. |
+| Two identical background ETKs / three moving traffic NPCs | Distinct clones with only player stages active; zero NPC detector calls, impacts or streams. |
+| Lifecycle and editor | 20 switches, 10 vehicle reloads, five extension reloads, four Automation/Gridmap changes; ready/original fields retained. Editor sentinel preserved. |
+| Actual mud/water/drying | Initial safe-teleport transfer invalidated generation and was rejected. Physical-approach retry retained generation 19, washed 64 deposits to zero and admitted 26 fresh deposits; original scuffs visibly persist. |
+
+[D3D12 functional snapshots](evidence/milestone5/resumed-half-d3d-func),
+[stock images](evidence/milestone5/resumed-half-d3d-func-stock),
+[guarded physical-approach washing](evidence/milestone5/resumed-half-d3d-wash-drive),
+[full-detail matched captures](evidence/milestone5/resumed-fixed2-full-d3d12-warm),
+[half-detail matched captures](evidence/milestone5/resumed-fixed2-half-d3d12-warm).
+The suite's original transfer error is retained; the replacement wash is separately
+labeled. Passing functional checks does not waive either performance gate.
 
 ## Historical full-resolution cohort
 

@@ -1,0 +1,12 @@
+{
+  "originalSuiteCompleted": false,
+  "originalFailure": "wash transfer changed generation; original error retained",
+  "replacementWash": "../resumed-half-d3d-wash-drive",
+  "lifecycleSnapshots": 32,
+  "mapTransitions": 4,
+  "inactiveTrafficNPCs": 3,
+  "replacementWashGeneration": 19,
+  "replacementWashImagesReviewed": true,
+  "defaultControlsRestored": true,
+  "performanceAcceptance": false
+}

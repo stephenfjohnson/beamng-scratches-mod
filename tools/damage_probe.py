@@ -20,7 +20,7 @@ def capture(path):
 def matched(label):
     folder=OUT/label;folder.mkdir(exist_ok=True)
     lua('simTimeAuthority.pause(true);local v=getPlayerVehicle(0);local c=v:getWorldBox():getCenter();local up=vec3(0,0,1);local p=c+up:cross(v:getDirectionVector()):normalized()*4.5+up*.9;core_camera.setByName(0,"free");core_camera.globalCameraFunction("free","setPosition",p);core_camera.globalCameraFunction("free","setRotation",quatFromDir((c-p):normalized(),up));return true')
-    if 'roof' in label:
+    if 'roof' in label or 'sustained' in label:
         lua('local v=getPlayerVehicle(0);local c=v:getWorldBox():getCenter();local p=c+vec3(0,.1,5);core_camera.globalCameraFunction("free","setPosition",p);core_camera.globalCameraFunction("free","setRotation",quatFromDir((c-p):normalized(),v:getDirectionVector()));return true')
     e=json.loads(lua(livery_probe.LUA));assert e['compatibility'].get('adapter');assert not e['comparison']['differences']
     mat=json.dumps(e['compatibility']['material'])

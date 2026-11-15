@@ -413,6 +413,10 @@ python tools/perf_candidate.py --label my-fixed-full-warm --width 4096 --bake 3 
 python tools/perf_candidate.py --label my-fixed-full-cold --width 4096 --bake 3 --flush .05 --group --repeat 3 --restart --renderer vk
 python tools/perf_endurance.py --label my-fixed-full-endurance --width 4096 --bake 3 --flush .05 --group --minutes 10
 python tools/perf_material_lifetime.py --label my-material-lifetime --cycles 10
+# Same fixture and current renderer, painting disabled; isolate ordinary frame tails.
+python tools/perf_endurance.py --label my-control-v2-disabled-endurance --width 4096 --bake 3 --flush .05 --group --disabled --minutes 10
+# Compare native batch size while retaining full resolution and every accepted layer.
+python tools/perf_candidate.py --label my-grouped-full-b6-cold --width 4096 --bake 6 --flush .05 --group --repeat 3 --restart --renderer vk --capture
 ```
 
 The backend is unchanged unless `--restart --renderer ...` is specified. For dry
@@ -439,3 +443,17 @@ prior activation state. The editor check refuses to replace existing user artwor
 Water state checks do not replace inspection of the genuine PNGs for scratch
 persistence and material fidelity. Fixtures restore their temporary objects; the
 suite leaves the verified ETK and full-resolution developer defaults selected.
+
+To repeat only the guarded washing regression on the current renderer:
+
+```powershell
+python tools/perf_wash_candidate.py --label my-full-wash --width 4096 --near-mud
+```
+
+This rejects any cosmetic-generation change from the initial asphalt scrape through
+mud, water, drying and fresh mud. `--near-mud` scrapes beside the strip, then uses
+assisted physical translation into mud and reverses there after washing. It never
+teleports the damaged car. The older transfer mode remains available for reproducing
+historical evidence, but even non-resetting safe placement sometimes invalidated
+the generation. A passing water state after a reset does not establish persistence. Keep
+builds, uploads, tracing and other heavy host work outside measured cohorts.

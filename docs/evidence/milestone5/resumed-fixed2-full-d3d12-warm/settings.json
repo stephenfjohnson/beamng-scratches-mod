@@ -1,0 +1,23 @@
+{
+  "label": "resumed-fixed2-full-d3d12-warm",
+  "width": 4096,
+  "bake": 3,
+  "repeat": 3,
+  "coalesce": false,
+  "group": true,
+  "flush": 0.05,
+  "projects": 6,
+  "layers": 24,
+  "scenarios": [
+    "sideslide",
+    "roofdrop",
+    "sustained"
+  ],
+  "capture": true,
+  "restart": false,
+  "renderer": "d3d12",
+  "disabled": false,
+  "skin": "police",
+  "restartRenderer": null,
+  "actualRendererEvidence": "engine*.txt; --renderer only selects the backend when --restart is used"
+}

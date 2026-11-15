@@ -1,0 +1,296 @@
+[
+  {
+    "phase": "start",
+    "elapsed": 0.04750650003552437,
+    "pid": 584840,
+    "privateBytes": 9386926080,
+    "workingSetBytes": 4128780288
+  },
+  {
+    "phase": "settleReset",
+    "elapsed": 0.5662787999026477,
+    "pid": 584840,
+    "privateBytes": 9427357696,
+    "workingSetBytes": 4131631104
+  },
+  {
+    "phase": "sideslide",
+    "elapsed": 6.252769300015643,
+    "pid": 584840,
+    "privateBytes": 9378488320,
+    "workingSetBytes": 4121411584
+  },
+  {
+    "phase": "run",
+    "elapsed": 10.867965599987656,
+    "pid": 584840,
+    "privateBytes": 9447010304,
+    "workingSetBytes": 4121849856
+  },
+  {
+    "phase": "roofdrop",
+    "elapsed": 14.59166150004603,
+    "pid": 584840,
+    "privateBytes": 9380171776,
+    "workingSetBytes": 4122271744
+  },
+  {
+    "phase": "run",
+    "elapsed": 21.255091599887237,
+    "pid": 584840,
+    "privateBytes": 9377464320,
+    "workingSetBytes": 4122275840
+  },
+  {
+    "phase": "run",
+    "elapsed": 31.464589999988675,
+    "pid": 584840,
+    "privateBytes": 9373437952,
+    "workingSetBytes": 4122169344
+  },
+  {
+    "phase": "run",
+    "elapsed": 41.72171579999849,
+    "pid": 584840,
+    "privateBytes": 9378131968,
+    "workingSetBytes": 4122730496
+  },
+  {
+    "phase": "sustained",
+    "elapsed": 46.771696500014514,
+    "pid": 584840,
+    "privateBytes": 9387180032,
+    "workingSetBytes": 4134469632
+  },
+  {
+    "phase": "run",
+    "elapsed": 51.92231189995073,
+    "pid": 584840,
+    "privateBytes": 9448935424,
+    "workingSetBytes": 4126416896
+  },
+  {
+    "phase": "sideslide",
+    "elapsed": 53.06226149993017,
+    "pid": 584840,
+    "privateBytes": 9380012032,
+    "workingSetBytes": 4124745728
+  },
+  {
+    "phase": "roofdrop",
+    "elapsed": 59.866708599962294,
+    "pid": 584840,
+    "privateBytes": 9376038912,
+    "workingSetBytes": 4124663808
+  },
+  {
+    "phase": "run",
+    "elapsed": 62.41430899989791,
+    "pid": 584840,
+    "privateBytes": 9491939328,
+    "workingSetBytes": 4138201088
+  },
+  {
+    "phase": "run",
+    "elapsed": 72.65263519994915,
+    "pid": 584840,
+    "privateBytes": 9393045504,
+    "workingSetBytes": 4136452096
+  },
+  {
+    "phase": "run",
+    "elapsed": 82.860861599911,
+    "pid": 584840,
+    "privateBytes": 9386573824,
+    "workingSetBytes": 4130213888
+  },
+  {
+    "phase": "sustained",
+    "elapsed": 91.99362439988181,
+    "pid": 584840,
+    "privateBytes": 9393573888,
+    "workingSetBytes": 4136824832
+  },
+  {
+    "phase": "settleReset",
+    "elapsed": 93.0279917998705,
+    "pid": 584840,
+    "privateBytes": 9426739200,
+    "workingSetBytes": 4135153664
+  },
+  {
+    "phase": "sideslide",
+    "elapsed": 98.23215799988247,
+    "pid": 584840,
+    "privateBytes": 9388457984,
+    "workingSetBytes": 4132225024
+  },
+  {
+    "phase": "run",
+    "elapsed": 103.38047749991529,
+    "pid": 584840,
+    "privateBytes": 9384681472,
+    "workingSetBytes": 4128178176
+  },
+  {
+    "phase": "roofdrop",
+    "elapsed": 105.52981039998122,
+    "pid": 584840,
+    "privateBytes": 9384488960,
+    "workingSetBytes": 4128444416
+  },
+  {
+    "phase": "run",
+    "elapsed": 113.70252560009249,
+    "pid": 584840,
+    "privateBytes": 9383235584,
+    "workingSetBytes": 4127535104
+  },
+  {
+    "phase": "run",
+    "elapsed": 123.98368649999611,
+    "pid": 584840,
+    "privateBytes": 9383817216,
+    "workingSetBytes": 4127449088
+  },
+  {
+    "phase": "run",
+    "elapsed": 134.22373339999467,
+    "pid": 584840,
+    "privateBytes": 9383686144,
+    "workingSetBytes": 4127318016
+  },
+  {
+    "phase": "sustained",
+    "elapsed": 137.73572200001217,
+    "pid": 584840,
+    "privateBytes": 9389068288,
+    "workingSetBytes": 4132499456
+  },
+  {
+    "phase": "sideslide",
+    "elapsed": 143.93922300008126,
+    "pid": 584840,
+    "privateBytes": 9385144320,
+    "workingSetBytes": 4129447936
+  },
+  {
+    "phase": "settleReset",
+    "elapsed": 144.45728600001894,
+    "pid": 584840,
+    "privateBytes": 9424199680,
+    "workingSetBytes": 4131250176
+  },
+  {
+    "phase": "roofdrop",
+    "elapsed": 151.2571499000769,
+    "pid": 584840,
+    "privateBytes": 9385279488,
+    "workingSetBytes": 4129234944
+  },
+  {
+    "phase": "run",
+    "elapsed": 154.85366729996167,
+    "pid": 584840,
+    "privateBytes": 9462235136,
+    "workingSetBytes": 4130390016
+  },
+  {
+    "phase": "run",
+    "elapsed": 165.1057935000863,
+    "pid": 584840,
+    "privateBytes": 9385959424,
+    "workingSetBytes": 4129357824
+  },
+  {
+    "phase": "run",
+    "elapsed": 175.26649939990602,
+    "pid": 584840,
+    "privateBytes": 9385672704,
+    "workingSetBytes": 4129214464
+  },
+  {
+    "phase": "sustained",
+    "elapsed": 183.40246740006842,
+    "pid": 584840,
+    "privateBytes": 9398530048,
+    "workingSetBytes": 4141486080
+  },
+  {
+    "phase": "run",
+    "elapsed": 185.4692861000076,
+    "pid": 584840,
+    "privateBytes": 9467125760,
+    "workingSetBytes": 4141391872
+  },
+  {
+    "phase": "sideslide",
+    "elapsed": 189.66330190002918,
+    "pid": 584840,
+    "privateBytes": 9386610688,
+    "workingSetBytes": 4130930688
+  },
+  {
+    "phase": "run",
+    "elapsed": 195.83849389990792,
+    "pid": 584840,
+    "privateBytes": 9387859968,
+    "workingSetBytes": 4131725312
+  },
+  {
+    "phase": "roofdrop",
+    "elapsed": 196.95747429993935,
+    "pid": 584840,
+    "privateBytes": 9387859968,
+    "workingSetBytes": 4131725312
+  },
+  {
+    "phase": "run",
+    "elapsed": 206.16879269992933,
+    "pid": 584840,
+    "privateBytes": 9387343872,
+    "workingSetBytes": 4130541568
+  },
+  {
+    "phase": "run",
+    "elapsed": 216.39378129993565,
+    "pid": 584840,
+    "privateBytes": 9386786816,
+    "workingSetBytes": 4130111488
+  },
+  {
+    "phase": "run",
+    "elapsed": 226.67264140001498,
+    "pid": 584840,
+    "privateBytes": 9386725376,
+    "workingSetBytes": 4130054144
+  },
+  {
+    "phase": "sustained",
+    "elapsed": 229.1896015999373,
+    "pid": 584840,
+    "privateBytes": 9399783424,
+    "workingSetBytes": 4142583808
+  },
+  {
+    "phase": "sideslide",
+    "elapsed": 235.4023223000113,
+    "pid": 584840,
+    "privateBytes": 9390264320,
+    "workingSetBytes": 4134301696
+  },
+  {
+    "phase": "launch",
+    "elapsed": 236.9530118999537,
+    "pid": 584840,
+    "privateBytes": 9429127168,
+    "workingSetBytes": 4136382464
+  },
+  {
+    "phase": "roofdrop",
+    "elapsed": 242.67012219992466,
+    "pid": 584840,
+    "privateBytes": 9391001600,
+    "workingSetBytes": 4134809600
+  }
+]

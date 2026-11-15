@@ -1,0 +1,135 @@
+{
+  "graphics": {
+    "GraphicDisplayResolutions": "3840 2160",
+    "GraphicLightingQuality": "Ultra",
+    "GraphicDynReflectionEnabled": true,
+    "GraphicTextureQuality": "Normal",
+    "GraphicShaderQuality": "High",
+    "GraphicOverallQuality": "Custom",
+    "GraphicAntialiasType": "smaa"
+  },
+  "paints": [
+    {
+      "baseColor": [
+        0,
+        0,
+        0,
+        2
+      ],
+      "roughness": 0.5,
+      "clearcoat": 0.5,
+      "metallic": 0.5,
+      "clearcoatRoughness": 0.2
+    },
+    {
+      "baseColor": [
+        0,
+        0.57,
+        1,
+        2
+      ],
+      "roughness": 0.5,
+      "clearcoat": 0.5,
+      "metallic": 0.5,
+      "clearcoatRoughness": 0.2
+    },
+    {
+      "baseColor": [
+        0,
+        0,
+        0,
+        2
+      ],
+      "roughness": 0.5,
+      "clearcoat": 0.5,
+      "metallic": 0.5,
+      "clearcoatRoughness": 0.2
+    }
+  ],
+  "vehicle": "scintilla",
+  "config": "vehicles/scintilla/gt3_balanced.pc",
+  "compatibility": {
+    "skipped": true,
+    "owned": false,
+    "ready": false,
+    "part": "scintilla_skin_exblue",
+    "pending": false
+  },
+  "materials": {
+    "scintilla_main": {
+      "activeLayers": "2",
+      "stages": [
+        {
+          "clearCoatRoughnessFactor": "1",
+          "clearCoatFactor": "1",
+          "clearCoatMap": "/vehicles/scintilla/scintilla_main_cc.data.png",
+          "detailScale": "128 64",
+          "roughnessFactor": "1",
+          "metallicMap": "",
+          "metallicFactor": "1",
+          "diffuseMapUseUV": "0",
+          "detailNormalMapStrength": "0.0500000007",
+          "detailNormalMap": "/vehicles/common/orange_peel_n.normal.png",
+          "normalMap": "/vehicles/scintilla/scintilla_main_nm.normal.png",
+          "opacityMap": "",
+          "colorPaletteMap": "/vehicles/scintilla/scintilla_main_mask.color.png",
+          "baseColorMap": "",
+          "roughnessMap": ""
+        },
+        {
+          "clearCoatRoughnessFactor": "1",
+          "clearCoatFactor": "1",
+          "clearCoatMap": "",
+          "detailScale": "2 2",
+          "roughnessFactor": "1",
+          "metallicMap": "/vehicles/scintilla/scintilla_main_m.data.png",
+          "metallicFactor": "1",
+          "diffuseMapUseUV": "0",
+          "detailNormalMapStrength": "1",
+          "detailNormalMap": "",
+          "normalMap": "/vehicles/scintilla/scintilla_main_nm.normal.png",
+          "opacityMap": "/vehicles/scintilla/scintilla_main_o.data.png",
+          "colorPaletteMap": "",
+          "baseColorMap": "/vehicles/scintilla/scintilla_main_b.color.png",
+          "roughnessMap": "/vehicles/scintilla/scintilla_main_r.data.png"
+        },
+        {
+          "clearCoatRoughnessFactor": "1",
+          "clearCoatFactor": "0",
+          "clearCoatMap": "",
+          "detailScale": "2 2",
+          "roughnessFactor": "1",
+          "metallicMap": "",
+          "metallicFactor": "0",
+          "diffuseMapUseUV": "0",
+          "detailNormalMapStrength": "1",
+          "detailNormalMap": "",
+          "normalMap": "",
+          "opacityMap": "",
+          "colorPaletteMap": "",
+          "baseColorMap": "",
+          "roughnessMap": ""
+        },
+        {
+          "clearCoatRoughnessFactor": "1",
+          "clearCoatFactor": "0",
+          "clearCoatMap": "",
+          "detailScale": "2 2",
+          "roughnessFactor": "1",
+          "metallicMap": "",
+          "metallicFactor": "0",
+          "diffuseMapUseUV": "0",
+          "detailNormalMapStrength": "1",
+          "detailNormalMap": "",
+          "normalMap": "",
+          "opacityMap": "",
+          "colorPaletteMap": "",
+          "baseColorMap": "",
+          "roughnessMap": ""
+        }
+      ]
+    }
+  },
+  "map": "gridmap_v2",
+  "id": 84490
+}

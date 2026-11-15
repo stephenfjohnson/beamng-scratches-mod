@@ -29,8 +29,8 @@ The corrected sustained fixture preserves internal vehicle motion and rejects
 mid-run resets. The final full-resolution Vulkan build still reproduced a
 **508 ms native projection** and a separate **965 ms frame interval** during
 endurance, despite favorable cold and warm runs. The latter pushed completed-layer
-age to 1,012 ms, failing the one-second gate. Half-resolution D3D12 runs previously reached
-**613 ms projection and 402 ms bake**. A separate
+age to 1,012 ms, failing the one-second gate. Final D3D12 warm tests still reached
+**444 ms projection at full resolution and 184 ms at half resolution**. A separate
 ETW diagnostic captured a graphics paging packet spanning about 423 ms of a
 426 ms native call; the engine/driver root cause remains unresolved. The prior
 6.52-second delays came from an older, physically unstable stress fixture and

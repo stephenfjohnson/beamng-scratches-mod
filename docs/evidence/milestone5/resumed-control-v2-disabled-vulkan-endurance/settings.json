@@ -1,0 +1,11 @@
+{
+  "label": "resumed-control-v2-disabled-vulkan-endurance",
+  "minutes": 10.0,
+  "width": 4096,
+  "bake": 3,
+  "flush": 0.05,
+  "coalesce": false,
+  "group": true,
+  "continuous": false,
+  "disabled": true
+}

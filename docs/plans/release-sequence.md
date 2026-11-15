@@ -38,6 +38,9 @@ explicitly incomplete; a passing mock suite does not establish visual success.
    distinguishes those gains from unresolved native hitches. Repeated baseline/stress runs, traffic,
    switching, long sessions, renderers and supported vehicles. Record exact
    versions, settings and frame-time results. Address spikes before release.
+   The resumed run completed final D3D12/Vulkan regressions and concrete resource,
+   stream, batching and quality work. Final native outliers (444/508 ms) and a
+   1012 ms delivery age still fail the original gates; this feature is incomplete.
 6. **Public release.** Clean ZIP-only install/uninstall test, final screenshots,
    version/changelog, credits/license decision, supported matrix, public ZIP,
    checksums and anonymous download verification. Publish as preview if known

@@ -1,0 +1,132 @@
+{
+  "error": "mud placement reset cosmetics; not persistence evidence",
+  "initialGeneration": 12,
+  "state": {
+    "surface": {
+      "waterSupported": true,
+      "soilRemaining": 1,
+      "visualWetnessSupported": true,
+      "wetness": 0,
+      "dirt": 0,
+      "snow": 0,
+      "deposits": 0,
+      "waterFraction": 0,
+      "visualCleaningSupported": true,
+      "mud": 0
+    },
+    "velocity": {
+      "x": 0.008081945591,
+      "y": -0.008896205574,
+      "z": -0.8432626128
+    },
+    "pos": {
+      "x": -312.9995117,
+      "y": -364.9949341,
+      "z": 99.9480896
+    },
+    "stats": {
+      "detect": {
+        "filteredCalls": 0,
+        "impactEvents": 0,
+        "paintCool": 0.003,
+        "perp": 0.8,
+        "totalCalls": 113,
+        "slip": 0.6,
+        "minForce": 10,
+        "maxNormalForce": 0,
+        "impForce": 800,
+        "impCool": 0.025,
+        "streamsFlushed": 0
+      },
+      "ready": true,
+      "latency": {
+        "oldestMs": 0
+      },
+      "coverage": {
+        "deliveredCells": 0,
+        "staleMerged": 0,
+        "pendingRequests": 0,
+        "mergedQueued": 0,
+        "historyEvicted": 0,
+        "representatives": 0,
+        "mergedBaked": 0,
+        "cachedRepresentatives": 0,
+        "requiredCells": 0,
+        "failedRepresentatives": 0,
+        "trackingOverflow": 0,
+        "unrepresentedCells": 0,
+        "requests": 0,
+        "completedRequests": 0,
+        "lostRequests": 0
+      },
+      "config": {
+        "aggregateCap": 160,
+        "coverageCoalescing": true,
+        "flushInterval": 0.05,
+        "panelGrouping": true,
+        "bakeBudget": 3,
+        "projBudget": 6,
+        "fullRateCombine": false,
+        "clusterRadius": 0.65,
+        "layerBudget": 24,
+        "damageWidth": 2048
+      },
+      "generation": 13,
+      "nativeEvents": {},
+      "queue": {
+        "bake": 0,
+        "stamps": 0,
+        "jobs": 0
+      },
+      "stamp": {
+        "stampsSkippedMissed": 0,
+        "combinesRun": 135,
+        "streamLayersMissed": 0,
+        "rebinds": 2,
+        "streamsBaked": 59,
+        "stampsEnqueued": 111,
+        "jobsDropped": 0,
+        "layersLost": 0,
+        "streamLayersExpected": 240,
+        "framesDeferred": 1,
+        "spotsSkipped": 39,
+        "framesTicked": 1063,
+        "streamsMerged": 61,
+        "clusterJobsMerged": 2,
+        "framesFlushed": 133,
+        "jobsFailed": 0,
+        "foreignDropped": 0,
+        "projectsIssued": 109,
+        "streamSubstrokesTotal": 240,
+        "bakeFailures": 0,
+        "bakesIssued": 133,
+        "clustersTotal": 50,
+        "aggregateDropped": 0,
+        "stampsAttempted": 114
+      },
+      "perf": {
+        "flushMsTotal": 1133.0795,
+        "combineMsMax": 0.90629999999692,
+        "framesOver1ms": 172,
+        "framesOver4ms": 98,
+        "msMax": 36.949400000026,
+        "projectMsTotal": 1074.1981000003,
+        "bakeMsTotal": 497.26600000065,
+        "flushMsMax": 36.912700000016,
+        "projectCalls": 109,
+        "inputToProjectMaxMs": 180.44499999996,
+        "lastMs": 0.012200000014673,
+        "msTotal": 1652.7036000007,
+        "bakeLayersTotal": 351,
+        "bakeCalls": 133,
+        "layerCalls": 351,
+        "layerMsTotal": 17.027200000143,
+        "bakeMsMax": 14.582500000074,
+        "combineMsTotal": 9.0835999998262,
+        "projectMsMax": 30.105300000059,
+        "frames": 1063,
+        "inputToBakeMaxMs": 223.35450000003
+      }
+    }
+  }
+}

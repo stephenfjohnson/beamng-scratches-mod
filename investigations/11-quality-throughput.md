@@ -369,3 +369,134 @@ gray side scuffs persisting while orange soil disappears and returns. No damage
 layers were rebaked during the wash. The earlier state-only wash checks are not
 presented as proof of original asphalt-scratch persistence.
 [Guarded result and genuine captures](../docs/evidence/milestone5/resumed-full-vk-wash-safe).
+
+## Acceptance ledger and remaining API boundary
+
+The thresholds above were set before final selection and have not been relaxed.
+
+| Requirement | Final full-detail Vulkan observation | Verdict |
+| --- | --- | --- |
+| Every native projection/bake call or batch <=100 ms | Endurance projection 508.453 ms, despite lower fresh/warm maxima | **Fail** |
+| Oldest GE-admitted input to completed layer <=1000 ms | 1012.267 ms after a separate 965.070 ms frame pause | **Fail** |
+| Accepted full-detail layers retained, no final backlog or missed capture | 4153 discrete and 6172 expected/captured stream layers across 39 fixtures; no losses or residual queue | Pass for this session |
+| Upstream coverage exclusions explicit | 6168 spot-saturation skips; detector filters remain separately counted | Disclosed, not equivalent-event merges |
+| Original materials, private ownership, soil separation and editor isolation | Functional matrix, generation-guarded wash images, distinct background clones | Pass in the exact tested scope |
+| Owned material count returns after deletion | Ten cycles, one baseline clone / two with fixture / one after deletion | Pass for these cycles |
+| Long-session native/GPU allocation behavior qualified | Ten-minute repeated fixtures and process-private samples; no per-target allocator trace or multi-hour qualification | Incomplete |
+
+The practical development preview is the narrow ETK main-body adapter with the
+documented full-detail grouping preset, or an explicit half-resolution quality
+tradeoff. It can retain representative accepted coverage and avoid the earlier
+growing scheduler backlog, but **cannot promise bounded frame stalls or one-second
+delivery** on this engine build. Half and quarter targets do not establish a
+stall-free alternative. This is a feasible preview-only scope, not an accepted
+milestone-5 release candidate or authorization to package milestone 6.
+
+The installed synchronous projection/bake interface is the observed boundary:
+Lua cannot yield, cancel or time-slice a native call already in progress. Merely
+lowering its admission budget cannot bound that call. A next engine-level remedy
+would need an asynchronous/native-budget API or a demonstrated engine/resource
+fix, followed by the same warm/fresh/endurance gates. A different rendering path
+would require new fidelity, material-isolation and coverage validation; disabling
+projection or dropping incoming marks is not an equivalent implementation.
+
+An initial longer disabled control began while a Git push was still active. It
+was deliberately aborted and marked diagnostic with `invalid.txt`; its completed
+fixtures remain retained, excluded from acceptance. A separate clean-label run
+follows after upload completion. Heavy builds, uploads and report plotting are
+kept outside the remaining timing windows.
+
+The clean disabled control completed 40 fixtures over 609.1 wall seconds (522.4
+measured fixture seconds), with zero projection calls. Largest per-run frame
+p95/p99/worst: **15.35 / 16.84 / 25.53 ms**; largest OtherRender phase 6.12 ms.
+Process-private memory sampled 8.744–8.829 GiB and ended at 8.751 GiB after Lua
+collection. This was the same already-warm Vulkan process after functional tests,
+not a process-cold or untouched-M4 comparison. The large OtherRender pause did
+not recur here; absence in one longer control does not prove it requires this
+mod. Engine VRAM API values and Lua memory are retained separately, without
+assuming per-target ownership or interpreting raw VRAM units.
+[Disabled session, settings and resource samples](../docs/evidence/milestone5/resumed-control-v2-disabled-vulkan-endurance-clean).
+
+The six-layer full-resolution/grouped ablation completed nine fixtures across
+three new Vulkan processes. Native maximum **53.94 ms** (bake batch maximum
+27.59 ms), completed-layer age **253.54 ms**, largest per-run frame p95/p99/worst
+**38.68 / 48.06 / 74.53 ms**. All 864 accepted discrete and 1598 stream layers
+were retained, with zero drops, misses or failed batches. Compared with the
+three-layer fresh-process cohort's 423.74 ms oldest layer, this supports faster
+drainage in these observations, at a larger maximum bake batch cost. Contact
+counts differ; this is not an equal-input replay or a confirmed cure for the
+endurance-only native/render outliers. It is not promoted to a release preset
+without its own warm/endurance qualification. The native-call gate remains
+unresolved by scheduling alone.
+[Six-layer settings, source hashes and captures](../docs/evidence/milestone5/resumed-grouped-full-b6-vulkan-cold).
+
+The original sustained matched helper used a side camera that obscured roof
+damage; its bench top-view JPEG still shows the genuine hood/upper-body scuffs.
+Subsequent D3D12 matched sustained captures now use an overhead camera. This
+changes only evidence framing, not rendering or collision behavior. Light roof
+areas can remain subtle or sparse; these captures do not certify every contact
+pixel or severely deformed panel.
+
+The final construction-hook D3D12 full-detail warm set also reproduced a native
+stall: **443.763 ms projection**, **453.078 ms worst frame**, despite retaining
+all 948 discrete and 1544 stream layers across nine fixtures. Oldest completed
+layer was 573.778 ms; largest per-run frame p95/p99 were 37.14/42.56 ms. Bake
+batches peaked at 30.06 ms. This independently fails the native gate on the final
+product revision, rather than relying only on an older D3D12 experiment. The
+three repeats share one new process; they are not three process-cold trials.
+[Final D3D12 full-detail results and matched captures](../docs/evidence/milestone5/resumed-fixed2-full-d3d12-warm).
+
+The following half-resolution/coalesced D3D12 set completed three slides and three
+30-second sustained fixtures. Native projection still reached **183.621 ms**;
+bake maximum 17.674 ms, completed-layer age 263.446 ms. Largest per-run frame
+p95/p99/worst were **32.56 / 41.27 / 412.58 ms**; the largest frame is not equated
+to the largest projection. All 670 discrete requests completed, including 14
+deliberate already-baked representative merges; zero pending/lost requests,
+missing proxy cells, overflow or queue/capture failures. All 1460 expected stream
+layers were captured. Genuine matched overhead and side images retain visible
+gray scrape/chip coverage and original artwork; fine detail is softer and the
+separate physical contacts/brush variants are not a pixel-matched quality replay.
+This final half-detail set also fails the native gate, independently of the
+earlier 613/402 ms half-detail outliers.
+[Final D3D12 half-detail results and matched captures](../docs/evidence/milestone5/resumed-fixed2-half-d3d12-warm).
+
+## Final D3D12 functional regression and transfer-fixture correction
+
+The half-detail functional suite completed both stock 844 configurations,
+background clone isolation, 20 switches/10 reloads, moving traffic, five extension
+reloads, editor artwork, all four map transitions and unsupported stock/mod skips.
+Its initial wash transfer was rejected: generation 12 became 13 during the mud
+approach. Installed `spawn.lua` shows that even `resetVehicle=false` safe placement
+moves the reference cluster and zeroes its velocity. This does not prove the
+native instability's cause, but it is unsuitable as a reliably non-disruptive
+transfer of an already deformed car. The failed suite/fixture remains retained.
+
+The new `--near-mud` path places the fresh vehicle near the strip **before** the
+initial collision, then uses additive horizontal velocity to approach mud through
+real physics. No damaged-vehicle teleport is used; re-dirtying reverses on the
+same strip. The original scratch-stream layer count must be nonzero, and generation
+is checked through approach and every water phase. The D3D12 half-detail retry
+preserved generation 19 throughout, passed water/pause/drying/re-dirty checks,
+and retained visible gray front/rear scuffs while orange mud disappeared and
+returned. Original material fields were identical and no damage layers were
+rebaked during washing. This is a controlled assisted-physics fixture, not an
+unassisted drive or a performance benchmark. Future functional commands select
+this route; historical safe-placement results remain separately labeled.
+[Guarded physical-approach result and images](../docs/evidence/milestone5/resumed-half-d3d-wash-drive).
+
+## Run completion versus feature acceptance
+
+This resumed implementation/experiment run is complete. Milestone 5 acceptance
+is **incomplete, blocked and unmerged**. The final product code is the construction-
+hook revision `219f8b0`; later commits improve fixtures, evidence and documentation.
+All tested runtime hashes are retained. The last merged baseline remains
+`c8bcae6`; no milestone 6, public release, stable tag or all-hardware guarantee.
+
+Concrete gains are private resource reuse, fair bake drainage, explicit target
+quality and native batch controls, conservative grouping/coalescing with accounting,
+correct stream-band layer ownership, private construction-cache isolation and
+reclamation of unused owned materials. The native-call and wall-delivery failures
+above remain release gates. Multi-hour native/GPU resource qualification and later
+clean-install/release checks also remain open. Check counts and favorable short
+cohorts do not replace these gates. The feasible scope is an explicitly limited
+development preview for the exact matrix, with intermittent stalls disclosed.
