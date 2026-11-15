@@ -1,0 +1,60 @@
+{
+  "pid": 590280,
+  "callsPerLoop": 20,
+  "renderer": "D3D12",
+  "damageTarget": "4096x2048",
+  "note": "Direct3D12 ETW id 91=create, 92=destroy, game process only; key id|WxH|format|heapType. Each loop window includes ~2 s idle frames. The project loop exceeded the MCP read timeout (>30 s) behind deferred destruction of the bake3 loop's 300 transient textures; its ETL shows those destroys and no projection-time creations. Diagnostic only; counts are event observations, not allocator truth.",
+  "loops": {
+    "idle": {
+      "91|658x655|f28|h0": 184,
+      "92|658x655|f28|h0": 184,
+      "91|8294400x1|f0|h0": 48,
+      "92|8294400x1|f0|h0": 47
+    },
+    "combine": {
+      "91|658x655|f28|h0": 184,
+      "92|658x655|f28|h0": 184,
+      "91|8294400x1|f0|h0": 51,
+      "92|8294400x1|f0|h0": 53,
+      "91|131072x1|f0|h0": 2,
+      "92|131072x1|f0|h0": 2
+    },
+    "bake1": {
+      "91|4096x2048|f28|h1": 60,
+      "92|4096x2048|f28|h1": 60,
+      "91|4096x2048|f61|h0": 40,
+      "92|4096x2048|f61|h0": 40,
+      "91|256x1|f0|h1": 20,
+      "92|256x1|f0|h1": 20,
+      "91|33554432x1|f0|h2": 8,
+      "92|33554432x1|f0|h2": 7,
+      "91|658x655|f28|h0": 184,
+      "92|658x655|f28|h0": 184,
+      "91|8294400x1|f0|h0": 48,
+      "92|8294400x1|f0|h0": 47,
+      "91|131072x1|f0|h0": 2,
+      "92|131072x1|f0|h0": 2
+    },
+    "bake3": {
+      "91|4096x2048|f28|h1": 180,
+      "91|4096x2048|f61|h0": 120,
+      "91|256x1|f0|h1": 60,
+      "91|33554432x1|f0|h2": 27,
+      "91|658x655|f28|h0": 96,
+      "92|658x655|f28|h0": 96,
+      "91|8294400x1|f0|h0": 22,
+      "92|8294400x1|f0|h0": 23,
+      "91|131072x1|f0|h0": 1,
+      "92|131072x1|f0|h0": 1
+    },
+    "project_after_bake3": {
+      "92|4096x2048|f28|h1": 180,
+      "92|4096x2048|f61|h0": 120,
+      "92|256x1|f0|h1": 56,
+      "92|33554432x1|f0|h2": 26,
+      "91|658x655|f28|h0": 5,
+      "92|658x655|f28|h0": 5,
+      "92|8294400x1|f0|h0": 1
+    }
+  }
+}
