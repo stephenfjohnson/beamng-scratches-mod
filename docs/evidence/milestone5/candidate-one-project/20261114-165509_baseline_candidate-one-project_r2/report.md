@@ -1,10 +1,12 @@
 # baseline - 20261114-165509_baseline_candidate-one-project_r2
 
+Remaining queues: `{"bake": 0, "jobs": 0, "stamps": 0}`
+
 _upright, coasting at 15 m/s - should leave no marks_
 
 Tuning: `if scratches_detect then scratches_detect.setPaintEnabled(true) end; scratches_paint.setProjectionBudget(1)`
 
-Settled: False after 4.003 s - 333 frames, 82.9 fps average (background limiter lifted)
+Settled: False after 4.003 s - 333 frames, 83.6 fps average from sampled wall intervals (background limiter lifted)
 Went past upside down: False (lowest up-vector z 1.0)
 
 ## Marks

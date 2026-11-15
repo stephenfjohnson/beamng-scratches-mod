@@ -17,10 +17,17 @@ brushes, original paint/livery and separate washable soil are retained.
 
 Repeated tests reproduced a **652 ms native projection call** on the old
 baseline and **738 ms with these fixes installed** during sustained scraping.
-Sustained input can also exceed throughput and delay or drop cosmetic marks. Stable release remains blocked pending repeated validation;
+The ten-minute run also reproduced a 732 ms projection and 663 ms bake batch;
+sustained input dropped work and needed up to 6.52 seconds to drain. Milestone 5
+feature acceptance remains incomplete; this investigation run is complete.
+Changes are retained on the milestone branch; last merged baseline is c8bcae6.
+Stable release remains blocked pending native profiling, mitigation and repeated validation;
 there is no all-hardware FPS guarantee. See the [acceptance gates and measured
 evidence](investigations/10-performance-compatibility.md) and
 [reproducible performance commands](docs/examples.md#milestone-5-reproducible-performance-investigation).
+The [exact compatibility matrix](docs/compatibility.md) distinguishes stock ETK
+configurations, Police paint design, tested renderers and safe skips. No milestone 6
+or public release was performed.
 
 ## Milestone 4: scratch and impact polish
 

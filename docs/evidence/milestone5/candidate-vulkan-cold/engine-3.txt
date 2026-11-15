@@ -1,0 +1,5 @@
+  0.00395|D|logging| -- Log started - v 0.40.5.0 - x64 - build 302427 - 2026-11-14 17:19:20 -0700 -----
+  1.68507|D|gfx|  - name:NVIDIA GeForce RTX 3090 (Vulkan), outputName:\\.\DISPLAY1, gfx:Vulkan, gpu:NVIDIA GeForce RTX 3090
+  1.68509|D|gfx| Attempting to create GFX device 0: NVIDIA GeForce RTX 3090 (Vulkan) [with output \\.\DISPLAY1]
+  1.83623|D|vulkan|  - name:NVIDIA GeForce RTX 3090 vendor:4318 version:2559967232 type:Discrete
+  1.83625|D|vulkan|  - Found vulkan device with suitable type: name:NVIDIA GeForce RTX 3090 vendor:4318 version:2559967232 type:Discrete

@@ -1,10 +1,12 @@
 # sideslide - 20261114-164205_sideslide_original-d3d12-cold_r1
 
+Remaining queues: `{"bake": 0, "jobs": 0, "stamps": 0}`
+
 _on its side, sliding along the ground at 14 m/s - one long scrape_
 
 Tuning: `if scratches_detect then scratches_detect.setPaintEnabled(true) end`
 
-Settled: True after 4.687 s - 172 frames, 36.5 fps average (background limiter lifted)
+Settled: True after 4.687 s - 172 frames, 31.3 fps average from sampled wall intervals (background limiter lifted)
 Went past upside down: True (lowest up-vector z -0.163)
 
 ## Marks

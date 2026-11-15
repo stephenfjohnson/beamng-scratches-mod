@@ -6,7 +6,9 @@
 > Milestone 3 adds selective water washing and drying within the ETK scope.
 > [Implementation and live evidence](../../investigations/08-water-washing.md).
 > Milestone 4 polish: [scope and evidence](../../investigations/09-scratch-impact-polish.md).
-> Milestone 5 is authorized and in progress; milestone 6/public release is outside this run.
+> Milestone 5 was authorized; its investigation run is complete, feature acceptance
+> is **blocked and unmerged**. Last merged baseline: c8bcae6. Milestone 6/public
+> release was not started. [Final evidence and gates](../../investigations/10-performance-compatibility.md).
 
 Run one feature thread at a time. Each starts from the latest merged baseline,
 owns a focused branch, implements and tests, updates documentation/examples,
@@ -30,7 +32,9 @@ explicitly incomplete; a passing mock suite does not establish visual success.
    [Evidence and limitations](../../investigations/09-scratch-impact-polish.md). Incorporate relevant prior realism work
    after review; improve opacity, material response, scale and placement. Capture
    matched before/after examples on light and dark paint and several body types.
-5. **Performance and compatibility.** Repeated baseline/stress runs, traffic,
+5. **Performance and compatibility: blocked.** Mitigations and repeated evidence
+   are committed on the scoped branch; native stalls and sustained throughput fail
+   acceptance. Repeated baseline/stress runs, traffic,
    switching, long sessions, renderers and supported vehicles. Record exact
    versions, settings and frame-time results. Address spikes before release.
 6. **Public release.** Clean ZIP-only install/uninstall test, final screenshots,

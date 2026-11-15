@@ -1,0 +1,7 @@
+{
+  "response": [
+    "{\"ok\":true,\"note\":\"Capture running; the .opt is written when it finishes. Wait readyInSeconds, then analyze with DevTools/optick/optick.py or open it via the optick-ui MCP.\",\"delay\":0,\"readyInSeconds\":2,\"path\":\"C:/Users/sforr/AppData/Local/BeamNG/BeamNG.drive/current/optick/m5-profiler-smoke.opt\",\"duration\":2}",
+    false
+  ],
+  "files": []
+}

@@ -1,8 +1,10 @@
 # roofdrop - 20261114-163959_roofdrop_m5-original-warm_r2
 
+Remaining queues: `{"bake": 0, "jobs": 0, "stamps": 0}`
+
 _dropped upside down from about 1 m - roof impacts_
 
-Settled: True after 6.288 s - 502 frames, 79.7 fps average (background limiter lifted)
+Settled: True after 6.288 s - 502 frames, 79.9 fps average from sampled wall intervals (background limiter lifted)
 Went past upside down: True (lowest up-vector z -1.0)
 
 ## Marks

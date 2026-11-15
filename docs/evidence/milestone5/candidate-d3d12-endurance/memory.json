@@ -1,0 +1,259 @@
+[
+  {
+    "phase": "start",
+    "elapsed": 0,
+    "privateBytes": 8079007744,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13209 MiB"
+  },
+  {
+    "phase": "sideslide",
+    "run": "20261114-173054_sideslide_candidate-d3d12-endurance_r1",
+    "elapsed": 6.570249800104648,
+    "privateBytes": 8416296960,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13305 MiB"
+  },
+  {
+    "phase": "roofdrop",
+    "run": "20261114-173101_roofdrop_candidate-d3d12-endurance_r2",
+    "elapsed": 14.662436600076035,
+    "privateBytes": 8384438272,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13257 MiB"
+  },
+  {
+    "phase": "sustained",
+    "run": "20261114-173109_sustained_candidate-d3d12-endurance_r3",
+    "elapsed": 51.5947298000101,
+    "privateBytes": 8388423680,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13439 MiB"
+  },
+  {
+    "phase": "sideslide",
+    "run": "20261114-173145_sideslide_candidate-d3d12-endurance_r4",
+    "elapsed": 58.90385359991342,
+    "privateBytes": 8488091648,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13368 MiB"
+  },
+  {
+    "phase": "roofdrop",
+    "run": "20261114-173153_roofdrop_candidate-d3d12-endurance_r5",
+    "elapsed": 67.00330079998821,
+    "privateBytes": 8417767424,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13335 MiB"
+  },
+  {
+    "phase": "sustained",
+    "run": "20261114-173201_sustained_candidate-d3d12-endurance_r6",
+    "elapsed": 105.23614650010131,
+    "privateBytes": 8466599936,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13304 MiB"
+  },
+  {
+    "phase": "sideslide",
+    "run": "20261114-173239_sideslide_candidate-d3d12-endurance_r7",
+    "elapsed": 111.79700300004333,
+    "privateBytes": 8464732160,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13335 MiB"
+  },
+  {
+    "phase": "roofdrop",
+    "run": "20261114-173246_roofdrop_candidate-d3d12-endurance_r8",
+    "elapsed": 122.45790260005742,
+    "privateBytes": 8364240896,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13336 MiB"
+  },
+  {
+    "phase": "sustained",
+    "run": "20261114-173257_sustained_candidate-d3d12-endurance_r9",
+    "elapsed": 159.6469672000967,
+    "privateBytes": 8361840640,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13656 MiB"
+  },
+  {
+    "phase": "sideslide",
+    "run": "20261114-173334_sideslide_candidate-d3d12-endurance_r10",
+    "elapsed": 167.36343059991486,
+    "privateBytes": 8480116736,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13383 MiB"
+  },
+  {
+    "phase": "roofdrop",
+    "run": "20261114-173341_roofdrop_candidate-d3d12-endurance_r11",
+    "elapsed": 175.39251799997874,
+    "privateBytes": 8345501696,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13351 MiB"
+  },
+  {
+    "phase": "sustained",
+    "run": "20261114-173349_sustained_candidate-d3d12-endurance_r12",
+    "elapsed": 214.8231069999747,
+    "privateBytes": 8460222464,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13357 MiB"
+  },
+  {
+    "phase": "sideslide",
+    "run": "20261114-173431_sideslide_candidate-d3d12-endurance_r13",
+    "elapsed": 224.3863639999181,
+    "privateBytes": 8460664832,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13356 MiB"
+  },
+  {
+    "phase": "roofdrop",
+    "run": "20261114-173439_roofdrop_candidate-d3d12-endurance_r14",
+    "elapsed": 232.66147439996712,
+    "privateBytes": 8457310208,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13355 MiB"
+  },
+  {
+    "phase": "sustained",
+    "run": "20261114-173447_sustained_candidate-d3d12-endurance_r15",
+    "elapsed": 269.6535984000657,
+    "privateBytes": 8418459648,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13321 MiB"
+  },
+  {
+    "phase": "sideslide",
+    "run": "20261114-173524_sideslide_candidate-d3d12-endurance_r16",
+    "elapsed": 276.3856206999626,
+    "privateBytes": 8484212736,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13385 MiB"
+  },
+  {
+    "phase": "roofdrop",
+    "run": "20261114-173530_roofdrop_candidate-d3d12-endurance_r17",
+    "elapsed": 285.97988309990615,
+    "privateBytes": 8447533056,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13448 MiB"
+  },
+  {
+    "phase": "sustained",
+    "run": "20261114-173540_sustained_candidate-d3d12-endurance_r18",
+    "elapsed": 324.611328399973,
+    "privateBytes": 8448487424,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13380 MiB"
+  },
+  {
+    "phase": "sideslide",
+    "run": "20261114-173618_sideslide_candidate-d3d12-endurance_r19",
+    "elapsed": 331.8056534000207,
+    "privateBytes": 8516280320,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13406 MiB"
+  },
+  {
+    "phase": "roofdrop",
+    "run": "20261114-173626_roofdrop_candidate-d3d12-endurance_r20",
+    "elapsed": 339.7973325001076,
+    "privateBytes": 8480169984,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13395 MiB"
+  },
+  {
+    "phase": "sustained",
+    "run": "20261114-173634_sustained_candidate-d3d12-endurance_r21",
+    "elapsed": 379.0174257999752,
+    "privateBytes": 8531214336,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13430 MiB"
+  },
+  {
+    "phase": "sideslide",
+    "run": "20261114-173713_sideslide_candidate-d3d12-endurance_r22",
+    "elapsed": 385.72378879995085,
+    "privateBytes": 8557727744,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13441 MiB"
+  },
+  {
+    "phase": "roofdrop",
+    "run": "20261114-173720_roofdrop_candidate-d3d12-endurance_r23",
+    "elapsed": 393.9497515000403,
+    "privateBytes": 8390131712,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13388 MiB"
+  },
+  {
+    "phase": "sustained",
+    "run": "20261114-173728_sustained_candidate-d3d12-endurance_r24",
+    "elapsed": 434.11463680001907,
+    "privateBytes": 8535666688,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13321 MiB"
+  },
+  {
+    "phase": "sideslide",
+    "run": "20261114-173808_sideslide_candidate-d3d12-endurance_r25",
+    "elapsed": 440.68147949990816,
+    "privateBytes": 8558432256,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13426 MiB"
+  },
+  {
+    "phase": "roofdrop",
+    "run": "20261114-173815_roofdrop_candidate-d3d12-endurance_r26",
+    "elapsed": 449.00988660007715,
+    "privateBytes": 8492384256,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13386 MiB"
+  },
+  {
+    "phase": "sustained",
+    "run": "20261114-173823_sustained_candidate-d3d12-endurance_r27",
+    "elapsed": 485.82603130000643,
+    "privateBytes": 8398163968,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13288 MiB"
+  },
+  {
+    "phase": "sideslide",
+    "run": "20261114-173900_sideslide_candidate-d3d12-endurance_r28",
+    "elapsed": 493.0762702000793,
+    "privateBytes": 8529170432,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13384 MiB"
+  },
+  {
+    "phase": "roofdrop",
+    "run": "20261114-173907_roofdrop_candidate-d3d12-endurance_r29",
+    "elapsed": 501.7662875999231,
+    "privateBytes": 8358002688,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13365 MiB"
+  },
+  {
+    "phase": "sustained",
+    "run": "20261114-173916_sustained_candidate-d3d12-endurance_r30",
+    "elapsed": 540.6253959999885,
+    "privateBytes": 8430395392,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13461 MiB"
+  },
+  {
+    "phase": "sideslide",
+    "run": "20261114-173955_sideslide_candidate-d3d12-endurance_r31",
+    "elapsed": 547.6204051999375,
+    "privateBytes": 8491528192,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13354 MiB"
+  },
+  {
+    "phase": "roofdrop",
+    "run": "20261114-174002_roofdrop_candidate-d3d12-endurance_r32",
+    "elapsed": 555.6814246999566,
+    "privateBytes": 8459546624,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13355 MiB"
+  },
+  {
+    "phase": "sustained",
+    "run": "20261114-174010_sustained_candidate-d3d12-endurance_r33",
+    "elapsed": 589.981265099952,
+    "privateBytes": 8430268416,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13308 MiB"
+  },
+  {
+    "phase": "sideslide",
+    "run": "20261114-174044_sideslide_candidate-d3d12-endurance_r34",
+    "elapsed": 596.5944578999188,
+    "privateBytes": 8464982016,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13356 MiB"
+  },
+  {
+    "phase": "roofdrop",
+    "run": "20261114-174051_roofdrop_candidate-d3d12-endurance_r35",
+    "elapsed": 607.4592669999693,
+    "privateBytes": 8328978432,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13330 MiB"
+  },
+  {
+    "phase": "after-gc",
+    "elapsed": 611.4028137999121,
+    "privateBytes": 8394633216,
+    "deviceMemory": "NVIDIA GeForce RTX 3090, 13344 MiB"
+  }
+]

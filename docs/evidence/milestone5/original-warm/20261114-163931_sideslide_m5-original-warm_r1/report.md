@@ -1,8 +1,10 @@
 # sideslide - 20261114-163931_sideslide_m5-original-warm_r1
 
+Remaining queues: `{"bake": 0, "jobs": 0, "stamps": 0}`
+
 _on its side, sliding along the ground at 14 m/s - one long scrape_
 
-Settled: True after 4.452 s - 122 frames, 27.2 fps average (background limiter lifted)
+Settled: True after 4.452 s - 122 frames, 27.4 fps average from sampled wall intervals (background limiter lifted)
 Went past upside down: True (lowest up-vector z -0.153)
 
 ## Marks

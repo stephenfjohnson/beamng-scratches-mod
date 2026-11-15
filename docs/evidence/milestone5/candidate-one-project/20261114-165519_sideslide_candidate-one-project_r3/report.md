@@ -1,10 +1,14 @@
 # sideslide - 20261114-165519_sideslide_candidate-one-project_r3
 
+Remaining queues: `{"bake": 0, "jobs": 38, "stamps": 0}`
+
+**Incomplete drain: rendering backlog remains. This run is not a latency acceptance pass.**
+
 _on its side, sliding along the ground at 14 m/s - one long scrape_
 
 Tuning: `if scratches_detect then scratches_detect.setPaintEnabled(true) end; scratches_paint.setProjectionBudget(1)`
 
-Settled: True after 4.254 s - 460 frames, 63.3 fps average (background limiter lifted)
+Settled: True after 4.254 s - 460 frames, 64.3 fps average from sampled wall intervals (background limiter lifted)
 Went past upside down: True (lowest up-vector z -0.19)
 
 ## Marks

@@ -1,10 +1,12 @@
 # roofdrop - 20261114-165405_roofdrop_candidate-d3d12-warm_r3
 
+Remaining queues: `{"bake": 0, "jobs": 0, "stamps": 0}`
+
 _dropped upside down from about 1 m - roof impacts_
 
 Tuning: `if scratches_detect then scratches_detect.setPaintEnabled(true) end`
 
-Settled: True after 7.631 s - 649 frames, 84.9 fps average (background limiter lifted)
+Settled: True after 7.631 s - 649 frames, 81.4 fps average from sampled wall intervals (background limiter lifted)
 Went past upside down: True (lowest up-vector z -1.0)
 
 ## Marks

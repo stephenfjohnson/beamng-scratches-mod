@@ -131,9 +131,9 @@ python tools/dev.py lua "return jsonEncode(scratches_paint.getCompatibility())"
 python tools/livery_probe.py --output bench/livery-status.json
 ```
 
-For supported ETKs, `comparison.originalStages=2`, `activeStages="3"` and an
+For supported ETKs, `comparison.originalStages=2`, `activeStages="4"` and an
 empty `differences` object/array indicate identical original fields in the
-clone. That structural check accompanies screenshots; it is not a render test.
+clone (two original stages, damage, soil). That structural check accompanies screenshots; it is not a render test.
 
 To reproduce the clean material comparison, first run a baseline at rest:
 
@@ -221,3 +221,84 @@ compared before interpreting results. Frame metrics include the whole game;
 native CPU-call timers can include GPU waits and do not measure GPU execution.
 
 See [acceptance gates and evidence](../investigations/10-performance-compatibility.md).
+
+
+For sustained scraping and a longer latency observation window (assisted roof
+motion, real physics contacts; this can damage the car):
+
+```powershell
+python tools/bench.py run sustained --repeat 3 --no-shots --tag local-stress
+python tools/bench.py run sustained --repeat 3 --no-shots --drain-timeout 15 --tag local-fastflush --set paint.setFlushInterval=0.05
+# Graphics-workload diagnostic; the helper restores the previous reflection setting:
+python tools/perf_probe.py --label local-no-reflections --reflections-off --rounds 3
+python tools/perf_traffic.py --label local-traffic
+python tools/perf_matrix.py --label local-compatibility
+python tools/perf_maps.py --label local-map-transitions
+```
+
+The faster interval and one-project budget are experiments, not recommended
+settings. The retained results include dropped work and multi-second latency.
+`bench.py` saves to ignored `bench/runs/`; archival probes copy their runs to
+`docs/evidence/milestone5/`. To include a new sustained series in the static
+report, archive its folders explicitly:
+
+```powershell
+New-Item -ItemType Directory docs/evidence/milestone5/local-stress
+Get-ChildItem bench/runs -Directory -Filter '*_sustained_local-stress*' | Copy-Item -Destination docs/evidence/milestone5/local-stress -Recurse
+# Matplotlib is required only for the offline static charts:
+python -m pip install matplotlib
+python tools/perf_report.py
+```
+
+Reports expose remaining queues and distinguish model-time duration from sampled
+wall-clock frame intervals. `drainWallSeconds` measures the post-run drain window
+in wall time in newer runs; it is not a measurement of every individual mark's
+latency. A nonempty queue at timeout is a failed latency check, even if FPS or
+frame p95 looks better. Native calls cannot be interrupted by a Lua budget.
+
+
+The ten-minute same-instance probe resets the car between real-physics scenarios
+but never reloads the painter. Use fresh labels; existing evidence is not replaced.
+Run probes sequentially, with no concurrent game controller:
+
+```powershell
+python tools/dev.py restart --game-arg=-gfx --game-arg=d3d12
+python tools/perf_endurance.py --label local-endurance --minutes 10
+python tools/perf_unloaded.py --label local-unloaded
+# These exact-fixture helpers write fixed folders; use a fresh evidence checkout:
+python tools/perf_stock_configs.py
+python tools/perf_mod_config.py
+```
+
+`perf_stock_configs` replaces the current car with stock 844 plain, 844 Police and
+854 Polizei, captures the supported slides and restores Rennspecht/Police.
+`perf_mod_config` requires the already-installed `mods/repo/scintilla_gt3.zip`;
+it records its hash, temporarily activates it if disabled, loads GT3 Balanced,
+records the skip, restores the ETK and the mod's prior activation state. Neither
+helper saves a vehicle configuration. The unloaded control disables detection,
+unloads the painter and restores both afterwards; this is not a clean uninstall.
+The endurance probe records process-private memory and optional `nvidia-smi`
+total-device memory; neither isolates mod GPU allocations.
+
+For an Optick attempt, use a profiling-capable engine build:
+
+```powershell
+python tools/bench.py run sustained --no-shots --drain-timeout 15 --optick --tag local-optick
+```
+
+On the tested installed build, both this request and official MCP `profiler_run`
+returned planned paths without creating a trace. Confirm an actual `capture.opt`
+exists before claiming attribution. The report warns when the file is absent.
+
+Restore diagnostic settings explicitly after standalone bench tuning:
+
+```powershell
+python tools/dev.py lua "scratches_paint.setProjectionBudget(6); scratches_paint.setFlushInterval(0.2); settings.setValue('GraphicDynReflectionEnabled',true); getPlayerVehicle(0):queueLuaCommand([[scratches_detect.setEnabled(true); scratches_detect.setPaintEnabled(true)]]); return true"
+```
+
+Default bake batches remain six layers; `getStats().config.layerBudget=24` is the
+projection layer cap, not the per-frame bake count. `perf_probe --renderer vk`
+selects that backend only with `--restart`; always verify its saved startup log.
+The final [acceptance table](../investigations/10-performance-compatibility.md#acceptance-disposition-and-remaining-gates)
+is blocked despite passing mock checks. These settings are reproducible test
+conditions, not guaranteed FPS recommendations.

@@ -1,10 +1,12 @@
 # baseline - 20261114-165653_baseline_candidate-d3d12-disabled-cold_r1
 
+Remaining queues: `{"bake": 0, "jobs": 0, "stamps": 0}`
+
 _upright, coasting at 15 m/s - should leave no marks_
 
 Tuning: `if scratches_detect then scratches_detect.setPaintEnabled(false) end; scratches_paint.setProjectionBudget(6)`
 
-Settled: False after 4.01 s - 358 frames, 89.0 fps average (background limiter lifted)
+Settled: False after 4.01 s - 358 frames, 89.4 fps average from sampled wall intervals (background limiter lifted)
 Went past upside down: False (lowest up-vector z 1.0)
 
 ## Marks

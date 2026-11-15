@@ -1,8 +1,10 @@
 # baseline - 20261114-163914_baseline_m5-original-warm_r1
 
+Remaining queues: `{"bake": 0, "jobs": 0, "stamps": 0}`
+
 _upright, coasting at 15 m/s - should leave no marks_
 
-Settled: False after 4.002 s - 357 frames, 89.0 fps average (background limiter lifted)
+Settled: False after 4.002 s - 357 frames, 88.9 fps average from sampled wall intervals (background limiter lifted)
 Went past upside down: False (lowest up-vector z 1.0)
 
 ## Marks

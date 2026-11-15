@@ -1,10 +1,12 @@
 # sideslide - 20261114-164017_sideslide_m5-disabled-warm_r1
 
+Remaining queues: `{"bake": 0, "jobs": 0, "stamps": 0}`
+
 _on its side, sliding along the ground at 14 m/s - one long scrape_
 
 Tuning: `if scratches_detect then scratches_detect.setPaintEnabled(false) end`
 
-Settled: True after 4.446 s - 413 frames, 92.7 fps average (background limiter lifted)
+Settled: True after 4.446 s - 413 frames, 92.6 fps average from sampled wall intervals (background limiter lifted)
 Went past upside down: True (lowest up-vector z -0.187)
 
 ## Marks

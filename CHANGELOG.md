@@ -1,6 +1,6 @@
 # Changelog
 
-## Milestone 5: performance investigation (acceptance pending)
+## Milestone 5: performance investigation — blocked, unmerged
 
 - Reuse the private full-resolution ETK damage projection across attachments;
   rebind shape before clearing/selecting exact private material indices.
@@ -8,7 +8,12 @@
 - Add repeated warm/process-cold physics runs, per-frame queue/timing records,
   lifecycle snapshots and a static frame-tail report.
 - 226 mock checks pass; the new starvation test fails on the prior baseline.
-- Native stall root cause and release readiness remain unresolved.
+- Retain 148 engine runs, renderer/control comparisons, a ten-minute same-instance
+  session, exact stock/mod compatibility checks and matched rendering/wash evidence.
+- Reproduce 738 ms projection, 663 ms bake batches and lost/delayed sustained marks.
+  Lower budgets, faster flushing and reflection changes did not establish a fix.
+- Native/GPU trace output was unavailable; root cause and stable release readiness
+  remain unresolved. Milestone 5 acceptance failed; no merge or milestone 6 release.
   [Acceptance/evidence](investigations/10-performance-compatibility.md).
 
 ## Milestone 4: scratch and impact polish — 2026-11-14

@@ -1,0 +1,3998 @@
+[
+  {
+    "run": "candidate-d3d12-cold\\20261114-170108_sideslide_candidate-d3d12-cold_r1\\result.json",
+    "p95": 71.565400000004,
+    "p99": 87.102899999998,
+    "max": 91.909399999999,
+    "projectionMax": 46.696900000001,
+    "bakeMax": 58.679099999999,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.037464993532214,
+    "drainWallSeconds": null,
+    "frames": 141
+  },
+  {
+    "run": "candidate-d3d12-cold\\20261114-170115_roofdrop_candidate-d3d12-cold_r1\\result.json",
+    "p95": 24.9685,
+    "p99": 59.3863,
+    "max": 65.549500000003,
+    "projectionMax": 16.419199999994,
+    "bakeMax": 52.997500000004,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011866661185792,
+    "drainWallSeconds": null,
+    "frames": 406
+  },
+  {
+    "run": "candidate-d3d12-cold\\20261114-170122_baseline_candidate-d3d12-cold_r1\\result.json",
+    "p95": 14.248500000001,
+    "p99": 18.422899999997,
+    "max": 25.999499999998,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011645770989789,
+    "drainWallSeconds": null,
+    "frames": 333
+  },
+  {
+    "run": "candidate-d3d12-cold\\20261114-170305_sideslide_candidate-d3d12-cold_r2\\result.json",
+    "p95": 72.040599999994,
+    "p99": 87.464199999999,
+    "max": 87.848600000001,
+    "projectionMax": 40.296900000001,
+    "bakeMax": 71.615600000001,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.034582895608365,
+    "drainWallSeconds": null,
+    "frames": 148
+  },
+  {
+    "run": "candidate-d3d12-cold\\20261114-170312_roofdrop_candidate-d3d12-cold_r2\\result.json",
+    "p95": 26.148499999998,
+    "p99": 52.062500000005,
+    "max": 61.4773,
+    "projectionMax": 27.025600000002,
+    "bakeMax": 51.488499999998,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010965870130329,
+    "drainWallSeconds": null,
+    "frames": 445
+  },
+  {
+    "run": "candidate-d3d12-cold\\20261114-170319_baseline_candidate-d3d12-cold_r2\\result.json",
+    "p95": 14.240799999996,
+    "p99": 15.873499999998,
+    "max": 21.8524,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010842532030981,
+    "drainWallSeconds": null,
+    "frames": 355
+  },
+  {
+    "run": "candidate-d3d12-cold\\20261114-170515_sideslide_candidate-d3d12-cold_r3\\result.json",
+    "p95": 69.396900000001,
+    "p99": 76.346600000001,
+    "max": 82.409400000003,
+    "projectionMax": 44.987599999999,
+    "bakeMax": 59.220799999999,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.052079324523732,
+    "drainWallSeconds": null,
+    "frames": 142
+  },
+  {
+    "run": "candidate-d3d12-cold\\20261114-170522_roofdrop_candidate-d3d12-cold_r3\\result.json",
+    "p95": 26.463299999996,
+    "p99": 46.817300000001,
+    "max": 64.631200000001,
+    "projectionMax": 22.721299999994,
+    "bakeMax": 51.425399999999,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011058402839775,
+    "drainWallSeconds": null,
+    "frames": 499
+  },
+  {
+    "run": "candidate-d3d12-cold\\20261114-170530_baseline_candidate-d3d12-cold_r3\\result.json",
+    "p95": 15.618799999999,
+    "p99": 20.756499999997,
+    "max": 27.243600000006,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012745038683288,
+    "drainWallSeconds": null,
+    "frames": 341
+  },
+  {
+    "run": "candidate-d3d12-disabled-cold\\20261114-165639_sideslide_candidate-d3d12-disabled-cold_r1\\result.json",
+    "p95": 12.153400000003,
+    "p99": 13.846400000006,
+    "max": 15.155,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.0098289571455254,
+    "drainWallSeconds": null,
+    "frames": 418
+  },
+  {
+    "run": "candidate-d3d12-disabled-cold\\20261114-165646_roofdrop_candidate-d3d12-disabled-cold_r1\\result.json",
+    "p95": 13.8538,
+    "p99": 15.175500000005,
+    "max": 16.961799999997,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011295182700413,
+    "drainWallSeconds": null,
+    "frames": 508
+  },
+  {
+    "run": "candidate-d3d12-disabled-cold\\20261114-165653_baseline_candidate-d3d12-disabled-cold_r1\\result.json",
+    "p95": 14.4108,
+    "p99": 16.959500000006,
+    "max": 18.777399999998,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010948318959034,
+    "drainWallSeconds": null,
+    "frames": 358
+  },
+  {
+    "run": "candidate-d3d12-disabled-cold\\20261114-165756_sideslide_candidate-d3d12-disabled-cold_r2\\result.json",
+    "p95": 13.087900000002,
+    "p99": 15.015999999999,
+    "max": 19.420099999998,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.009879025996525,
+    "drainWallSeconds": null,
+    "frames": 422
+  },
+  {
+    "run": "candidate-d3d12-disabled-cold\\20261114-165802_roofdrop_candidate-d3d12-disabled-cold_r2\\result.json",
+    "p95": 13.385499999998,
+    "p99": 15.421499999995,
+    "max": 21.384499999996,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011064727287144,
+    "drainWallSeconds": null,
+    "frames": 521
+  },
+  {
+    "run": "candidate-d3d12-disabled-cold\\20261114-165810_baseline_candidate-d3d12-disabled-cold_r2\\result.json",
+    "p95": 13.415500000001,
+    "p99": 15.020800000002,
+    "max": 17.5427,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010919022121368,
+    "drainWallSeconds": null,
+    "frames": 360
+  },
+  {
+    "run": "candidate-d3d12-disabled-cold\\20261114-165922_sideslide_candidate-d3d12-disabled-cold_r3\\result.json",
+    "p95": 16.493599999997,
+    "p99": 21.906599999994,
+    "max": 49.394500000005,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011070271769022,
+    "drainWallSeconds": null,
+    "frames": 386
+  },
+  {
+    "run": "candidate-d3d12-disabled-cold\\20261114-165929_roofdrop_candidate-d3d12-disabled-cold_r3\\result.json",
+    "p95": 16.594699999999,
+    "p99": 20.1201,
+    "max": 23.428299999999,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012461432287782,
+    "drainWallSeconds": null,
+    "frames": 452
+  },
+  {
+    "run": "candidate-d3d12-disabled-cold\\20261114-165936_baseline_candidate-d3d12-disabled-cold_r3\\result.json",
+    "p95": 17.804599999998,
+    "p99": 19.897900000004,
+    "max": 25.622999999996,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011255471078652,
+    "drainWallSeconds": null,
+    "frames": 331
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173054_sideslide_candidate-d3d12-endurance_r1\\result.json",
+    "p95": 56.712300000001,
+    "p99": 66.752399999999,
+    "max": 79.693399999996,
+    "projectionMax": 44.938099999996,
+    "bakeMax": 49.434300000001,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.017104261632963,
+    "drainWallSeconds": 0.010379599999993,
+    "frames": 144
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173101_roofdrop_candidate-d3d12-endurance_r2\\result.json",
+    "p95": 30.836899999997,
+    "p99": 45.961000000005,
+    "max": 49.160400000005,
+    "projectionMax": 30.320199999977,
+    "bakeMax": 41.951699999998,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011163566156077,
+    "drainWallSeconds": 0.010695200000015,
+    "frames": 425
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173109_sustained_candidate-d3d12-endurance_r3\\result.json",
+    "p95": 49.773700000003,
+    "p99": 58.636699999994,
+    "max": 80.809600000009,
+    "projectionMax": 47.949799999998,
+    "bakeMax": 50.169400000016,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 12,
+    "aggregateDrops": 231,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 4.1240377694126,
+    "drainWallSeconds": 4.0176727,
+    "frames": 1356
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173145_sideslide_candidate-d3d12-endurance_r4\\result.json",
+    "p95": 50.882000000001,
+    "p99": 66.387099999986,
+    "max": 500.9086,
+    "projectionMax": 45.689799999991,
+    "bakeMax": 43.328399999979,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.025460188380325,
+    "drainWallSeconds": 0.0091652999999781,
+    "frames": 147
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173153_roofdrop_candidate-d3d12-endurance_r5\\result.json",
+    "p95": 18.781099999984,
+    "p99": 43.830200000002,
+    "max": 47.917300000023,
+    "projectionMax": 30.134900000007,
+    "bakeMax": 37.438399999985,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010970058266481,
+    "drainWallSeconds": 0.013921199999999,
+    "frames": 422
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173201_sustained_candidate-d3d12-endurance_r6\\result.json",
+    "p95": 54.355500000014,
+    "p99": 62.269599999979,
+    "max": 74.708299999998,
+    "projectionMax": 49.119200000007,
+    "bakeMax": 52.652800000004,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 46,
+    "aggregateDrops": 78,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 5.47482546901,
+    "drainWallSeconds": 5.4584345,
+    "frames": 1336
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173239_sideslide_candidate-d3d12-endurance_r7\\result.json",
+    "p95": 56.981400000012,
+    "p99": 68.135300000023,
+    "max": 70.457099999999,
+    "projectionMax": 38.283199999995,
+    "bakeMax": 47.508499999992,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.020958583259752,
+    "drainWallSeconds": 0.009395799999993,
+    "frames": 135
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173246_roofdrop_candidate-d3d12-endurance_r8\\result.json",
+    "p95": 18.848399999996,
+    "p99": 42.627600000003,
+    "max": 48.964900000016,
+    "projectionMax": 30.581699999999,
+    "bakeMax": 41.275200000001,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011417826078914,
+    "drainWallSeconds": 0.012521099999987,
+    "frames": 651
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173257_sustained_candidate-d3d12-endurance_r9\\result.json",
+    "p95": 51.016800000014,
+    "p99": 60.8383,
+    "max": 469.86760000004,
+    "projectionMax": 53.605800000014,
+    "bakeMax": 461.72109999998,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 71,
+    "aggregateDrops": 102,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 4.1192169512024,
+    "drainWallSeconds": 3.8611805,
+    "frames": 1324
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173334_sideslide_candidate-d3d12-endurance_r10\\result.json",
+    "p95": 51.90170000003,
+    "p99": 61.52800000001,
+    "max": 86.696899999993,
+    "projectionMax": 41.421200000002,
+    "bakeMax": 45.690800000045,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010474103930559,
+    "drainWallSeconds": 0.010519400000021,
+    "frames": 238
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173341_roofdrop_candidate-d3d12-endurance_r11\\result.json",
+    "p95": 17.201800000009,
+    "p99": 43.625300000031,
+    "max": 47.981400000026,
+    "projectionMax": 30.051899999989,
+    "bakeMax": 37.219599999958,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011431434843278,
+    "drainWallSeconds": 0.011517500000025,
+    "frames": 453
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173349_sustained_candidate-d3d12-endurance_r12\\result.json",
+    "p95": 56.195100000025,
+    "p99": 64.426000000026,
+    "max": 165.7558,
+    "projectionMax": 95.734900000025,
+    "bakeMax": 78.276899999992,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 59,
+    "aggregateDrops": 36,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 5.9817678032046,
+    "drainWallSeconds": 6.2160379,
+    "frames": 1257
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173431_sideslide_candidate-d3d12-endurance_r13\\result.json",
+    "p95": 67.077400000016,
+    "p99": 78.333900000018,
+    "max": 79.89950000001,
+    "projectionMax": 44.360499999982,
+    "bakeMax": 56.061700000043,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.038282648357614,
+    "drainWallSeconds": 0.019427899999982,
+    "frames": 124
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173439_roofdrop_candidate-d3d12-endurance_r14\\result.json",
+    "p95": 18.001300000037,
+    "p99": 43.268699999999,
+    "max": 46.444299999962,
+    "projectionMax": 29.921699999989,
+    "bakeMax": 38.948199999993,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011317168144374,
+    "drainWallSeconds": 0.010874999999999,
+    "frames": 440
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173447_sustained_candidate-d3d12-endurance_r15\\result.json",
+    "p95": 49.740700000029,
+    "p99": 58.259000000021,
+    "max": 744.11749999996,
+    "projectionMax": 731.92660000001,
+    "bakeMax": 50.588000000005,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 31,
+    "aggregateDrops": 37,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 3.4569198736121,
+    "drainWallSeconds": 3.4554596,
+    "frames": 1358
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173524_sideslide_candidate-d3d12-endurance_r16\\result.json",
+    "p95": 51.32679999997,
+    "p99": 56.079099999977,
+    "max": 68.144599999982,
+    "projectionMax": 39.665900000045,
+    "bakeMax": 43.790300000012,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.014169835215645,
+    "drainWallSeconds": 0.011160799999971,
+    "frames": 156
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173530_roofdrop_candidate-d3d12-endurance_r17\\result.json",
+    "p95": 17.554899999993,
+    "p99": 43.638999999985,
+    "max": 47.297200000003,
+    "projectionMax": 31.607899999983,
+    "bakeMax": 38.86,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012166816233964,
+    "drainWallSeconds": 0.012829299999964,
+    "frames": 533
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173540_sustained_candidate-d3d12-endurance_r18\\result.json",
+    "p95": 54.734500000052,
+    "p99": 68.272500000035,
+    "max": 94.313800000009,
+    "projectionMax": 56.699199999969,
+    "bakeMax": 52.737000000036,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 46,
+    "aggregateDrops": 98,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 5.319471867112,
+    "drainWallSeconds": 5.3116973,
+    "frames": 1287
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173618_sideslide_candidate-d3d12-endurance_r19\\result.json",
+    "p95": 52.370999999994,
+    "p99": 61.787400000014,
+    "max": 69.102599999951,
+    "projectionMax": 45.036800000048,
+    "bakeMax": 46.286100000032,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011657274608335,
+    "drainWallSeconds": 0.010587499999986,
+    "frames": 152
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173626_roofdrop_candidate-d3d12-endurance_r20\\result.json",
+    "p95": 17.774700000018,
+    "p99": 43.169799999987,
+    "max": 45.635000000004,
+    "projectionMax": 30.192999999997,
+    "bakeMax": 37.298200000009,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.01154905884551,
+    "drainWallSeconds": 0.010354099999972,
+    "frames": 439
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173634_sustained_candidate-d3d12-endurance_r21\\result.json",
+    "p95": 57.051000000001,
+    "p99": 70.644200000004,
+    "max": 80.432200000018,
+    "projectionMax": 46.508299999971,
+    "bakeMax": 64.135800000031,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 24,
+    "aggregateDrops": 36,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 6.2799580709563,
+    "drainWallSeconds": 6.2240248,
+    "frames": 1196
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173713_sideslide_candidate-d3d12-endurance_r22\\result.json",
+    "p95": 54.826500000047,
+    "p99": 69.757999999979,
+    "max": 72.522300000003,
+    "projectionMax": 34.526400000004,
+    "bakeMax": 50.167599999952,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.015573030574939,
+    "drainWallSeconds": 0.010630600000013,
+    "frames": 138
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173720_roofdrop_candidate-d3d12-endurance_r23\\result.json",
+    "p95": 24.645499999963,
+    "p99": 47.396300000003,
+    "max": 51.678999999979,
+    "projectionMax": 32.16980000002,
+    "bakeMax": 43.579500000021,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012306131009485,
+    "drainWallSeconds": 0.012633999999935,
+    "frames": 413
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173728_sustained_candidate-d3d12-endurance_r24\\result.json",
+    "p95": 49.830200000088,
+    "p99": 61.202299999991,
+    "max": 673.34060000007,
+    "projectionMax": 52.883100000031,
+    "bakeMax": 662.80619999998,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 35,
+    "aggregateDrops": 150,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 6.6547782371701,
+    "drainWallSeconds": 6.5240052,
+    "frames": 1659
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173808_sideslide_candidate-d3d12-endurance_r25\\result.json",
+    "p95": 51.178299999947,
+    "p99": 61.358000000041,
+    "max": 70.015900000044,
+    "projectionMax": 39.885799999979,
+    "bakeMax": 42.223499999977,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.016042116941248,
+    "drainWallSeconds": 0.011138899999992,
+    "frames": 142
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173815_roofdrop_candidate-d3d12-endurance_r26\\result.json",
+    "p95": 23.995000000014,
+    "p99": 44.991900000014,
+    "max": 61.248299999988,
+    "projectionMax": 30.274299999974,
+    "bakeMax": 39.347299999918,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011760248810667,
+    "drainWallSeconds": 0.012478600000009,
+    "frames": 412
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173823_sustained_candidate-d3d12-endurance_r27\\result.json",
+    "p95": 54.243999999926,
+    "p99": 67.894900000056,
+    "max": 98.125600000003,
+    "projectionMax": 49.278200000003,
+    "bakeMax": 51.674299999945,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 10,
+    "aggregateDrops": 57,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 3.6255745162911,
+    "drainWallSeconds": 3.5467024,
+    "frames": 1265
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173900_sideslide_candidate-d3d12-endurance_r28\\result.json",
+    "p95": 58.807900000033,
+    "p99": 74.180800000022,
+    "max": 85.373799999957,
+    "projectionMax": 47.633700000006,
+    "bakeMax": 49.832699999911,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.025746938756218,
+    "drainWallSeconds": 0.0090824000000111,
+    "frames": 131
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173907_roofdrop_candidate-d3d12-endurance_r29\\result.json",
+    "p95": 17.585399999916,
+    "p99": 44.722500000034,
+    "max": 49.124099999972,
+    "projectionMax": 30.96400000004,
+    "bakeMax": 40.840600000024,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011469857324517,
+    "drainWallSeconds": 0.011793499999953,
+    "frames": 455
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173916_sustained_candidate-d3d12-endurance_r30\\result.json",
+    "p95": 50.99569999993,
+    "p99": 58.638900000005,
+    "max": 344.6993,
+    "projectionMax": 334.3989,
+    "bakeMax": 49.603199999979,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 14,
+    "aggregateDrops": 86,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 5.7472740442692,
+    "drainWallSeconds": 5.6894853,
+    "frames": 1318
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-173955_sideslide_candidate-d3d12-endurance_r31\\result.json",
+    "p95": 52.502200000049,
+    "p99": 58.129800000074,
+    "max": 83.444600000007,
+    "projectionMax": 40.140299999962,
+    "bakeMax": 44.466800000009,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012882860531556,
+    "drainWallSeconds": 0.011525200000051,
+    "frames": 154
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-174002_roofdrop_candidate-d3d12-endurance_r32\\result.json",
+    "p95": 23.237900000026,
+    "p99": 43.336400000044,
+    "max": 48.598100000049,
+    "projectionMax": 30.224000000089,
+    "bakeMax": 41.44539999993,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011663631851743,
+    "drainWallSeconds": 0.012063399999988,
+    "frames": 419
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-174010_sustained_candidate-d3d12-endurance_r33\\result.json",
+    "p95": 47.455300000024,
+    "p99": 57.796200000098,
+    "max": 84.373000000028,
+    "projectionMax": 61.099600000034,
+    "bakeMax": 45.166800000061,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 86,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 1.5051908627418,
+    "drainWallSeconds": 1.4565952,
+    "frames": 1388
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-174044_sideslide_candidate-d3d12-endurance_r34\\result.json",
+    "p95": 52.418099999954,
+    "p99": 55.884800000058,
+    "max": 82.139699999971,
+    "projectionMax": 35.674599999993,
+    "bakeMax": 47.129899999959,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011156781517537,
+    "drainWallSeconds": 0.011239699999919,
+    "frames": 161
+  },
+  {
+    "run": "candidate-d3d12-endurance\\20261114-174051_roofdrop_candidate-d3d12-endurance_r35\\result.json",
+    "p95": 15.461400000049,
+    "p99": 43.467499999906,
+    "max": 61.167799999907,
+    "projectionMax": 42.644399999972,
+    "bakeMax": 51.435699999956,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011465461968897,
+    "drainWallSeconds": 0.011043799999925,
+    "frames": 634
+  },
+  {
+    "run": "candidate-d3d12-warm\\20261114-165305_sideslide_candidate-d3d12-warm_r1\\result.json",
+    "p95": 62.383100000034,
+    "p99": 72.511200000008,
+    "max": 73.663499999952,
+    "projectionMax": 43.301199999974,
+    "bakeMax": 52.838699999938,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.02101034318822,
+    "drainWallSeconds": null,
+    "frames": 134
+  },
+  {
+    "run": "candidate-d3d12-warm\\20261114-165311_roofdrop_candidate-d3d12-warm_r1\\result.json",
+    "p95": 22.061500000063,
+    "p99": 44.286499999998,
+    "max": 49.621799999954,
+    "projectionMax": 31.565299999897,
+    "bakeMax": 39.408800000047,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010913371137885,
+    "drainWallSeconds": null,
+    "frames": 545
+  },
+  {
+    "run": "candidate-d3d12-warm\\20261114-165320_baseline_candidate-d3d12-warm_r1\\result.json",
+    "p95": 13.314000000037,
+    "p99": 16.031800000064,
+    "max": 101.35200000002,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011364775535088,
+    "drainWallSeconds": null,
+    "frames": 346
+  },
+  {
+    "run": "candidate-d3d12-warm\\20261114-165331_sideslide_candidate-d3d12-warm_r2\\result.json",
+    "p95": 54.934200000048,
+    "p99": 63.813400000072,
+    "max": 77.022599999964,
+    "projectionMax": 46.3021999999,
+    "bakeMax": 59.940400000073,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010285932336988,
+    "drainWallSeconds": null,
+    "frames": 286
+  },
+  {
+    "run": "candidate-d3d12-warm\\20261114-165339_roofdrop_candidate-d3d12-warm_r2\\result.json",
+    "p95": 22.606500000052,
+    "p99": 47.409000000016,
+    "max": 50.839100000076,
+    "projectionMax": 30.936499999939,
+    "bakeMax": 41.681499999981,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.013273390522972,
+    "drainWallSeconds": null,
+    "frames": 532
+  },
+  {
+    "run": "candidate-d3d12-warm\\20261114-165348_baseline_candidate-d3d12-warm_r2\\result.json",
+    "p95": 15.235400000051,
+    "p99": 17.213799999922,
+    "max": 21.036600000002,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011652518931719,
+    "drainWallSeconds": null,
+    "frames": 346
+  },
+  {
+    "run": "candidate-d3d12-warm\\20261114-165358_sideslide_candidate-d3d12-warm_r3\\result.json",
+    "p95": 69.524099999967,
+    "p99": 77.561899999978,
+    "max": 79.789800000071,
+    "projectionMax": 42.189199999939,
+    "bakeMax": 54.904899999997,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.051867481390939,
+    "drainWallSeconds": null,
+    "frames": 119
+  },
+  {
+    "run": "candidate-d3d12-warm\\20261114-165405_roofdrop_candidate-d3d12-warm_r3\\result.json",
+    "p95": 17.156199999931,
+    "p99": 44.187800000032,
+    "max": 55.363800000009,
+    "projectionMax": 30.978399999981,
+    "bakeMax": 45.605399999999,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011615586839964,
+    "drainWallSeconds": null,
+    "frames": 649
+  },
+  {
+    "run": "candidate-d3d12-warm\\20261114-165415_baseline_candidate-d3d12-warm_r3\\result.json",
+    "p95": 13.748899999996,
+    "p99": 14.63960000001,
+    "max": 15.472100000011,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011122894568693,
+    "drainWallSeconds": null,
+    "frames": 350
+  },
+  {
+    "run": "candidate-one-project\\20261114-165425_sideslide_candidate-one-project_r1\\result.json",
+    "p95": 46.967600000016,
+    "p99": 57.034899999962,
+    "max": 67.324699999972,
+    "projectionMax": 56.697999999983,
+    "bakeMax": 47.902600000043,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 34
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 1,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 3.0038506710082,
+    "drainWallSeconds": null,
+    "frames": 447
+  },
+  {
+    "run": "candidate-one-project\\20261114-165434_roofdrop_candidate-one-project_r1\\result.json",
+    "p95": 32.091599999944,
+    "p99": 42.492500000094,
+    "max": 50.938699999961,
+    "projectionMax": 30.566900000053,
+    "bakeMax": 39.454399999954,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 1,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011807672290227,
+    "drainWallSeconds": null,
+    "frames": 405
+  },
+  {
+    "run": "candidate-one-project\\20261114-165442_baseline_candidate-one-project_r1\\result.json",
+    "p95": 13.759599999958,
+    "p99": 18.200099999945,
+    "max": 23.409399999991,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 1,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011357978377555,
+    "drainWallSeconds": null,
+    "frames": 344
+  },
+  {
+    "run": "candidate-one-project\\20261114-165452_sideslide_candidate-one-project_r2\\result.json",
+    "p95": 43.89500000002,
+    "p99": 50.056599999948,
+    "max": 57.894899999951,
+    "projectionMax": 43.536399999994,
+    "bakeMax": 45.378700000015,
+    "queue": {
+      "bake": 1,
+      "stamps": 0,
+      "jobs": 35
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 1,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 3.0083083306554,
+    "drainWallSeconds": null,
+    "frames": 471
+  },
+  {
+    "run": "candidate-one-project\\20261114-165502_roofdrop_candidate-one-project_r2\\result.json",
+    "p95": 26.667999999972,
+    "p99": 43.578900000057,
+    "max": 53.460900000005,
+    "projectionMax": 30.545599999982,
+    "bakeMax": 41.600900000049,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 1,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012284301773608,
+    "drainWallSeconds": null,
+    "frames": 371
+  },
+  {
+    "run": "candidate-one-project\\20261114-165509_baseline_candidate-one-project_r2\\result.json",
+    "p95": 15.463100000034,
+    "p99": 18.100600000025,
+    "max": 19.230900000025,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 1,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011457390940761,
+    "drainWallSeconds": null,
+    "frames": 333
+  },
+  {
+    "run": "candidate-one-project\\20261114-165519_sideslide_candidate-one-project_r3\\result.json",
+    "p95": 44.854999999984,
+    "p99": 53.718900000035,
+    "max": 60.600300000033,
+    "projectionMax": 38.143799999943,
+    "bakeMax": 46.288000000004,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 38
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 1,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 3.0138569256741,
+    "drainWallSeconds": null,
+    "frames": 460
+  },
+  {
+    "run": "candidate-one-project\\20261114-165528_roofdrop_candidate-one-project_r3\\result.json",
+    "p95": 31.425900000045,
+    "p99": 43.605200000002,
+    "max": 54.321200000004,
+    "projectionMax": 34.706400000005,
+    "bakeMax": 42.987999999923,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 1,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011465656851262,
+    "drainWallSeconds": null,
+    "frames": 469
+  },
+  {
+    "run": "candidate-one-project\\20261114-165536_baseline_candidate-one-project_r3\\result.json",
+    "p95": 14.885400000026,
+    "p99": 16.027799999961,
+    "max": 17.9124,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 1,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011490847108558,
+    "drainWallSeconds": null,
+    "frames": 340
+  },
+  {
+    "run": "candidate-reflections-off\\20261114-171003_sideslide_candidate-reflections-off_r1\\result.json",
+    "p95": 55.254600000012,
+    "p99": 70.895899999982,
+    "max": 76.279100000022,
+    "projectionMax": 48.522300000002,
+    "bakeMax": 47.414899999978,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.018011537300953,
+    "drainWallSeconds": null,
+    "frames": 145
+  },
+  {
+    "run": "candidate-reflections-off\\20261114-171009_roofdrop_candidate-reflections-off_r1\\result.json",
+    "p95": 18.601899999965,
+    "p99": 44.968899999958,
+    "max": 49.865599999976,
+    "projectionMax": 31.100100000003,
+    "bakeMax": 41.579399999989,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011789842504637,
+    "drainWallSeconds": null,
+    "frames": 537
+  },
+  {
+    "run": "candidate-reflections-off\\20261114-171017_baseline_candidate-reflections-off_r1\\result.json",
+    "p95": 14.799200000027,
+    "p99": 17.7099,
+    "max": 20.79150000003,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011195787599957,
+    "drainWallSeconds": null,
+    "frames": 350
+  },
+  {
+    "run": "candidate-reflections-off\\20261114-171027_sideslide_candidate-reflections-off_r2\\result.json",
+    "p95": 56.863200000009,
+    "p99": 68.629299999998,
+    "max": 80.456900000001,
+    "projectionMax": 37.932899999987,
+    "bakeMax": 48.108600000035,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.019982017621557,
+    "drainWallSeconds": null,
+    "frames": 137
+  },
+  {
+    "run": "candidate-reflections-off\\20261114-171033_roofdrop_candidate-reflections-off_r2\\result.json",
+    "p95": 19.422399999996,
+    "p99": 44.593300000031,
+    "max": 51.564400000018,
+    "projectionMax": 30.471900000009,
+    "bakeMax": 41.192999999964,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.17739475305403,
+    "drainWallSeconds": null,
+    "frames": 573
+  },
+  {
+    "run": "candidate-reflections-off\\20261114-171042_baseline_candidate-reflections-off_r2\\result.json",
+    "p95": 15.252499999974,
+    "p99": 17.157899999972,
+    "max": 24.047400000029,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010926713407262,
+    "drainWallSeconds": null,
+    "frames": 340
+  },
+  {
+    "run": "candidate-reflections-off\\20261114-171052_sideslide_candidate-reflections-off_r3\\result.json",
+    "p95": 57.625399999949,
+    "p99": 69.257600000014,
+    "max": 80.48500000001,
+    "projectionMax": 42.397599999958,
+    "bakeMax": 52.793000000008,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010452299042457,
+    "drainWallSeconds": null,
+    "frames": 399
+  },
+  {
+    "run": "candidate-reflections-off\\20261114-171102_roofdrop_candidate-reflections-off_r3\\result.json",
+    "p95": 34.844499999963,
+    "p99": 54.857500000026,
+    "max": 62.032899999963,
+    "projectionMax": 48.932600000001,
+    "bakeMax": 48.541,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011934783232066,
+    "drainWallSeconds": null,
+    "frames": 369
+  },
+  {
+    "run": "candidate-reflections-off\\20261114-171109_baseline_candidate-reflections-off_r3\\result.json",
+    "p95": 14.251000000002,
+    "p99": 15.53210000003,
+    "max": 18.495800000039,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011651787745871,
+    "drainWallSeconds": null,
+    "frames": 346
+  },
+  {
+    "run": "candidate-traffic\\20261114-170951_sideslide_candidate-traffic\\result.json",
+    "p95": 55.693500000018,
+    "p99": 60.647099999983,
+    "max": 62.62270000002,
+    "projectionMax": 41.191400000002,
+    "bakeMax": 48.442499999965,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012993246170734,
+    "drainWallSeconds": null,
+    "frames": 150
+  },
+  {
+    "run": "candidate-vulkan-cold\\20261114-171715_sideslide_candidate-vulkan-cold_r1\\result.json",
+    "p95": 38.4034,
+    "p99": 53.9956,
+    "max": 71.2796,
+    "projectionMax": 37.7273,
+    "bakeMax": 16.4118,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011963257782726,
+    "drainWallSeconds": 0.011094,
+    "frames": 301
+  },
+  {
+    "run": "candidate-vulkan-cold\\20261114-171722_roofdrop_candidate-vulkan-cold_r1\\result.json",
+    "p95": 21.982799999996,
+    "p99": 50.881699999998,
+    "max": 86.415000000002,
+    "projectionMax": 63.348699999999,
+    "bakeMax": 6.6291000000049,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.013040781265883,
+    "drainWallSeconds": 0.0111037,
+    "frames": 366
+  },
+  {
+    "run": "candidate-vulkan-cold\\20261114-171728_baseline_candidate-vulkan-cold_r1\\result.json",
+    "p95": 16.188299999996,
+    "p99": 19.966799999999,
+    "max": 21.9174,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012492839269949,
+    "drainWallSeconds": 0.012359500000002,
+    "frames": 318
+  },
+  {
+    "run": "candidate-vulkan-cold\\20261114-171828_sideslide_candidate-vulkan-cold_r2\\result.json",
+    "p95": 29.509000000001,
+    "p99": 52.644600000001,
+    "max": 82.325700000002,
+    "projectionMax": 48.448299999997,
+    "bakeMax": 17.244099999999,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011718283706211,
+    "drainWallSeconds": 0.012165000000003,
+    "frames": 394
+  },
+  {
+    "run": "candidate-vulkan-cold\\20261114-171836_roofdrop_candidate-vulkan-cold_r2\\result.json",
+    "p95": 17.740199999999,
+    "p99": 49.215600000004,
+    "max": 61.7862,
+    "projectionMax": 44.663500000006,
+    "bakeMax": 8.6575999999994,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012075244292883,
+    "drainWallSeconds": 0.014274200000003,
+    "frames": 455
+  },
+  {
+    "run": "candidate-vulkan-cold\\20261114-171844_baseline_candidate-vulkan-cold_r2\\result.json",
+    "p95": 14.816500000002,
+    "p99": 16.439300000002,
+    "max": 17.791800000005,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012493108610902,
+    "drainWallSeconds": 0.012641800000004,
+    "frames": 319
+  },
+  {
+    "run": "candidate-vulkan-cold\\20261114-171947_sideslide_candidate-vulkan-cold_r3\\result.json",
+    "p95": 46.610300000001,
+    "p99": 54.049199999998,
+    "max": 575.0408,
+    "projectionMax": 32.664999999998,
+    "bakeMax": 21.681800000003,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011923191788571,
+    "drainWallSeconds": 0.012593699999996,
+    "frames": 325
+  },
+  {
+    "run": "candidate-vulkan-cold\\20261114-171955_roofdrop_candidate-vulkan-cold_r3\\result.json",
+    "p95": 15.264100000003,
+    "p99": 48.456399999999,
+    "max": 63.7525,
+    "projectionMax": 47.316500000001,
+    "bakeMax": 7.9884000000021,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012770429730079,
+    "drainWallSeconds": 0.013081399999997,
+    "frames": 593
+  },
+  {
+    "run": "candidate-vulkan-cold\\20261114-172005_baseline_candidate-vulkan-cold_r3\\result.json",
+    "p95": 14.490899999998,
+    "p99": 15.301299999997,
+    "max": 17.257900000004,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011798476124359,
+    "drainWallSeconds": 0.010658100000001,
+    "frames": 322
+  },
+  {
+    "run": "candidate-vulkan-disabled-warm\\20261114-172015_sideslide_candidate-vulkan-disabled-warm_r1\\result.json",
+    "p95": 13.773700000002,
+    "p99": 15.516099999999,
+    "max": 18.348899999999,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011733738562497,
+    "drainWallSeconds": 0.011775700000001,
+    "frames": 357
+  },
+  {
+    "run": "candidate-vulkan-disabled-warm\\20261114-172021_roofdrop_candidate-vulkan-disabled-warm_r1\\result.json",
+    "p95": 15.722600000004,
+    "p99": 18.809500000003,
+    "max": 20.243300000004,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012651267571652,
+    "drainWallSeconds": 0.014870999999999,
+    "frames": 411
+  },
+  {
+    "run": "candidate-vulkan-disabled-warm\\20261114-172029_baseline_candidate-vulkan-disabled-warm_r1\\result.json",
+    "p95": 14.806100000001,
+    "p99": 16.073899999995,
+    "max": 18.841699999996,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012040306559544,
+    "drainWallSeconds": 0.011391700000004,
+    "frames": 322
+  },
+  {
+    "run": "candidate-vulkan-disabled-warm\\20261114-172039_sideslide_candidate-vulkan-disabled-warm_r2\\result.json",
+    "p95": 13.885799999997,
+    "p99": 17.593300000001,
+    "max": 28.710000000004,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012459576266966,
+    "drainWallSeconds": 0.010231699999991,
+    "frames": 348
+  },
+  {
+    "run": "candidate-vulkan-disabled-warm\\20261114-172045_roofdrop_candidate-vulkan-disabled-warm_r2\\result.json",
+    "p95": 14.908699999992,
+    "p99": 16.208399999996,
+    "max": 18.83380000001,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012945021323216,
+    "drainWallSeconds": 0.013231300000001,
+    "frames": 408
+  },
+  {
+    "run": "candidate-vulkan-disabled-warm\\20261114-172052_baseline_candidate-vulkan-disabled-warm_r2\\result.json",
+    "p95": 14.942700000006,
+    "p99": 16.377300000002,
+    "max": 18.562199999991,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012617453386174,
+    "drainWallSeconds": 0.012460300000001,
+    "frames": 320
+  },
+  {
+    "run": "candidate-vulkan-disabled-warm\\20261114-172102_sideslide_candidate-vulkan-disabled-warm_r3\\result.json",
+    "p95": 14.464700000005,
+    "p99": 16.246699999996,
+    "max": 82.70069999999,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011621942650899,
+    "drainWallSeconds": 0.012223500000005,
+    "frames": 339
+  },
+  {
+    "run": "candidate-vulkan-disabled-warm\\20261114-172108_roofdrop_candidate-vulkan-disabled-warm_r3\\result.json",
+    "p95": 14.903500000003,
+    "p99": 15.965499999993,
+    "max": 17.578999999998,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012863693164473,
+    "drainWallSeconds": 0.012629799999999,
+    "frames": 416
+  },
+  {
+    "run": "candidate-vulkan-disabled-warm\\20261114-172116_baseline_candidate-vulkan-disabled-warm_r3\\result.json",
+    "p95": 14.936699999993,
+    "p99": 16.401099999996,
+    "max": 524.38739999999,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012929667245852,
+    "drainWallSeconds": 0.015326999999999,
+    "frames": 311
+  },
+  {
+    "run": "d3d12-painter-unloaded\\20261114-174107_sideslide_d3d12-painter-unloaded_r1\\result.json",
+    "p95": 12.206400000082,
+    "p99": 14.233399999966,
+    "max": 23.937600000068,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010425323668458,
+    "drainWallSeconds": 0.010763699999984,
+    "frames": 399
+  },
+  {
+    "run": "d3d12-painter-unloaded\\20261114-174113_roofdrop_d3d12-painter-unloaded_r1\\result.json",
+    "p95": 12.946299999953,
+    "p99": 14.74660000008,
+    "max": 22.035500000015,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011471661829876,
+    "drainWallSeconds": 0.011381400000005,
+    "frames": 451
+  },
+  {
+    "run": "d3d12-painter-unloaded\\20261114-174120_sideslide_d3d12-painter-unloaded_r2\\result.json",
+    "p95": 11.969599999929,
+    "p99": 13.261800000009,
+    "max": 15.955700000063,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010405279770211,
+    "drainWallSeconds": 0.011417199999983,
+    "frames": 415
+  },
+  {
+    "run": "d3d12-painter-unloaded\\20261114-174126_roofdrop_d3d12-painter-unloaded_r2\\result.json",
+    "p95": 12.676400000032,
+    "p99": 13.686699999994,
+    "max": 17.529399999944,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011307953790539,
+    "drainWallSeconds": 0.011799999999994,
+    "frames": 475
+  },
+  {
+    "run": "d3d12-painter-unloaded\\20261114-174134_sideslide_d3d12-painter-unloaded_r3\\result.json",
+    "p95": 12.278199999969,
+    "p99": 13.552300000015,
+    "max": 14.16549999999,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010456821932989,
+    "drainWallSeconds": 0.011050100000034,
+    "frames": 398
+  },
+  {
+    "run": "d3d12-painter-unloaded\\20261114-174140_roofdrop_d3d12-painter-unloaded_r3\\result.json",
+    "p95": 12.514199999941,
+    "p99": 13.613999999961,
+    "max": 14.808499999958,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011725671876354,
+    "drainWallSeconds": 0.010590699999966,
+    "frames": 457
+  },
+  {
+    "run": "drain-default\\20261114-171352_sustained_m5-drain-default\\result.json",
+    "p95": 57.561499999906,
+    "p99": 65.332900000044,
+    "max": 79.049800000007,
+    "projectionMax": 48.633900000027,
+    "bakeMax": 56.283000000008,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 48,
+    "aggregateDrops": 168,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 2.9451075243387,
+    "drainWallSeconds": 2.7894827,
+    "frames": 1113
+  },
+  {
+    "run": "fastflush\\20261114-171427_sustained_m5-fastflush_r1\\result.json",
+    "p95": 63.223500000049,
+    "p99": 70.425699999987,
+    "max": 85.311899999965,
+    "projectionMax": 43.888899999956,
+    "bakeMax": 55.443800000035,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 5,
+    "aggregateDrops": 48,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.05
+    },
+    "failures": 0,
+    "drainSeconds": 6.1348967292491,
+    "drainWallSeconds": 5.9455747999999,
+    "frames": 1080
+  },
+  {
+    "run": "fastflush\\20261114-171506_sustained_m5-fastflush_r2\\result.json",
+    "p95": 59.512300000051,
+    "p99": 68.461999999954,
+    "max": 483.85890000009,
+    "projectionMax": 43.146799999931,
+    "bakeMax": 475.83439999994,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 24,
+    "aggregateDrops": 76,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.05
+    },
+    "failures": 0,
+    "drainSeconds": 5.2582993410261,
+    "drainWallSeconds": 5.141666,
+    "frames": 1076
+  },
+  {
+    "run": "fastflush\\20261114-171544_sustained_m5-fastflush_r3\\result.json",
+    "p95": 59.574399999974,
+    "p99": 65.480999999977,
+    "max": 125.98809999997,
+    "projectionMax": 47.77839999997,
+    "bakeMax": 55.342200000041,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 54,
+    "aggregateDrops": 83,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.05
+    },
+    "failures": 0,
+    "drainSeconds": 2.1769072918148,
+    "drainWallSeconds": 2.0700724,
+    "frames": 967
+  },
+  {
+    "run": "optick-attempt\\20261114-172925_sustained_m5-optick\\result.json",
+    "p95": 50.795600000001,
+    "p99": 56.554299999995,
+    "max": 65.401699999995,
+    "projectionMax": 48.275599999997,
+    "bakeMax": 52.240300000001,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 33,
+    "aggregateDrops": 71,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.77111616184986,
+    "drainWallSeconds": 1.000955,
+    "frames": 1359
+  },
+  {
+    "run": "original-d3d12-cold\\20261114-164205_sideslide_original-d3d12-cold_r1\\result.json",
+    "p95": 65.749699999998,
+    "p99": 72.066,
+    "max": 91.606300000002,
+    "projectionMax": 42.267600000002,
+    "bakeMax": 53.011900000001,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.025971157472359,
+    "drainWallSeconds": null,
+    "frames": 172
+  },
+  {
+    "run": "original-d3d12-cold\\20261114-164213_roofdrop_original-d3d12-cold_r1\\result.json",
+    "p95": 34.7632,
+    "p99": 47.589900000006,
+    "max": 58.2402,
+    "projectionMax": 30.046600000006,
+    "bakeMax": 46.1277,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.013468236798831,
+    "drainWallSeconds": null,
+    "frames": 451
+  },
+  {
+    "run": "original-d3d12-cold\\20261114-164221_baseline_original-d3d12-cold_r1\\result.json",
+    "p95": 13.594500000004,
+    "p99": 15.593000000003,
+    "max": 42.2273,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011865166919505,
+    "drainWallSeconds": null,
+    "frames": 359
+  },
+  {
+    "run": "original-d3d12-cold\\20261114-164339_sideslide_original-d3d12-cold_r2\\result.json",
+    "p95": 61.508600000003,
+    "p99": 80.838100000001,
+    "max": 122.8851,
+    "projectionMax": 46.7327,
+    "bakeMax": 54.073899999999,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.030063601265401,
+    "drainWallSeconds": null,
+    "frames": 132
+  },
+  {
+    "run": "original-d3d12-cold\\20261114-164346_roofdrop_original-d3d12-cold_r2\\result.json",
+    "p95": 24.816299999998,
+    "p99": 47.016800000002,
+    "max": 663.8656,
+    "projectionMax": 652.4749,
+    "bakeMax": 39.9125,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011184218287551,
+    "drainWallSeconds": null,
+    "frames": 435
+  },
+  {
+    "run": "original-d3d12-cold\\20261114-164354_baseline_original-d3d12-cold_r2\\result.json",
+    "p95": 14.241200000001,
+    "p99": 16.056900000002,
+    "max": 16.323999999997,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010852026869784,
+    "drainWallSeconds": null,
+    "frames": 357
+  },
+  {
+    "run": "original-d3d12-cold\\20261114-164456_sideslide_original-d3d12-cold_r3\\result.json",
+    "p95": 61.6798,
+    "p99": 71.1905,
+    "max": 81.303900000002,
+    "projectionMax": 41.903899999994,
+    "bakeMax": 56.213500000002,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011492908262826,
+    "drainWallSeconds": null,
+    "frames": 227
+  },
+  {
+    "run": "original-d3d12-cold\\20261114-164505_roofdrop_original-d3d12-cold_r3\\result.json",
+    "p95": 26.367999999998,
+    "p99": 53.582399999996,
+    "max": 82.654000000005,
+    "projectionMax": 28.964600000002,
+    "bakeMax": 49.069200000005,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.0106958949228,
+    "drainWallSeconds": null,
+    "frames": 401
+  },
+  {
+    "run": "original-d3d12-cold\\20261114-164512_baseline_original-d3d12-cold_r3\\result.json",
+    "p95": 13.805000000005,
+    "p99": 15.514799999998,
+    "max": 16.929400000002,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010934775214055,
+    "drainWallSeconds": null,
+    "frames": 363
+  },
+  {
+    "run": "original-warm\\20261114-163914_baseline_m5-original-warm_r1\\result.json",
+    "p95": 13.142500000413,
+    "p99": 14.614000000165,
+    "max": 15.500399999837,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010824416334327,
+    "drainWallSeconds": null,
+    "frames": 357
+  },
+  {
+    "run": "original-warm\\20261114-163920_baseline_m5-original-warm_r2\\result.json",
+    "p95": 14.491299999918,
+    "p99": 15.981000000011,
+    "max": 18.406700000014,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.01152421363217,
+    "drainWallSeconds": null,
+    "frames": 356
+  },
+  {
+    "run": "original-warm\\20261114-163925_baseline_m5-original-warm_r3\\result.json",
+    "p95": 14.240199999676,
+    "p99": 15.779199999997,
+    "max": 16.91830000027,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011275310584658,
+    "drainWallSeconds": null,
+    "frames": 354
+  },
+  {
+    "run": "original-warm\\20261114-163931_sideslide_m5-original-warm_r1\\result.json",
+    "p95": 66.105599999901,
+    "p99": 77.755499999967,
+    "max": 84.200199999941,
+    "projectionMax": 40.927200000169,
+    "bakeMax": 62.681200000043,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.038175781233535,
+    "drainWallSeconds": null,
+    "frames": 122
+  },
+  {
+    "run": "original-warm\\20261114-163938_sideslide_m5-original-warm_r2\\result.json",
+    "p95": 61.185900000055,
+    "p99": 73.052100000041,
+    "max": 75.798400000167,
+    "projectionMax": 42.36660000015,
+    "bakeMax": 46.099200000299,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.035418917831299,
+    "drainWallSeconds": null,
+    "frames": 144
+  },
+  {
+    "run": "original-warm\\20261114-163944_sideslide_m5-original-warm_r3\\result.json",
+    "p95": 55.712800000038,
+    "p99": 71.701300000313,
+    "max": 83.593000000292,
+    "projectionMax": 48.846199999844,
+    "bakeMax": 48.398099999758,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.025908188918068,
+    "drainWallSeconds": null,
+    "frames": 147
+  },
+  {
+    "run": "original-warm\\20261114-163950_roofdrop_m5-original-warm_r1\\result.json",
+    "p95": 18.015000000105,
+    "p99": 43.740799999796,
+    "max": 52.68709999973,
+    "projectionMax": 31.942899999649,
+    "bakeMax": 41.98180000003,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011430810496548,
+    "drainWallSeconds": null,
+    "frames": 540
+  },
+  {
+    "run": "original-warm\\20261114-163959_roofdrop_m5-original-warm_r2\\result.json",
+    "p95": 17.978600000333,
+    "p99": 48.570599999948,
+    "max": 56.445600000188,
+    "projectionMax": 45.242400000006,
+    "bakeMax": 41.657499999928,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011737035313954,
+    "drainWallSeconds": null,
+    "frames": 502
+  },
+  {
+    "run": "original-warm\\20261114-164007_roofdrop_m5-original-warm_r3\\result.json",
+    "p95": 23.716100000001,
+    "p99": 45.610099999976,
+    "max": 47.690100000182,
+    "projectionMax": 34.307299999909,
+    "bakeMax": 38.402299999689,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011734914158065,
+    "drainWallSeconds": null,
+    "frames": 396
+  },
+  {
+    "run": "original-warm\\20261114-164017_sideslide_m5-disabled-warm_r1\\result.json",
+    "p95": 13.188999999784,
+    "p99": 14.941400000225,
+    "max": 16.048899999987,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010750514448667,
+    "drainWallSeconds": null,
+    "frames": 413
+  },
+  {
+    "run": "original-warm\\20261114-164024_sideslide_m5-disabled-warm_r2\\result.json",
+    "p95": 13.074599999982,
+    "p99": 13.848800000233,
+    "max": 15.830099999675,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010738019600092,
+    "drainWallSeconds": null,
+    "frames": 455
+  },
+  {
+    "run": "original-warm\\20261114-164030_sideslide_m5-disabled-warm_r3\\result.json",
+    "p95": 12.842699999965,
+    "p99": 14.423100000386,
+    "max": 16.047900000103,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010716133647229,
+    "drainWallSeconds": null,
+    "frames": 391
+  },
+  {
+    "run": "original-warm\\20261114-164037_roofdrop_m5-disabled-warm_r1\\result.json",
+    "p95": 13.993200000186,
+    "p99": 15.766500000154,
+    "max": 24.438300000384,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011684020296161,
+    "drainWallSeconds": null,
+    "frames": 670
+  },
+  {
+    "run": "original-warm\\20261114-164046_roofdrop_m5-disabled-warm_r2\\result.json",
+    "p95": 14.281899999787,
+    "p99": 16.577299999881,
+    "max": 19.503400000303,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011699203419095,
+    "drainWallSeconds": null,
+    "frames": 445
+  },
+  {
+    "run": "original-warm\\20261114-164054_roofdrop_m5-disabled-warm_r3\\result.json",
+    "p95": 15.154000000166,
+    "p99": 17.226599999958,
+    "max": 19.721699999991,
+    "projectionMax": 0,
+    "bakeMax": 0,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011856254261037,
+    "drainWallSeconds": null,
+    "frames": 430
+  },
+  {
+    "run": "stock-configs\\844_150_A\\result.json",
+    "p95": 52.788699999951,
+    "p99": 61.091400000009,
+    "max": 83.600100000012,
+    "projectionMax": 35.392900000033,
+    "bakeMax": 51.50279999998,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010500347969018,
+    "drainWallSeconds": 0.011189899999977,
+    "frames": 663
+  },
+  {
+    "run": "stock-configs\\844_police_A\\result.json",
+    "p95": 41.283099999987,
+    "p99": 48.082499999964,
+    "max": 71.751500000005,
+    "projectionMax": 47.754800000007,
+    "bakeMax": 43.655700000045,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.010985381117009,
+    "drainWallSeconds": 0.0094493999999941,
+    "frames": 727
+  },
+  {
+    "run": "sustained\\20261114-170748_sustained_m5-sustained_r1\\result.json",
+    "p95": 53.984200000002,
+    "p99": 62.580799999978,
+    "max": 458.06830000001,
+    "projectionMax": 46.910199999985,
+    "bakeMax": 54.206899999997,
+    "queue": {
+      "bake": 28,
+      "stamps": 0,
+      "jobs": 32
+    },
+    "drops": 38,
+    "aggregateDrops": 215,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 3.006500242194,
+    "drainWallSeconds": null,
+    "frames": 1228
+  },
+  {
+    "run": "sustained\\20261114-170824_sustained_m5-sustained_r2\\result.json",
+    "p95": 52.844400000026,
+    "p99": 64.411100000001,
+    "max": 102.2988,
+    "projectionMax": 43.164300000001,
+    "bakeMax": 54.46280000001,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 39
+    },
+    "drops": 26,
+    "aggregateDrops": 110,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 3.0022137609246,
+    "drainWallSeconds": null,
+    "frames": 1191
+  },
+  {
+    "run": "sustained\\20261114-170859_sustained_m5-sustained_r3\\result.json",
+    "p95": 55.836100000022,
+    "p99": 64.742800000033,
+    "max": 757.85550000001,
+    "projectionMax": 738.02379999995,
+    "bakeMax": 48.082599999987,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 26
+    },
+    "drops": 47,
+    "aggregateDrops": 17,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 3.026704788121,
+    "drainWallSeconds": null,
+    "frames": 1172
+  },
+  {
+    "run": "visual\\plain\\result.json",
+    "p95": 72.152000000017,
+    "p99": 75.661200000013,
+    "max": 86.388699999986,
+    "projectionMax": 45.567000000005,
+    "bakeMax": 59.619400000031,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.05863067799558,
+    "drainWallSeconds": null,
+    "frames": 107
+  },
+  {
+    "run": "visual\\police\\result.json",
+    "p95": 73.18459999999,
+    "p99": 79.484799999989,
+    "max": 79.72030000002,
+    "projectionMax": 40.446700000018,
+    "bakeMax": 68.51690000002,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.045712403610653,
+    "drainWallSeconds": null,
+    "frames": 109
+  },
+  {
+    "run": "visual\\vulkan-plain\\result.json",
+    "p95": 36.980699999987,
+    "p99": 45.311499999997,
+    "max": 79.497300000014,
+    "projectionMax": 36.729799999989,
+    "bakeMax": 19.188400000019,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.011228880782548,
+    "drainWallSeconds": 0.011752900000005,
+    "frames": 265
+  },
+  {
+    "run": "visual\\vulkan-police\\result.json",
+    "p95": 36.692200000005,
+    "p99": 49.207100000004,
+    "max": 70.341900000003,
+    "projectionMax": 35.375900000005,
+    "bakeMax": 17.992899999996,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.012089544555389,
+    "drainWallSeconds": 0.011078099999992,
+    "frames": 248
+  },
+  {
+    "run": "vulkan-sustained\\20261114-172518_sustained_m5-vulkan-sustained_r1\\result.json",
+    "p95": 42.248999999998,
+    "p99": 51.779999999994,
+    "max": 760.245,
+    "projectionMax": 47.818399999997,
+    "bakeMax": 25.098200000002,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 3.3460755427706,
+    "drainWallSeconds": 3.948233,
+    "frames": 2321
+  },
+  {
+    "run": "vulkan-sustained\\20261114-172554_sustained_m5-vulkan-sustained_r2\\result.json",
+    "p95": 45.018800000008,
+    "p99": 53.977399999994,
+    "max": 104.2341,
+    "projectionMax": 69.914600000004,
+    "bakeMax": 11.134399999989,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 29,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 1.328325705205,
+    "drainWallSeconds": 1.3371955,
+    "frames": 2172
+  },
+  {
+    "run": "vulkan-sustained\\20261114-172628_sustained_m5-vulkan-sustained_r3\\result.json",
+    "p95": 40.772900000007,
+    "p99": 52.405999999991,
+    "max": 65.827499999997,
+    "projectionMax": 39.709799999997,
+    "bakeMax": 15.486600000003,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 54,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 3.1005064235449,
+    "drainWallSeconds": 3.0825485,
+    "frames": 2259
+  },
+  {
+    "run": "vulkan-wash\\result.json",
+    "p95": 35.897000000006,
+    "p99": 52.34759999999,
+    "max": 54.105600000014,
+    "projectionMax": 34.621499999986,
+    "bakeMax": 10.628300000008,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.01255685505171,
+    "drainWallSeconds": 0.01357999999999,
+    "frames": 255
+  },
+  {
+    "run": "wash\\result.json",
+    "p95": 78.13950000002,
+    "p99": 85.624199999984,
+    "max": 93.00920000004,
+    "projectionMax": 46.432900000013,
+    "bakeMax": 69.858099999976,
+    "queue": {
+      "bake": 0,
+      "stamps": 0,
+      "jobs": 0
+    },
+    "drops": 0,
+    "aggregateDrops": 0,
+    "config": {
+      "aggregateCap": 160,
+      "projBudget": 6,
+      "clusterRadius": 0.65,
+      "fullRateCombine": false,
+      "layerBudget": 24,
+      "flushInterval": 0.2
+    },
+    "failures": 0,
+    "drainSeconds": 0.056478908011632,
+    "drainWallSeconds": 0.023583499999972,
+    "frames": 101
+  }
+]

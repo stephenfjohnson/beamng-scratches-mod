@@ -6,13 +6,16 @@
 > Milestone 3 adds selective water washing and drying within the ETK scope.
 > [Implementation and live evidence](../../investigations/08-water-washing.md).
 > Milestone 4 polish: [scope and evidence](../../investigations/09-scratch-impact-polish.md).
-> Milestone 5 is authorized and in progress; milestone 6/public release is outside this run.
+> Milestone 5 was authorized; its investigation run is complete, feature acceptance
+> is **blocked and unmerged**. Last merged baseline: c8bcae6. Milestone 6/public
+> release was not started. [Final evidence and gates](../../investigations/10-performance-compatibility.md).
 
 
 ## Release readiness update — 2026-11-14
 
-Status: development preview; not ready for a broad public release.
-Milestone 5 reproduced a 652 ms native projection call; [current acceptance
+Status: development branch; no public release. Milestone 5 acceptance is blocked.
+Milestone 5 reproduced 738 ms native projection and 663 ms bake batches,
+with lost/delayed sustained marks; [final acceptance
 gates and experiments](../../investigations/10-performance-compatibility.md).
 
 Integrated surface cosmetics prototype (mud/dirt/snow color deposits and internal
@@ -58,7 +61,7 @@ scratch polish is recorded in milestone 4. Native stalls still block stable rele
 - [ ] Reduce projection/bake spikes; measure repeat runs against a clean baseline.
 - [x] Refine overly bright scrape brushes and capture matching clean/damaged
   views, close-up scrape/chip details and validated environmental effects.
-- [ ] Record exact game build and per-vehicle results: paint colors, liveries,
+- [x] Record exact game build and per-vehicle results: paint colors, liveries,
   resets, switching, traffic, mod vehicles and Dynamic Decals editor conflicts.
 - [ ] Test the packaged ZIP alone in a clean mod setup (no unpacked duplicate).
 - [ ] Choose version, author/credits and license; include changelog, supported
