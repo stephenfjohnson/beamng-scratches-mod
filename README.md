@@ -67,10 +67,18 @@ c8bcae6. No milestone 6, stable release or all-hardware FPS claim. See the
 
 ## Milestone 4: scratch and impact polish
 
+Play-test visibility adjustment: the damage stage now uses 1.6 opacity and an
+unmuted diffuse factor on dark/plain and Police paint; light plain paint retains
+its darker coating response. This increases existing baked-mark visibility without
+adding projection work or changing soil. A real Police sideslide confirms visible
+fender/rear-quarter scuffs, but marks across the white doors remain subtle. This is
+a partial visibility improvement, not a completed mixed-livery contrast fix.
+[Test report and screenshots](docs/evidence/visibility/report.md).
+
 Smaller, irregular depth-colored scuffs, chips and gouges replace the bright
 single-tone brush marks. Four scrape/chip variants avoid immediate family
 repeats; narrower bands and sub-centimeter jitter keep marks closer to contact.
-The private ETK damage stage mutes diffuse color without darkening washable soil.
+The private ETK damage stage adjusts contrast without darkening washable soil.
 Original PBR/livery stages and editor isolation remain intact.
 
 [Matched engine captures, rejected experiments, measured costs and limitations](investigations/09-scratch-impact-polish.md).

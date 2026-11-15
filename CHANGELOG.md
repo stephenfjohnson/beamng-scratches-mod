@@ -1,5 +1,15 @@
 # Changelog
 
+## Play-test scratch visibility adjustment
+
+- Increase damage-stage opacity from 1 to 1.6 and remove the 0.75 diffuse
+  multiplier on Police/dark plain paint; preserve the light-paint dark response.
+- Leave original PBR/livery and washable soil stages unchanged.
+- 271 mock checks and packaging preflight pass. Real Police sideslide: visible
+  left fender/rear-quarter marks; white-door contrast remains a limitation.
+- [Actual run and screenshots](docs/evidence/visibility/report.md). Single-run
+  rendering verification only; this does not close performance acceptance gates.
+
 ## Milestone 5: performance investigation — blocked, unmerged
 
 - **Projection-free synthetic anchors (default).** Captured layers are anchored at

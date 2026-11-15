@@ -47,13 +47,13 @@ local function cloneMaterial(veh,part)
   local function set(f,v) mat:setField(f,count,tostring(v)) end
   set("baseColorMap","@DynamicTextureBaseColor")
   set("diffuseMapUseUV",1)
-  -- Keep coverage from the authored brush, but mute its diffuse response.
-  set("baseColorFactor","0.75 0.75 0.75 1")
+  -- Keep the authored brush detail visible at normal driving distance.
+  set("baseColorFactor","1 1 1 1")
   set("instanceDiffuse",false)
   set("colorPaletteMap","")
   set("opacityMap","@DynamicTextureBaseColor")
   set("opacityMapUseUV",1)
-  set("opacityFactor",1)
+  set("opacityFactor",1.6)
   set("metallicMap","")
   set("roughnessMap","")
   set("metallicFactor",0)
@@ -252,7 +252,7 @@ function M.create(veh,part)
   function result:damageTone(luminance)
     -- Plain light paint needs darker exposed coating. Police contains both
     -- light and dark texels, so keep its neutral compromise. Setup/reset only.
-    local factor = self.part == "" and luminance and luminance >= 0.5 and 0.15 or 0.75
+    local factor = self.part == "" and luminance and luminance >= 0.5 and 0.15 or 1
     local value = string.format("%.2f %.2f %.2f 1",factor,factor,factor)
     if mat:getField("baseColorFactor",count) ~= value then
       mat:setField("baseColorFactor",count,value); mat:flush(); mat:reload()
