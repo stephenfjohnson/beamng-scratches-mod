@@ -33,11 +33,19 @@ render the same; worst bake there 19.6 ms.
   dry-ground colour was hard to see on bright paint.
 - Underside soil is projected under the sills, not at the floor pan: a car's
   skin UV layout has no floor in it, so nothing showed there.
-- **Mud on the painted floor.** Faces outside the skin layout read one corner
-  texel of the canvas; a UV-space texture fill of that corner gives the floor a
-  film that steps up with the soil rolled through (`soil_floor_fill_1..6`,
-  `scratches_paint.soilFill`). The window frames and wing top of the Sunburst
-  rally car share that texel, so it stops at about half strength by default.
+- **Mud on the painted floor, off by default.** Faces outside the skin layout
+  read one corner texel of the canvas; a UV-space texture fill of that corner
+  gives the floor a film that steps up with the soil rolled through
+  (`soil_floor_fill_1..6`, `scratches_paint.soilFill`). The window frames and
+  wing top of the Sunburst rally car share that texel, so it stays off until it
+  can reach the floor alone (`setSoilExtras(nil, nil, nil, true)` to try it).
+- **Fixed: a fan of long straight lines across the hood and roof after a
+  roll.** The aerial reported contacts when it was dragged along the ground,
+  and a decal anchored at its tip was projected down through the car. Aerials
+  and the rear window no longer report. Also: contacts from parts that have
+  broken off are dropped, hood and nose contacts are no longer taken for
+  underside ones, and a cluster's camera follows its stamps' facing. New bench
+  scenarios `endo`, `barrel`, `tumble`, `roofslide`, `hoodslide`.
 - **Opaque mud.** Soil opacity is the soil canvas red channel, so dark mud was
   mostly transparent. Soil is baked at full red and the stage's colour factor
   carries its brightness (`bodyAdapter soilTone`).

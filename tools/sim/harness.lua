@@ -213,6 +213,9 @@ dofile=function(path)
 end
 local paint = dofile(ROOT .. "/lua/ge/extensions/scratches/paint.lua")
 scratches_paint = paint
+-- This harness drags contacts metres along a car that never moves, so the
+-- "is this contact on the car" test is off except where it is checked itself.
+paint.setStrayMargin(-1)
 
 local function frame(dt)
   counters.projectsThisFrame = 0
@@ -440,6 +443,14 @@ contactN(43, 1.2, 0, 0, 1, 0, 5000)     -- an engine node high on the car
 contactN(40, 0.15, 0, 0, 1, 0, 5000, 18) -- skidplate ploughing mud
 contactN(30, 0, 0, 0, 1, 0, 5000)       -- wheel
 check(detectPayload() == "", "excluded-part contact with a sideways normal is still rejected (as are glass, high parts, wheels, mud)")
+-- An aerial stands clear of the roof: a decal anchored at its tip is projected
+-- down through everything under it. It never reports.
+v.data.nodes[46] = { nodeMaterial = METAL, partOrigin = "sunburst2_antenna", pos = vec3(0.3, 1.6, 1.9) }
+v.data.nodes[47] = { nodeMaterial = METAL, partOrigin = "pickup_backlight", pos = vec3(0, 1.2, 1.3) }
+obj.simTime = obj.simTime + 0.5
+contactN(46, 1.9, 0, 0, 1, 8, 5000)
+contactN(47, 1.3, 0, 0, 1, 8, 5000)
+check(detectPayload() == "", "an aerial dragged along the ground, or the rear window, reports nothing")
 obj.simTime = obj.simTime + 0.5
 contactN(40, 0.15, 0, 0, 1, 0, 5000)
 local underPayload = detectPayload()
@@ -1053,7 +1064,9 @@ paint.setPanelGrouping(false)
 -- harness runs the legacy path, where the level builds and nothing is baked.
 -- (The soil tone it relies on is checked in adapter_harness.lua.)
 do
-  local bakesBefore=counters.bakes
+  paint.ingestSurface(playerVid,{{'mud',101,-1,0.3,0,0,1,1}},false,true)
+  check((paint.getSurfaceState().floorLevel or 0)==0,'the floor film is off unless asked for')
+  paint.setSoilExtras(nil,nil,nil,true)
   for _=1,12 do paint.ingestSurface(playerVid,{{'mud',101,-1,0.3,0,0,1,1}},false,true) end
   local state=paint.getSurfaceState()
   check(state.floorLevel and state.floorLevel>0.3,'wheel samples build the floor film level')
@@ -1062,7 +1075,6 @@ do
   paint.setSoilExtras(nil,nil,nil,false)
   paint.ingestSurface(playerVid,{{'mud',101,-1,0.3,0,0,1,1}},false,true)
   check(paint.getSurfaceState().floorLevel==state.floorLevel,'the floor film can be switched off')
-  paint.setSoilExtras(nil,nil,nil,true)
   for _=1,40 do frame(.02) end
   paint.clearStamps()
   for _=1,4 do frame(.02) end
@@ -1246,9 +1258,63 @@ for _=1,40 do frame(1/60) end
 check(#bakedLayers==1 and bakedLayers[1].decalNorm.z<-0.99 and math.abs(bakedLayers[1].decalScale.y-0.25)<1e-6 and math.abs(bakedLayers[1].decalPos.z-0.25)<1e-6,"a sill/floor contact is painted on the bottom face with a shallow box")
 -- Tall contact near the top of the zone: the box is clamped under the cap.
 bakedLayers={}
-paint.ingest(playerVid,{{99.5,-2.0,0.72,0,0,1,"i",6000,0,0,0,2}},nil)
+paint.ingest(playerVid,{{99.5,-2.0,0.50,0,0,1,"i",6000,0,0,0,2}},nil)
 for _=1,40 do frame(1/60) end
-check(#bakedLayers==1 and bakedLayers[1].decalPos.z+bakedLayers[1].decalScale.y*0.5<=0.756+1e-6,"underside box top is capped inside the lower shell")
+check(#bakedLayers==1 and bakedLayers[1].decalPos.z+bakedLayers[1].decalScale.y*0.5<=0.54+1e-6,"underside box top is capped inside the lower shell")
+-- The underside zone has a hard ceiling (an aerial inflates the spawn box): a
+-- hood-height contact with the ground normal up is an ordinary top-face one,
+-- and a nose-down landing (normal 40 degrees off the car's up axis) is the
+-- front of the car, not its belly.
+bakedLayers={}
+local underBefore=paint.getStats().underside.contacts
+paint.ingest(playerVid,{{100.2,-1.2,0.80,0,0,1,"i",6000,0,0,0},{100.6,-1.7,0.30,0,-0.64,0.77,"i",6000,0,0,0}},nil)
+for _=1,40 do frame(1/60) end
+check(paint.getStats().underside.contacts==underBefore and #bakedLayers==2,"hood-height and nose-down contacts are not underside contacts")
+-- A part that broke off in a crash keeps reporting contacts from wherever it
+-- lies. Converted with the car's matrix they are metres from the car, and the
+-- decals anchored out there were projected back across the hood and roof as
+-- long straight lines. Contacts that are not on the car are dropped.
+do
+  paint.setStrayMargin(0.15)
+  bakedLayers={}
+  local strayBefore=paint.getStats().stamp.strayDropped
+  local patchesBefore=paint.getStats().wear.patches.impactSamples+paint.getStats().wear.patches.slideSamples
+  paint.ingest(playerVid,{{103.4,-2.5,30.5,0,-1,0,"i",6000,0,0,0},{100.4,1.0,-18.7,0,1,0,"i",6000,0,0,0}},
+    {{{101.9,-4.4,-10.5,0,1,0},{101.9,-4.0,-10.5,0,1,0}}})
+  for _=1,40 do frame(1/60) end
+  local stats=paint.getStats()
+  check(stats.stamp.strayDropped-strayBefore==3 and #bakedLayers==0
+    and stats.wear.patches.impactSamples+stats.wear.patches.slideSamples==patchesBefore,
+    "contacts from a part lying metres from the car are dropped, not painted")
+  paint.ingest(playerVid,{{101.1,0.5,0.9,1,0,0,"i",6000,0,0,0}},nil)
+  for _=1,40 do frame(1/60) end
+  check(paint.getStats().stamp.strayDropped-strayBefore==3 and #bakedLayers==1,
+    "a contact on a panel bulged a little past the box is still painted")
+  paint.setStrayMargin(-1)
+end
+-- One camera per facing. An underside patch (down) beside a top-side one (up)
+-- used to average to a sliver pointing along the car: the camera looked down
+-- the length of the car and smeared both edge-on, a fan of lines from bumper
+-- to roof. The camera now follows the cluster's hull-resolved facing.
+do
+  bakedLayers={}
+  local cams={}
+  local dataBefore=decalProjection.getDecalData
+  decalProjection.getDecalData=function(self,cam,proj) cams[#cams+1]=cam.c[1]; return dataBefore(self,cam,proj) end
+  paint.stampAtLocal(vec3(0.2,0.3,0.30),vec3(0,0.03,-1),{noJitter=true,scale=.2,depth=.2})
+  paint.stampAtLocal(vec3(0.3,0.3,0.34),vec3(0,0,1),{noJitter=true,scale=.2,depth=.2})
+  for _=1,40 do frame(1/60) end
+  decalProjection.getDecalData=dataBefore
+  local alongZ=#cams>0
+  for _,fwd in ipairs(cams) do if math.abs(fwd.z)<0.99 then alongZ=false end end
+  check(#bakedLayers==2 and alongZ,"opposed up and down stamps are shot along the vertical, never along the car ("..#cams.." cameras)")
+  -- Faces that really differ get a camera each.
+  local clustersBefore=paint.getStats().stamp.clustersTotal
+  paint.stampAtLocal(vec3(0.85,0.3,0.9),vec3(1,0,0),{noJitter=true,scale=.2,depth=.2})
+  paint.stampAtLocal(vec3(0.80,0.3,1.4),vec3(0,0,1),{noJitter=true,scale=.2,depth=.2})
+  for _=1,40 do frame(1/60) end
+  check(paint.getStats().stamp.clustersTotal-clustersBefore==2,"a door stamp and a roof stamp side by side are not clustered under one camera")
+end
 -- Switched off: low parts are dropped, body contacts take the previous path.
 paint.setUndersideScrapes(false)
 bakedLayers={}

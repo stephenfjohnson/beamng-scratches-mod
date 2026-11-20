@@ -95,6 +95,26 @@ Added 2026-11-20 with snow fling, the wheel and undercarriage overlay, underside
 scrapes and ground transfer. Driven on Vulkan, BeamNG 0.40.6.0, mostly on the
 Sunburst rally car; wheel binding was also checked on eleven other vehicles.
 
+- [x] **Fan of long lines across the hood and roof after a roll** (2026-11-20).
+  The aerial. It stands a metre clear of the roof and is the first thing
+  dragged along the ground when the car goes over; a decal anchored at its tip
+  was projected from above the tip down through the roof, hood and bumper,
+  magnified, as straight lines fanning out from the aerial's base. Aerials (and
+  the rear window) no longer report contacts. `tools/bench.py run endo`
+  reproduced it three times in three before, none in three after.
+- [ ] **A decal anchored off the surface projects through.** The aerial was the
+  bad case, but any contact node that stands clear of the skin under it (a
+  wing on struts, a roof bar, a light pod) is painted onto what lies beneath,
+  larger than life. Nothing checks the distance from a contact to the panel.
+- [x] **Contacts from parts that have broken off** are dropped
+  (`stamp.strayDropped`): a bumper lying 30 m away kept reporting, 42 of 132
+  contacts in one crash were not on the car.
+- [x] **Hood and nose contacts were taken for underside ones.** The underside
+  zone was 42 % of the spawn box, which an aerial stretches to 2.18 m, so it
+  reached hood height; it now stops 0.55 m above the floor, and a body contact
+  must be within about 37 degrees of straight up. The shared camera of a
+  cluster also follows the stamps' resolved facing: an up and a down normal
+  used to cancel and aim it along the car.
 - [ ] **Belly scrapes are counted, not yet seen.** The `bellyflop` bench
   scenario (`tools/bench.py run bellyflop`) grounds the car: 52 underside
   contacts, 40 patches painted, undercarriage abrasion at step 4 of 10. From
@@ -108,12 +128,13 @@ Sunburst rally car; wheel binding was also checked on eleven other vehicles.
   bottom-left corner, and a UV-space texture fill of that corner does reach it:
   the floor now gets an even film that steps up as the wheels roll through soil
   (`soil_floor_fill_1..6`, `tools/generate_floor_fill.py`).
-- [ ] **The floor film is shared.** That one texel is read by everything else
-  outside the skin layout too: on the Sunburst rally car the window frames,
-  pillars and the top of the rear wing. So the film stops at four of its six
-  steps by default, about half strength; `setSoilExtras(nil, nil, nil, 6)`
-  lets it go to 0.72, `false` turns it off. One even colour, no lumps. Checked
-  on the Sunburst only: which faces share the texel on other cars is unknown.
+- [ ] **The floor film is off by default** (owner's call, 2026-11-20). That one
+  texel is read by everything else outside the skin layout too: on the Sunburst
+  rally car the window frames, pillars and the top of the rear wing, which
+  must not be coloured. The code stays:
+  `scratches_paint.setSoilExtras(nil, nil, nil, true)` turns it on (four of its
+  six steps, about half strength; pass 6 for 0.72). One even colour, no lumps.
+  To ship it, the film needs a way to reach the floor without the trim.
 - [x] **Mud was half transparent.** The soil stage takes its opacity from the
   soil canvas red channel, so brown mud at r = 0.43 was 43 % opaque at best.
   Soil is now baked at full red with its brightness in the stage's colour
@@ -176,7 +197,7 @@ Sunburst rally car; wheel binding was also checked on eleven other vehicles.
 
 ## Tech debt
 
-- [ ] **No CI.** The 498-check harness and preflight only run locally
+- [ ] **No CI.** The 505-check harness and preflight only run locally
   (`python tools/package.py`). A GitHub Action with Lua 5.1 would guard `master`.
 - [ ] **`paint.lua` is near Lua's local limit.** About 3,500 lines and 163
   top-level locals; Lua 5.1 caps a function at 200. Split the scheduler, soil

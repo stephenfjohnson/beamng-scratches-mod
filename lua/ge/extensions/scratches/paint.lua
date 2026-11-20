@@ -153,6 +153,7 @@ local stampStats = {
   jobsFailed          = 0,  -- projection jobs that threw (logged, then skipped)
   framesDeferred      = 0,  -- frames that hit the projection budget with work left over
   foreignDropped      = 0,  -- batches from a vehicle that isn't the player car
+  strayDropped        = 0,  -- contacts that were not on the car (broken-off parts)
   combinesRun         = 0,  -- composites actually run (light or full)
   rebinds             = 0,  -- of those, full api.onUpdate_ texture-set re-binds
   spotsSkipped        = 0,  -- marks skipped: that spot was already painted enough
@@ -846,7 +847,9 @@ end
 -- The catch: that texel is shared. On the Sunburst rally car the window
 -- frames, pillars and the top of the rear wing read it too, so the film stops
 -- at `limit` of its six steps (about half strength) unless asked for more.
-floorSoil = { on = true, cooldown = 0, steps = 6, limit = 4, interval = 1.2,
+-- OFF by default (owner's call, 2026-11-20: the trim and wing must not be
+-- coloured). scratches_paint.setSoilExtras(nil, nil, nil, true) turns it on.
+floorSoil = { on = false, cooldown = 0, steps = 6, limit = 4, interval = 1.2,
   gain = { mud = 0.03, dirt = 0.012, snow = 0.025 },
   texture = "/art/dynamicDecals/textures/soil_floor_fill_%d.png" }
 
@@ -1454,9 +1457,20 @@ end
 -- view that's OUTSIDE the owning hull face at `localPos` looking IN.
 -- BeamNG/Torque convention: col0=right(+X), col1=forward(+Y), col2=up(+Z),
 -- col3=position. (Verified in lua/ge/spawn.lua lines 98-101.)
-local function buildSyntheticCameraLocal(localPos, localNormal, dist)
+-- `facing`, when given, is a normal already resolved against the hull (see
+-- anchorNormal): the camera then looks straight down its dominant axis, sign
+-- included, rather than re-deriving the face from the position.
+local function buildSyntheticCameraLocal(localPos, localNormal, dist, facing)
   dist = dist or 0.5
-  local outward = chooseHullOutward(localPos, localNormal)
+  local outward
+  if facing and vecLen(facing) > 1e-3 then
+    local ax, ay, az = math.abs(facing.x), math.abs(facing.y), math.abs(facing.z)
+    if az >= ax and az >= ay then outward = vec3(0, 0, facing.z >= 0 and 1 or -1)
+    elseif ay >= ax then outward = vec3(0, facing.y >= 0 and 1 or -1, 0)
+    else outward = vec3(facing.x >= 0 and 1 or -1, 0, 0) end
+  else
+    outward = chooseHullOutward(localPos, localNormal)
+  end
 
   local fwd = -outward                  -- camera looks inward toward impact
   local camPos = localPos + outward * dist  -- camera placed outside the body
@@ -1503,8 +1517,12 @@ end
 local underside = {
   on = true,
   stats = { contacts = 0, parts = 0, dropped = 0, painted = 0 },
-  NORMAL_MIN_Z = 0.5,                 -- local normal points up into the car
-  ZONE_FRAC = 0.42, ZONE_MIN = 0.40,  -- height of the underside zone above the box floor
+  NORMAL_MIN_Z = 0.5,                 -- low part: local normal points up into the car
+  NORMAL_BODY_Z = 0.8,                -- body node: within ~37 degrees of straight up
+  -- Height of the underside zone above the box floor. The spawn box includes
+  -- aerials (the rally Sunburst's is 2.18 m tall), so a share of its height
+  -- alone put the hood inside the "underside": hence the hard ceiling.
+  ZONE_FRAC = 0.30, ZONE_MIN = 0.40, ZONE_MAX = 0.55,
   DEPTH_BODY = 0.25, DEPTH_PART = 0.35, -- m, full depth of the box
   PART_SINK = 0.04,                   -- m of the part box left below the contact
 }
@@ -1515,7 +1533,8 @@ underside.zoneTop = function()
   if not box then return nil end
   local minZ, maxZ = box.minExtents.z, box.maxExtents.z
   if not (minZ and maxZ and maxZ > minZ) then return nil end
-  return math.min((minZ + maxZ) * 0.5, minZ + math.max(underside.ZONE_MIN, (maxZ - minZ) * underside.ZONE_FRAC))
+  return math.min((minZ + maxZ) * 0.5, minZ + math.min(underside.ZONE_MAX,
+    math.max(underside.ZONE_MIN, (maxZ - minZ) * underside.ZONE_FRAC)))
 end
 
 -- "under" for an underside contact, "drop" for a low-part contact that is not
@@ -1530,7 +1549,9 @@ underside.classify = function(lp, ln, flag)
     -- dominant axis, i.e. when the hull-face pick would have chosen the bottom
     -- face anyway. Otherwise a slanted hit low on a door or bumper (normal
     -- 45-60 degrees off vertical) would be pulled off its side face.
-    if lowPart or (ln.z > math.abs(ln.x) and ln.z > math.abs(ln.y)) then return "under" end
+    -- A nose-down landing tilts the ground normal 40 degrees and more off the
+    -- car's up axis: that is the front of the car, not its belly.
+    if lowPart or ln.z / len >= underside.NORMAL_BODY_Z then return "under" end
   end
   return lowPart and "drop" or nil
 end
@@ -1811,18 +1832,14 @@ local function buildClusters(inputs)
       local dy = s.localPos.y - c.cy
       local dz = s.localPos.z - c.cz
       local radius=panelGrouping and math.max(CLUSTER_RADIUS,1.2) or CLUSTER_RADIUS
-      -- A cluster shares one camera, aimed along its averaged normal. Soil is
-      -- placed on chosen faces (flank, underside), so a soil stamp never joins
-      -- a cluster facing another way: an upward underside stamp averaged with
-      -- a sideways flank stamp would be shot edge-on.
-      local first = c.members[1]
-      local facesAgree = true
-      if (s.soil or first.soil) and s.localNormal and first.localNormal then
-        local la, lb = vecLen(s.localNormal), vecLen(first.localNormal)
-        if la > 1e-3 and lb > 1e-3 then
-          facesAgree = s.localNormal:dot(first.localNormal) / (la * lb) >= 0.5
-        end
-      end
+      -- A cluster shares one camera, so every member must face the way the
+      -- first one does. Two stamps facing apart average to nothing useful: an
+      -- underside patch (down) beside a hood patch (up) cancelled to a sliver
+      -- pointing along the car, the camera was aimed down the length of the
+      -- car, and the marks were shot edge-on: a fan of lines from bumper to
+      -- roof (seen in game, 2026-11-20). Normals are compared after resolving
+      -- them against the hull, the way they are anchored.
+      local facesAgree = anchorNormal(s.localPos, s.localNormal):dot(c.facing) >= 0.5
       if facesAgree and (dx*dx + dy*dy + dz*dz) < radius*radius and
         (not panelGrouping or (#c.members<MAX_LAYERS_PER_FLUSH and averageNormals(c.members):dot(s.localNormal)>=.9)) then
         local k = #c.members
@@ -1839,6 +1856,7 @@ local function buildClusters(inputs)
       clusters[#clusters + 1] = {
         cx = s.localPos.x, cy = s.localPos.y, cz = s.localPos.z,
         members = {s}, queuedAt = s.queuedAt or clockhp(),
+        facing = anchorNormal(s.localPos, s.localNormal),
       }
     end
   end
@@ -2155,7 +2173,7 @@ local function runClusterJob(cluster, projM, bakeList)
     for _,s in ipairs(cluster.members) do extent=math.max(extent,distLocal(centroid,s.localPos)+s.scale) end
     clusterDist=math.max(clusterDist or .5,(extent+.05)*2.2)
   end
-  local camLocal = buildSyntheticCameraLocal(centroid, averageNormals(cluster.members), clusterDist)
+  local camLocal = buildSyntheticCameraLocal(centroid, averageNormals(cluster.members), clusterDist, cluster.facing)
   setScratchProjectionFence(true)
   if not syntheticAnchors then
     local tp = clockhp()
@@ -2569,6 +2587,35 @@ underside.mark = function(patch, flag)
   if lowPart then patch.underPart = true end
 end
 
+-- Is this car-local contact point on the car? A part that breaks off in a
+-- crash (a bumper, a light pod) keeps reporting contacts from wherever it
+-- lands. In one end-over-end crash 42 of 132 contacts were off the car, some
+-- 30 m away, and the decals anchored out there were projected back across the
+-- hood and roof as a fan of long straight lines (2026-11-20). The spawn box
+-- already includes mirrors and aerials, so the margin only has to allow for a
+-- panel bulging outwards. No box (no vehicle data yet): let it through.
+local STRAY_MARGIN = 0.15
+-- Metres a contact may lie outside the car's box and still be painted; a
+-- negative value switches the test off.
+M.setStrayMargin = function(m)
+  m = tonumber(m)
+  if m and m == m then STRAY_MARGIN = m end
+  return STRAY_MARGIN
+end
+local function onTheCar(lp)
+  if STRAY_MARGIN < 0 then return true end
+  local box = getSpawnAabb()
+  if not box then return true end
+  local lo, hi = box.minExtents, box.maxExtents
+  if lp.x < lo.x - STRAY_MARGIN or lp.x > hi.x + STRAY_MARGIN
+      or lp.y < lo.y - STRAY_MARGIN or lp.y > hi.y + STRAY_MARGIN
+      or lp.z < lo.z - STRAY_MARGIN or lp.z > hi.z + STRAY_MARGIN then
+    stampStats.strayDropped = stampStats.strayDropped + 1
+    return false
+  end
+  return true
+end
+
 -- Detector batch -> patches. Impacts carry an optional world slip velocity.
 local function ingestWear(events, streams, invM, rotOnly)
   local agg, now = wear.agg, wear.now
@@ -2576,8 +2623,11 @@ local function ingestWear(events, streams, invM, rotOnly)
     local e = events[i]
     local lp = invM:mulP3F(vec3(e[1], e[2], e[3]))
     local ln = rotOnly:mulP3F(vec3(e[4], e[5], e[6]))
-    local under = underside.classify(lp, ln, e[12])
-    if under == "drop" then
+    local under = "stray"
+    if onTheCar(lp) then under = underside.classify(lp, ln, e[12]) end
+    if under == "stray" then
+      -- not on the car: nothing to paint
+    elseif under == "drop" then
       underside.stats.dropped = underside.stats.dropped + 1
     else
       local n = under and vec3(0, 0, -1) or anchorNormal(lp, ln)
@@ -2605,8 +2655,11 @@ local function ingestWear(events, streams, invM, rotOnly)
       end
       local ln = rotOnly:mulP3F(vec3(nx, ny, nz))
       -- A stream is flagged by its points' optional 7th field (the anchor's).
-      local under = underside.classify(anchor, ln, last[7])
-      if under == "drop" then
+      local under = "stray"
+      if onTheCar(anchor) then under = underside.classify(anchor, ln, last[7]) end
+      if under == "stray" then
+        -- not on the car: nothing to paint
+      elseif under == "drop" then
         underside.stats.dropped = underside.stats.dropped + 1
       else
         local n = under and vec3(0, 0, -1) or anchorNormal(anchor, ln)
@@ -2665,7 +2718,9 @@ M.ingest = function(vid, events, streams)
       local e = events[i]
       local lp = invM:mulP3F(vec3(e[1], e[2], e[3]))
       local ln = rotOnly:mulP3F(vec3(e[4], e[5], e[6]))
-      if (tonumber(e[12]) or 0) >= 2 then
+      if not onTheCar(lp) then
+        -- a broken-off part: nothing to paint
+      elseif (tonumber(e[12]) or 0) >= 2 then
         -- Low mechanical parts are only painted by the contact-patch pipeline.
         underside.stats.dropped = underside.stats.dropped + 1
       elseif e[7] == "i" then
@@ -2680,7 +2735,10 @@ M.ingest = function(vid, events, streams)
     for si = 1, #streams do
       local points = streams[si]
       if points and #points >= 2 then
-        if (tonumber(points[#points][7]) or 0) >= 2 then
+        local tail = points[#points]
+        if not onTheCar(invM:mulP3F(vec3(tail[1], tail[2], tail[3]))) then
+          -- a broken-off part: nothing to paint
+        elseif (tonumber(tail[7]) or 0) >= 2 then
           underside.stats.dropped = underside.stats.dropped + 1
         else
           enqueueSlide(points, invM, rotOnly, vid)
@@ -3329,6 +3387,7 @@ M.resetPaintStats = function()
   stampStats.jobsFailed = 0
   stampStats.framesDeferred = 0
   stampStats.foreignDropped = 0
+  stampStats.strayDropped = 0
   stampStats.combinesRun = 0
   stampStats.rebinds = 0
   stampStats.spotsSkipped = 0

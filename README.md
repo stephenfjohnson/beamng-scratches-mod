@@ -118,11 +118,11 @@ go white.
 <table>
   <tr>
     <td width="50%"><img src="docs/showcase/wheels-mud.jpg" alt="Mud caked on the tyres and dusting the rims of a rally car parked in a mud pit"></td>
-    <td width="50%"><img src="docs/showcase/underside-mud.jpg" alt="The underside of the same car: skid plate, mud flaps and tyres caked in mud, and a film of mud over the painted floor"></td>
+    <td width="50%"><img src="docs/showcase/underside-mud.jpg" alt="The underside of the same car: skid plate, mud flaps and tyres caked in mud, with a muddy strip under each sill"></td>
   </tr>
   <tr>
     <td valign="top"><b>Wheels and tyres get dirty.</b> Tyres cake up fast, rims take a lighter dusting, and both rinse off in water with the rest of the car. Drag a wheel along on its side and the rim gets scuffed.</td>
-    <td valign="top"><b>So does the underside.</b> Skid plates, suspension, exhaust, mud flaps and running boards pick up mud as you drive, the painted floor gets a film of it, and it cakes under the sills. In deep mud it builds up along them too. Bottom out and the belly gets scuffed.</td>
+    <td valign="top"><b>So does the underside.</b> Skid plates, suspension, exhaust, mud flaps and running boards pick up mud as you drive, and it cakes under the sills. In deep mud it builds up along them too. Bottom out and the belly gets scuffed.</td>
   </tr>
 </table>
 

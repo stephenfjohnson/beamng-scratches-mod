@@ -217,7 +217,13 @@ local EXCLUDE_PART_PATTERNS = {
   -- passes through and stamps land on whatever paintable surface is behind
   -- (typically the roof or hood). Excluding them removes both the false
   -- impact-branch hits and the misplaced stamps.
-  "windshield", "doorglass",
+  "windshield", "doorglass", "backlight",
+  -- Aerials. A whip stands a metre clear of the roof, and when the car goes
+  -- over it is the first thing dragged along the ground. A decal anchored at
+  -- its tip is projected from above the tip down through everything under it,
+  -- magnified: a fan of long straight lines from the aerial's base across the
+  -- roof, hood and bumper (rally Sunburst, 2026-11-20).
+  "antenna", "aerial",
 }
 
 -- The subset of the deny-list that is what actually touches the ground when a
