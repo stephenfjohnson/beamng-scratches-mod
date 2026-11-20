@@ -505,6 +505,9 @@ end
 local WHEEL_SCRAPE_SURFACES = {ASPHALT=true, ASPHALT_WET=true, ROCK=true, COBBLESTONE=true,
   METAL=true, RUMBLE_STRIP=true, GRAVEL=true, CONCRETE=true}
 local wheelScrapeLast, pendingWheelScrapes = {}, {}
+-- Unit axle per wheel, re-read at most 20 times a second: this runs for every
+-- wheel contact of a skid, and node positions allocate.
+local wheelAxle = {}
 local function wheelSideScrape(id1, pos, normal, slipVel, normalForce, mat1)
   if not paintEnabled or #pendingWheelScrapes >= 8 then return end
   if not (finite(slipVel) and finite(normalForce)) or slipVel < 1.5 or normalForce < 60 then return end
@@ -518,13 +521,19 @@ local function wheelSideScrape(id1, pos, normal, slipVel, normalForce, mat1)
   if last and now >= last and now - last < 0.25 then return end
   if not (finite(pos.x) and finite(pos.y) and finite(pos.z)
       and finite(normal.x) and finite(normal.y) and finite(normal.z)) then return end
-  local a, b = obj:getNodePosition(wheel.node1), obj:getNodePosition(wheel.node2)
-  if not a or not b then return end
-  local ax, ay, az = a.x - b.x, a.y - b.y, a.z - b.z
-  local len = math.sqrt(ax*ax + ay*ay + az*az)
+  local axle = wheelAxle[wheelId]
+  if not axle then axle = {0, 0, 0, -1}; wheelAxle[wheelId] = axle end
+  if now == 0 or now < axle[4] or now - axle[4] > 0.05 then
+    local a, b = obj:getNodePosition(wheel.node1), obj:getNodePosition(wheel.node2)
+    if not a or not b then return end
+    local ax, ay, az = a.x - b.x, a.y - b.y, a.z - b.z
+    local len = math.sqrt(ax*ax + ay*ay + az*az)
+    if not (len >= 1e-4) then return end
+    axle[1], axle[2], axle[3], axle[4] = ax/len, ay/len, az/len, now
+  end
   local nlen = math.sqrt(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z)
-  if len < 1e-4 or nlen < 1e-4 then return end
-  local along = math.abs(ax*normal.x + ay*normal.y + az*normal.z) / (len * nlen)
+  if nlen < 1e-4 then return end
+  local along = math.abs(axle[1]*normal.x + axle[2]*normal.y + axle[3]*normal.z) / nlen
   if along < 0.6 then return end
   wheelScrapeLast[wheelId] = now
   stats.wheelScrapes = (stats.wheelScrapes or 0) + 1
