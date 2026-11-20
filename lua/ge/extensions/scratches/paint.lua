@@ -843,7 +843,10 @@ end
 -- projection can reach those faces, but a UV-space fill of that corner can, so
 -- the floor carries one even film whose strength steps up as the wheels roll
 -- through soil. `tick` is filled in below, once the fill exists.
-floorSoil = { on = true, cooldown = 0, steps = 6, interval = 1.2,
+-- The catch: that texel is shared. On the Sunburst rally car the window
+-- frames, pillars and the top of the rear wing read it too, so the film stops
+-- at `limit` of its six steps (about half strength) unless asked for more.
+floorSoil = { on = true, cooldown = 0, steps = 6, limit = 4, interval = 1.2,
   gain = { mud = 0.03, dirt = 0.012, snow = 0.025 },
   texture = "/art/dynamicDecals/textures/soil_floor_fill_%d.png" }
 
@@ -1766,7 +1769,7 @@ end
 floorSoil.tick = function(dt)
   floorSoil.cooldown = math.max(0, floorSoil.cooldown - dt)
   if not (floorSoil.on and ready and adapter) or floorSoil.cooldown > 0 or surfaceWaterAge <= 0.5 then return end
-  local want = math.min(floorSoil.steps, math.floor((surfaceState.floorLevel or 0) * floorSoil.steps + 1e-6))
+  local want = math.min(floorSoil.limit, math.floor((surfaceState.floorLevel or 0) * floorSoil.steps + 1e-6))
   local step = surfaceState.floorBakes or 0
   local repeatFill = floorSoil.again == step and step > 0
   if want <= step and not repeatFill then return end
@@ -2715,8 +2718,12 @@ local UNDER_ALONG  = { 0.35, 0.95, 1.55, 0.65, 1.25, 0.10 }
 local UNDER_INSET  = { 0.10, 0.16, 0.12, 0.20, 0.08, 0.14 }
 local SILL_STEP = { 0, 0.5, 1, 0.25, 0.75 }
 
+-- floor: false/true, or how many of the film's six steps it may reach (0-6).
 M.setSoilExtras = function(underside, sills, snowFling, floor)
-  if floor ~= nil then floorSoil.on = floor and true or false end
+  if type(floor) == "number" then
+    floorSoil.limit = math.max(0, math.min(floorSoil.steps, math.floor(floor)))
+    floorSoil.on = floorSoil.limit > 0
+  elseif floor ~= nil then floorSoil.on = floor and true or false end
   if underside ~= nil then soilExtras.underside = underside and true or false end
   if sills ~= nil then soilExtras.sills = sills and true or false end
   if snowFling ~= nil then soilExtras.snowFling = snowFling and true or false end

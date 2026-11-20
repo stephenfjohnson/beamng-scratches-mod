@@ -33,6 +33,14 @@ render the same; worst bake there 19.6 ms.
   dry-ground colour was hard to see on bright paint.
 - Underside soil is projected under the sills, not at the floor pan: a car's
   skin UV layout has no floor in it, so nothing showed there.
+- **Mud on the painted floor.** Faces outside the skin layout read one corner
+  texel of the canvas; a UV-space texture fill of that corner gives the floor a
+  film that steps up with the soil rolled through (`soil_floor_fill_1..6`,
+  `scratches_paint.soilFill`). The window frames and wing top of the Sunburst
+  rally car share that texel, so it stops at about half strength by default.
+- **Opaque mud.** Soil opacity is the soil canvas red channel, so dark mud was
+  mostly transparent. Soil is baked at full red and the stage's colour factor
+  carries its brightness (`bodyAdapter soilTone`).
 - Fixed after a six-way code review of the above: wheel clones were all
   reloaded on any change (13 to 16 ms frames; now one clone at a time, only the
   ones that changed); a car replaced in place kept the previous car's wheel

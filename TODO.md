@@ -102,11 +102,23 @@ Sunburst rally car; wheel binding was also checked on eleven other vehicles.
   exterior panels (see the next item), and the abrasion overlay is grey on a
   grey plate. Needs a car with painted bumper and sill undersides in view, and
   probably a stronger abrasion look.
-- [x] **Why the painted floor stays clean.** A car's skin UV layout holds
-  exterior panels only (checked against `sunburst2_skin_UVs.png`), so nothing
-  projected at the floor pan can show. Underside soil now goes under the sills
-  instead, where a thin slab paints the sill's underside and bottom edge; the
-  undercarriage material overlay covers the rest.
+- [x] **Mud on the painted floor.** A car's skin UV layout holds exterior panels
+  only (checked against `sunburst2_skin_UVs.png`), so no projection reaches the
+  floor pan. Every face outside the layout reads one texel of the canvas, its
+  bottom-left corner, and a UV-space texture fill of that corner does reach it:
+  the floor now gets an even film that steps up as the wheels roll through soil
+  (`soil_floor_fill_1..6`, `tools/generate_floor_fill.py`).
+- [ ] **The floor film is shared.** That one texel is read by everything else
+  outside the skin layout too: on the Sunburst rally car the window frames,
+  pillars and the top of the rear wing. So the film stops at four of its six
+  steps by default, about half strength; `setSoilExtras(nil, nil, nil, 6)`
+  lets it go to 0.72, `false` turns it off. One even colour, no lumps. Checked
+  on the Sunburst only: which faces share the texel on other cars is unknown.
+- [x] **Mud was half transparent.** The soil stage takes its opacity from the
+  soil canvas red channel, so brown mud at r = 0.43 was 43 % opaque at best.
+  Soil is now baked at full red with its brightness in the stage's colour
+  factor (`bodyAdapter soilTone`). The same limit still holds for the damage
+  stage ("Weak dark marks" above).
 - [ ] **Undercarriage parts are found by name** (`mechanical`, `skidplate`,
   `exhaust`, `suspension`, `rallyparts`, `runningboard`, `mudflap` ...). The
   ETK 800 and the city bus have no material that matches, so only their wheels
@@ -117,9 +129,6 @@ Sunburst rally car; wheel binding was also checked on eleven other vehicles.
   hand; Gridmap's mud strip is too shallow to set it. Sill and underside
   heights now come from the car's own rest pose (Sunburst 0.26 m, D-Series
   0.41 m).
-- [ ] **Mud on the body is thin at low speed.** Ten seconds through the mud
-  strip at 5 m/s leaves speckle on the arches and little on the doors, while
-  the tyres are caked. The throw grows with speed; the amount may want a boost.
 - [ ] **Ground marks use the car's base paint**, so a liveried panel leaves the
   colour under its livery. Marks are also laid on loose ground (dirt, sand,
   gravel), where paint transfer is unlikely.
@@ -167,7 +176,7 @@ Sunburst rally car; wheel binding was also checked on eleven other vehicles.
 
 ## Tech debt
 
-- [ ] **No CI.** The 492-check harness and preflight only run locally
+- [ ] **No CI.** The 498-check harness and preflight only run locally
   (`python tools/package.py`). A GitHub Action with Lua 5.1 would guard `master`.
 - [ ] **`paint.lua` is near Lua's local limit.** About 3,500 lines and 163
   top-level locals; Lua 5.1 caps a function at 200. Split the scheduler, soil

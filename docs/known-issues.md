@@ -29,10 +29,11 @@ affect you:
 - **First mud contact hitch.** The first terrain-texture read for soil tint takes
   about 99 ms; later lookups are cached (~0.03 ms).
 - **Snow fling, dirty wheels, underside and ground paint are brand new.** Driven
-  on Vulkan on a few cars. The painted floor pan under the car stays clean (the
-  game's skin layout has no floor in it); the mud underneath lands on the skid
-  plates, suspension, exhaust, mud flaps and under the sills. Belly scrapes are
-  counted but barely visible. A car you switch into, rather than spawn, keeps
+  on Vulkan on a few cars. The mud film on the painted floor is one even colour,
+  and the window frames, pillars and rear wing top of the Sunburst rally car
+  pick up the same film, so it stops at about half strength
+  (`scratches_paint.setSoilExtras(nil, nil, nil, 6)` in game-engine Lua for
+  more, `false` for none). Belly scrapes are counted but barely visible. A car you switch into, rather than spawn, keeps
   clean wheels until you reload it. See
   [TODO](../TODO.md#needs-live-verification).
 - **Marks don't persist.** Reset, vehicle switch, reload and editor use clear all
