@@ -324,16 +324,26 @@ local surfaceKinds = {MUD="mud", DIRT="dirt", DIRT_DUSTY="dirt",
   SAND="dirt", SANDY_ROAD="dirt", GRAVEL="dirt", SNOW="snow"}
 local surfacePending, surfaceLast = {}, 0
 local waterNodes = nil
+-- Deep soil: bodywork itself is in the mud/snow, or a wheel has sunk past
+-- SURFACE_DEEP_WHEEL metres. Held for SURFACE_DEEP_HOLD seconds so the wheel
+-- samples that follow carry it; the painter cakes the sills on that signal.
+local SURFACE_DEEP_WHEEL, SURFACE_DEEP_HOLD = 0.12, 1.5
+local surfaceDeep, surfaceDeepUntil = {}, {}
 local function resetSurface()
   surfacePending, surfaceLast, waterNodes = {}, 0, nil
+  surfaceDeep, surfaceDeepUntil = {}, {}
 end
-local function surfaceContact(id, pos, normal, speed, force, material)
+local function surfaceContact(id, pos, normal, speed, force, material, depth)
   if not paintEnabled or not finite(speed) or not finite(force)
       or force < 10 then return end
   local kind = surfaceKinds[nameById[material]]
   if not kind then return end
   local node = v.data.nodes and v.data.nodes[id]
   if not node or (not node.wheelID and type(classifyNode(id)) ~= "string") then return end
+  if kind ~= "dirt" and (node.wheelID == nil
+      or (type(depth) == "number" and finite(depth) and depth > SURFACE_DEEP_WHEEL)) then
+    surfaceDeep[kind] = true
+  end
   local pending = surfacePending[kind]
   -- Rotate preference over the four standard wheels; retain the first
   -- available wheel as fallback. Body contacts must not starve tire samples.
@@ -384,6 +394,7 @@ local function flushSurface(now)
   local parts = {}
   for _, kind in ipairs({"mud", "dirt", "snow"}) do
     local e = surfacePending[kind]
+    if surfaceDeep[kind] then surfaceDeepUntil[kind] = now + SURFACE_DEEP_HOLD end
     if e and not wet then
       -- Refresh the emitting node at send time: queued world contacts trail
       -- a moving vehicle by up to a quarter second otherwise.
@@ -391,10 +402,12 @@ local function flushSurface(now)
         local p = obj:getNodePosition(e[8]) + obj:getPosition()
         e[1],e[2],e[3] = p.x,p.y,p.z
       end
-      parts[#parts+1] = string.format("{%q,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d}",kind,unpack(e,1,7))
+      -- Field 9 (deep) is optional on the painter's side: older painters ignore it.
+      parts[#parts+1] = string.format("{%q,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d,%d}",kind,
+        e[1],e[2],e[3],e[4],e[5],e[6],e[7],(surfaceDeepUntil[kind] or -1) > now and 1 or 0)
     end
   end
-  surfacePending = {}
+  surfacePending, surfaceDeep = {}, {}
   obj:queueGameEngineLua(string.format(
     "if scratches_paint and scratches_paint.ingestSurface then scratches_paint.ingestSurface(%d,{%s},%s,%s,%.3f) end",
     obj:getId(), table.concat(parts,","), tostring(wet), tostring(supported),submerged/math.max(1,#(waterNodes or {}))))
@@ -414,7 +427,7 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
 
   if not buildSets() then return end
 
-  surfaceContact(id1, pos, normal, slipVel, normalForce, mat1)
+  surfaceContact(id1, pos, normal, slipVel, normalForce, mat1, depth)
 
   local bodyName = nodeClass[id1]
   if bodyName == nil then

@@ -133,7 +133,13 @@ function decalProjection:getDecalData()
     colorTex=counters.tex.color,metalTex=counters.tex.metallic,roughTex=counters.tex.roughness }
 end
 function decalProjection:bakeLayers(list)
-  for _,layer in ipairs(list) do if layer.name=='soil' then counters.lastSoilLayer=layer end end
+  for _,layer in ipairs(list) do
+    if layer.name=='soil' then
+      counters.lastSoilLayer=layer
+      if layer.decalNorm and layer.decalNorm.z < -0.9 then counters.lastUnderLayer=layer end
+      if layer.colorTex and layer.colorTex:find('_band_',1,true) then counters.lastSillLayer=layer end
+    end
+  end
   counters.bakes = counters.bakes + 1
   counters.bakeLayers = counters.bakeLayers + #list
   counters.bakesThisFrame = (counters.bakesThisFrame or 0) + 1
@@ -577,11 +583,95 @@ for _,side in ipairs({-1,1}) do
       'soil slab reaches recessed bodywork but stays short of the vehicle centerline')
   end
 end
+-- Snow is flung like mud, but steeper and puffier; every third deposit packs
+-- into the arch. Reversing flips the throw.
+obj.getVelocity=function() return vec3(0,5,0) end
+paint.clearStamps()
+paint.ingestSurface(playerVid,{{'mud',101,-1,0.3,0,0,1,1}},false,true)
+local mudLift=paint.getSurfaceState().lastSample.flowZ
+paint.clearStamps()
+paint.ingestSurface(playerVid,{{'snow',101,-1,0.3,0,0,1,1}},false,true)
+for _=1,5 do frame(0.26) end
+do
+  local sample,layer=paint.getSurfaceState().lastSample,counters.lastSoilLayer
+  check(sample.where=='flank' and sample.flowY<0 and sample.flowZ>mudLift,
+    'wheel snow is flung up and back, steeper than mud')
+  check(layer.colorTex:find('soil_snow_fling_',1,true)~=nil,'wheel snow uses a snow fling brush')
+  check(math.abs(layer.decalScale.z-layer.decalScale.x*0.7)<1e-6 and layer.decalScale.x<=1.3,
+    'snow plume is puffier than the 2:1 mud fan and bounded')
+end
+paint.ingestSurface(playerVid,{{'snow',101,-1,0.3,0,0,1,1}},false,true)
+paint.ingestSurface(playerVid,{{'snow',101,-1,0.3,0,0,1,1}},false,true)
+do
+  local state=paint.getSurfaceState()
+  check(state.lastFlank.pack==true and state.lastFlank.flowY==nil and state.lastFlank.z<0.6,
+    'every third snow deposit packs low into the wheel arch')
+  -- The third wheel sample also throws one deposit up onto the floor.
+  local under=state.lastSample
+  check(under.where=='under' and state.underDeposits==1 and state.deposits==3,
+    'every third wheel sample adds an underside deposit on its own budget')
+  check(under.normalZ==-1 and under.normalX==0 and under.depth<=0.35
+    and under.z+under.depth*0.5<0.5 and math.abs(under.x)+under.scale*0.5<=0.8,
+    'underside deposit projects straight up through a shallow slab inboard of the sills')
+  paint.setSyntheticAnchors(true) -- the anchor normal is only written under synthetic anchors
+  for _=1,6 do frame(0.26) end
+  paint.setSyntheticAnchors(false)
+  local layer=counters.lastUnderLayer
+  check(layer~=nil and layer.decalNorm.z==-1 and layer.decalScale.y<=0.35
+    and layer.colorTex:find('soil_snow_coverage',1,true)~=nil,
+    'underside layer keeps its downward normal and is not snapped to a side face')
+end
+obj.getVelocity=function() return vec3(0,-5,0) end
+paint.clearStamps()
+paint.ingestSurface(playerVid,{{'snow',101,-1,0.3,0,0,1,1}},false,true)
+check(paint.getSurfaceState().lastSample.flowY>0,'reversing flips the snow throw')
+obj.getVelocity=function() return vec3(0,5,0) end
+-- Deep mud cakes the sill on that side; old 8-field samples are never deep.
+paint.clearStamps()
+paint.ingestSurface(playerVid,{{'mud',101,-1,0.3,0,0,1,1}},false,true)
+check(paint.getSurfaceState().sillDeposits==0 and paint.getSurfaceState().lastSample.where=='flank',
+  'legacy 8-field wheel sample lays no sill band')
+do
+  local seen,count={},0
+  for i=1,10 do
+    paint.ingestSurface(playerVid,{{'mud',101,-1+i*0.01,0.3,0,0,1,1,1}},false,true)
+    local sill=paint.getSurfaceState().lastSill
+    if sill and not seen[sill.y] then seen[sill.y]=true; count=count+1 end
+  end
+  local sill=paint.getSurfaceState().lastSill
+  check(sill.where=='sill' and sill.x==1 and sill.normalX==1 and sill.z>=0.1 and sill.z<=0.35,
+    'deep mud lays a band low on the flank that is in the mud')
+  check(count==5 and math.abs(sill.y)<1.5,'sill bands step along the car between the axles')
+  check(sill.brush:find('soil_mud_band_',1,true)~=nil and sill.width<sill.scale,
+    'sill uses the horizontal band brush')
+  for _=1,8 do frame(0.26) end
+  check(counters.lastSillLayer~=nil and counters.lastSillLayer.decalRotation==0,
+    'sill band is laid upright')
+  for i=1,400 do
+    paint.ingestSurface(playerVid,{{'mud',101+(i%2)*-202,-2+(i%40)*0.1,0.3,0,0,1,1,1}},false,true)
+  end
+  local state=paint.getSurfaceState()
+  check(state.deposits==96 and state.sillDeposits<=32 and state.underDeposits<=24
+    and state.sillDeposits>10 and state.underDeposits>10,
+    'underside and sill deposits have their own budgets and never starve the flank fling')
+end
+-- Each extra switches off live.
+paint.clearStamps()
+paint.setSoilExtras(false,false,false)
+for _=1,6 do paint.ingestSurface(playerVid,{{'snow',101,-1,0.3,0,0,1,1,1}},false,true) end
+do
+  local state=paint.getSurfaceState()
+  check(state.underDeposits==0 and state.sillDeposits==0 and state.lastSample.where=='flank'
+    and state.lastSample.flowY==nil,'setSoilExtras(false,false,false) restores flank-only soil')
+end
+paint.setSoilExtras(true,true,true)
 obj.getVelocity=movingVelocity
 paint.clearStamps()
 soil(10,18); soil(30,18); surfaceTick(false)
 check(paint.getSurfaceState().lastSample.wheel == 1,
   "wheel sample takes priority over earlier body contact")
+check(paint.getSurfaceState().sillDeposits == 1 and paint.getSurfaceState().lastFlank.deep == true,
+  "bodywork touching mud marks the following wheel sample deep")
 paint.clearStamps()
 local scratchBeforeSoil = paint.getStats().stamp.streamsBaked
 local beforeSoft = detStats()
