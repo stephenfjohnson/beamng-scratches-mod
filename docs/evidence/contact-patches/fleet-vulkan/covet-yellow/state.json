@@ -1,0 +1,32 @@
+{
+  "model": "covet",
+  "paint": "yellow",
+  "part": "",
+  "source": "covet_main",
+  "keys": [
+    "covet"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261120-112418_sideslide_fleet-covet-yellow/report.md",
+    "contacts": "3493",
+    "passed": "1181",
+    "impacts": "23",
+    "streams": "91",
+    "stamps": "39",
+    "projections": "39",
+    "bakes": "39",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "0",
+    "layersBaked": 39,
+    "bakeMsMax": 6.5,
+    "painterMsMax": 6.6,
+    "frameMsP95": 15.2,
+    "frameMsMax": 26.5,
+    "framesOver25ms": 1,
+    "slidePatches": 13,
+    "impactPatches": 10
+  }
+}

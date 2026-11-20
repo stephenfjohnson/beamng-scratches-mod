@@ -17,7 +17,7 @@ local skipFields = {name=true,mapTo=true,persistentId=true,parentGroup=true,
 local OWNER = "bodyAdapter-v2"
 -- Exposed primer/metal brightness: mid grey reads on dark paint and liveries;
 -- plain light paint needs it darker to show at all.
-local DAMAGE_TONE_DARK, DAMAGE_TONE_LIGHT = "0.62 0.62 0.63 1", "0.30 0.30 0.31 1"
+local DAMAGE_TONE_DARK, DAMAGE_TONE_LIGHT = "0.62 0.62 0.63 1", "0.46 0.46 0.47 1"
 local LEGACY_OWNER = "etkAdapter-v1"
 local DT_SUFFIX = ".skin.dynamicTextures"
 local prepared = {}
@@ -349,8 +349,9 @@ function M.create(veh,part)
   for i=2,#indices do api.addMaterialIdx(indices[i]) end
   projection:clearBakedTextures(); projection:flushDynamicTextures()
   projection:combineTextures(textureSet)
-  -- Separate, bounded 1024x512 soil target; damage remains in its original set.
-  soilTarget = soilTarget or DecalProjection("", Point2I(1024,512), 1, indices[1])
+  -- Separate, bounded 2048x1024 soil target (~3 mm a texel, enough to hold
+  -- flung drops); damage remains in its original set.
+  soilTarget = soilTarget or DecalProjection("", Point2I(2048,1024), 1, indices[1])
   local soil = soilTarget
   local soilSet = soil:getTextureSet()
   local function syncSoil()

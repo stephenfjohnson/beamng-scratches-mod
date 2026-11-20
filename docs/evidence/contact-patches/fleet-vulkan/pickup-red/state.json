@@ -1,0 +1,32 @@
+{
+  "model": "pickup",
+  "paint": "red",
+  "part": "",
+  "source": "pickup_main",
+  "keys": [
+    "pickup"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261120-111602_sideslide_fleet-pickup-red/report.md",
+    "contacts": "10883",
+    "passed": "1456",
+    "impacts": "13",
+    "streams": "87",
+    "stamps": "31",
+    "projections": "31",
+    "bakes": "31",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "0",
+    "layersBaked": 31,
+    "bakeMsMax": 6.5,
+    "painterMsMax": 6.6,
+    "frameMsP95": 17.1,
+    "frameMsMax": 27.6,
+    "framesOver25ms": 1,
+    "slidePatches": 18,
+    "impactPatches": 3
+  }
+}

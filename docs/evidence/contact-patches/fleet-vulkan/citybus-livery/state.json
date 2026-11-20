@@ -1,0 +1,32 @@
+{
+  "model": "citybus",
+  "paint": null,
+  "part": "citybus_skin_transit",
+  "source": "citybus.skin.transit",
+  "keys": [
+    "citybus"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261120-111918_sideslide_fleet-citybus-livery/report.md",
+    "contacts": "14405",
+    "passed": "5364",
+    "impacts": "33",
+    "streams": "351",
+    "stamps": "100",
+    "projections": "100",
+    "bakes": "100",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "0",
+    "layersBaked": 100,
+    "bakeMsMax": 6.0,
+    "painterMsMax": 6.1,
+    "frameMsP95": 15.1,
+    "frameMsMax": 27.6,
+    "framesOver25ms": 1,
+    "slidePatches": 120,
+    "impactPatches": 24
+  }
+}

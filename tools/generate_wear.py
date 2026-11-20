@@ -32,7 +32,12 @@ from PIL import Image, ImageDraw, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.normpath(os.path.join(HERE, "..", "art", "dynamicDecals", "textures"))
-SS = 2  # supersampling factor
+SS = 2  # supersampling factor over the design size
+# Files are written at half the design size. The engine keeps only about two
+# brush textures loaded and a reload costs time in proportion to the pixel
+# count (1024x512: ~9 ms, 512x256: ~3 ms, 256x128: ~1 ms over a cached bake),
+# and a 512 px brush already matches the 1.5 mm canvas on a 0.8 m decal.
+OUT_DIV = 2
 
 SIDECAR = {"version": 2, "vehicle": "", "isSdfCompatible": False, "tags": ["shape", "scratch"], "type": 0}
 
@@ -67,6 +72,7 @@ def down(a, w, h):
 
 def save_set(name, w, h, alpha, green, blue, metal=None, rough=None):
     """Write the colour brush and, when given, half-size metallic/roughness maps."""
+    w, h = w // OUT_DIV, h // OUT_DIV
     a = down(alpha, w, h)
     rgba = np.dstack([np.full_like(a, 255), down(green, w, h), down(blue, w, h), a])
     write(name, Image.fromarray(rgba, mode="RGBA"))
@@ -161,7 +167,8 @@ def chips(name, seed, tier, scored=False, size=512):
     n = size * SS
     y = np.linspace(-0.5, 0.5, n)[:, None]
     x = np.linspace(-0.5, 0.5, n)[None, :]
-    sx, sy = (0.25, 0.085) if scored else ((0.10, 0.10), (0.135, 0.135), (0.17, 0.17))[tier - 1]
+    sx, sy = ((0.20, 0.050), (0.26, 0.062), (0.31, 0.075))[tier - 1] if scored else (
+        (0.10, 0.10), (0.135, 0.135), (0.17, 0.17))[tier - 1]
     if not scored:
         # An off-round, lumpy footprint: no two clusters share a silhouette.
         turn = rng.uniform(0, np.pi)
@@ -171,7 +178,8 @@ def chips(name, seed, tier, scored=False, size=512):
     else:
         env = np.exp(-((x / sx) ** 2 + (y / sy) ** 2))
     if scored:
-        shape = 0.6 * fft_noise(n, n, rng, 26 * SS, 4.5 * SS) + 0.4 * fft_noise(n, n, rng, 9 * SS, 2.2 * SS)
+        # Long thin islands: the flakes were torn out along the slip.
+        shape = 0.6 * fft_noise(n, n, rng, 42 * SS, 3.2 * SS) + 0.4 * fft_noise(n, n, rng, 12 * SS, 1.8 * SS)
     else:
         shape = 0.6 * fft_noise(n, n, rng, 6.5 * SS, 6.5 * SS) + 0.4 * fft_noise(n, n, rng, 2.4 * SS, 2.4 * SS)
     shape = smooth(0.2, 0.8, shape)
@@ -263,8 +271,8 @@ def main():
     print("impact chips")
     for i, letter in enumerate("abcdef"):
         chips("w2_chip_" + letter, 4400 + i, i // 2 + 1)
-    chips("w2_score_a", 4500, 2, scored=True)
-    chips("w2_score_b", 4501, 3, scored=True)
+    for i, letter in enumerate("abcdef"):
+        chips("w2_score_" + letter, 4500 + i, i // 2 + 1, scored=True)
     print("detail maps")
     detail_maps()
 

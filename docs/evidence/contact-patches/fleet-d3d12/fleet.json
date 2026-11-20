@@ -1,0 +1,196 @@
+[
+  {
+    "model": "etk800",
+    "paint": "black",
+    "part": "etk800_skin_brushedtrim",
+    "source": "etk800.skin.brushedtrim",
+    "keys": [
+      "etk800",
+      "etk800_extra"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261120-113053_sideslide_fleet-etk800-black/report.md",
+      "contacts": "1820",
+      "passed": "1009",
+      "impacts": "35",
+      "streams": "100",
+      "stamps": "41",
+      "projections": "41",
+      "bakes": "41",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "0",
+      "layersBaked": 41,
+      "bakeMsMax": 309.2,
+      "painterMsMax": 309.3,
+      "frameMsP95": 16.7,
+      "frameMsMax": 322.0,
+      "framesOver25ms": 1,
+      "slidePatches": 16,
+      "impactPatches": 20
+    }
+  },
+  {
+    "model": "etki",
+    "paint": "white",
+    "part": "",
+    "source": "etki_main",
+    "keys": [
+      "etki",
+      "etki_modparts"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261120-113121_sideslide_fleet-etki-white/report.md",
+      "contacts": "3693",
+      "passed": "1227",
+      "impacts": "36",
+      "streams": "120",
+      "stamps": "36",
+      "projections": "36",
+      "bakes": "36",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "0",
+      "layersBaked": 36,
+      "bakeMsMax": 9.7,
+      "painterMsMax": 9.8,
+      "frameMsP95": 16.3,
+      "frameMsMax": 20.7,
+      "framesOver25ms": 0,
+      "slidePatches": 12,
+      "impactPatches": 14
+    }
+  },
+  {
+    "model": "pickup",
+    "paint": "red",
+    "part": "",
+    "source": "pickup_main",
+    "keys": [
+      "pickup"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261120-113149_sideslide_fleet-pickup-red/report.md",
+      "contacts": "12062",
+      "passed": "1607",
+      "impacts": "10",
+      "streams": "93",
+      "stamps": "34",
+      "projections": "34",
+      "bakes": "34",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "0",
+      "layersBaked": 34,
+      "bakeMsMax": 10.3,
+      "painterMsMax": 10.4,
+      "frameMsP95": 16.9,
+      "frameMsMax": 22.4,
+      "framesOver25ms": 0,
+      "slidePatches": 21,
+      "impactPatches": 2
+    }
+  },
+  {
+    "model": "vivace",
+    "paint": "blue",
+    "part": "",
+    "source": "vivace_main",
+    "keys": [
+      "vivace"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261120-113216_sideslide_fleet-vivace-blue/report.md",
+      "contacts": "2105",
+      "passed": "842",
+      "impacts": "71",
+      "streams": "111",
+      "stamps": "62",
+      "projections": "62",
+      "bakes": "62",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "0",
+      "layersBaked": 62,
+      "bakeMsMax": 13.3,
+      "painterMsMax": 13.4,
+      "frameMsP95": 19.7,
+      "frameMsMax": 52.1,
+      "framesOver25ms": 2,
+      "slidePatches": 26,
+      "impactPatches": 35
+    }
+  },
+  {
+    "model": "bluebuck",
+    "paint": null,
+    "part": "bluebuck_skin_twotone",
+    "source": "bluebuck.skin.twotone",
+    "keys": [
+      "bluebuck"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261120-113242_sideslide_fleet-bluebuck-livery/report.md",
+      "contacts": "3900",
+      "passed": "125",
+      "impacts": "18",
+      "streams": "17",
+      "stamps": "23",
+      "projections": "23",
+      "bakes": "23",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "0",
+      "layersBaked": 23,
+      "bakeMsMax": 10.8,
+      "painterMsMax": 10.9,
+      "frameMsP95": 15.4,
+      "frameMsMax": 23.8,
+      "framesOver25ms": 0,
+      "slidePatches": 9,
+      "impactPatches": 14
+    }
+  },
+  {
+    "model": "citybus",
+    "paint": null,
+    "part": "citybus_skin_transit",
+    "source": "citybus.skin.transit",
+    "keys": [
+      "citybus"
+    ],
+    "stage": 2,
+    "originalStageDifferences": 0,
+    "marks": {
+      "report": "bench/runs/20261120-113307_sideslide_fleet-citybus-livery/report.md",
+      "contacts": "15980",
+      "passed": "5735",
+      "impacts": "36",
+      "streams": "346",
+      "stamps": "97",
+      "projections": "97",
+      "bakes": "96",
+      "missed": "0.0%",
+      "dropped": "0",
+      "deferred": "0",
+      "layersBaked": 96,
+      "bakeMsMax": 13.2,
+      "painterMsMax": 13.3,
+      "frameMsP95": 18.4,
+      "frameMsMax": 24.8,
+      "framesOver25ms": 0,
+      "slidePatches": 114,
+      "impactPatches": 30
+    }
+  }
+]

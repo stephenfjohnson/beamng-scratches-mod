@@ -1,0 +1,32 @@
+{
+  "model": "scintilla",
+  "paint": null,
+  "part": "scintilla_skin_blackroof",
+  "source": "scintilla_main.skin.blackroof",
+  "keys": [
+    "scintilla_main"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261120-112511_sideslide_fleet-scintilla-livery/report.md",
+    "contacts": "2949",
+    "passed": "478",
+    "impacts": "81",
+    "streams": "61",
+    "stamps": "64",
+    "projections": "64",
+    "bakes": "64",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "0",
+    "layersBaked": 64,
+    "bakeMsMax": 30.8,
+    "painterMsMax": 30.8,
+    "frameMsP95": 14.6,
+    "frameMsMax": 41.7,
+    "framesOver25ms": 3,
+    "slidePatches": 21,
+    "impactPatches": 33
+  }
+}

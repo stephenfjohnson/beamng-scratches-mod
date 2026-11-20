@@ -22,21 +22,17 @@ not started. See [the release plan](docs/plans/release-sequence.md).
   contact (the grouping/coalescing tradeoffs are measured in
   [investigation 11](investigations/11-quality-throughput.md)); or find another
   bake path. Evidence: [investigation 12](investigations/12-synthetic-anchors.md#what-remains-per-layer-allocation-churn-inside-the-native-bake).
-- [ ] **Intermittent ~410 ms Vulkan render-phase pauses.** 2 of 18 short
-  fixtures, never inside a mod call, always within 0.4 s of mod GPU work, never
-  in painting-disabled controls. Probably the same allocation churn. Contact
-  patches (2026-11-20) cut layers per crash about sixfold and no such pause
-  occurred in eight runs ([investigation 13](investigations/13-contact-patches.md));
-  eight runs can't rule out a rare event, so a longer Vulkan session is still owed.
-- [ ] **Contact patches beyond one car.** Tuned and measured only on the
-  Sunburst rally livery, Vulkan, Gridmap. Check plain dark and light paint (the
-  0.30 light-paint tone is untested in game), the ETK, D3D12, and mud/snow/wash
-  with the changed damage stage (soil stage fields were verified live, not driven).
-- [ ] **Brush textures are reloaded mid-crash.** A brush not used for a few
-  seconds costs 10–16 ms on its next bake, three or four times per sideslide
-  (~26 ms frames). The spawn-time warm-up (388 ms) does not prevent it and its
-  benefit is unproven: keep the textures resident some other way, or remove it
-  ([investigation 13](investigations/13-contact-patches.md#the-warm-up-does-not-hold)).
+- [ ] **Rare 0.3–0.6 s pauses with painting on.** Contact patches (2026-11-20)
+  cut layers per crash about sixfold, but the pause still happens: on Vulkan
+  562 ms (OtherRender) and 638 ms (UIpixelsToGPU) in 22 painted runs, plus one
+  91 ms; none in six painting-off runs. On D3D12 one 319 ms frame in game Lua
+  (the mod's ingest measures at most 0.3 ms). Not attributed. Next: a long
+  alternating on/off session, and the same at 2048×1024 damage resolution
+  ([investigation 13](investigations/13-contact-patches.md#rare-long-frames)).
+- [ ] **Wash and snow after the stage change.** Mud fling was driven on both
+  renderers; washing, snow and dirt were not, and soil is now 2048×1024.
+- [ ] **One 31 ms bake** in the Vulkan Scintilla run (others peak at 5–9 ms). Not
+  reproduced or explained.
 - [ ] **Long-session qualification.** No multi-hour D3D12 run yet. The Vulkan
   functional suite (lifecycle, traffic, maps, editor, washing) hasn't been
   rerun on the synthetic-anchor build; only D3D12 was
@@ -86,14 +82,17 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 - [ ] **No waterline.** Washing is a uniform fade, and a partial wash weakens new
   deposits until that soil cycle is fully removed
   ([investigation 8](investigations/08-water-washing.md)).
-- [ ] **Static splashes.** Splash tails are baked art; they don't run or drip
+- [ ] **Fling is a placement rule.** Throw angle and length follow speed, but
+  the wheel-arch lip, the mud flaps and wheelspin are ignored, and nothing lands
+  on the car behind.
+- [ ] **Static splashes.** Fling drops are baked art; they don't run or drip
   after landing.
 
 ## Needs live verification
 
 - [ ] Terrain tint for **dirt and snow**, and on maps other than Gridmap v2.
   Only Gridmap mud has been checked.
-- [ ] Dirt splash artwork and **reverse-direction** splashes in game.
+- [ ] Dirt fling artwork and **reverse-direction** flings in game (mock-checked only).
 - [ ] The legacy non-ETK Dynamic Textures path on 0.40.5.0.
 
 ## Compatibility

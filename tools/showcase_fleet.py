@@ -2,6 +2,7 @@
 
     python tools/showcase_fleet.py                  # the default fleet below
     python tools/showcase_fleet.py pickup:red vivace:blue bluebuck
+    python tools/showcase_fleet.py --out docs/evidence/contact-patches/fleet-vulkan etk800:black
 
 Each entry is `model[:paint]` (paint from PAINTS; omit it to keep the default
 config's livery). For each: spawn the default config, apply the paint, wait for
@@ -74,7 +75,20 @@ def bench(tag: str) -> dict:
     cells = [c.strip() for c in row.group(1).split("|")] if row else []
     keys = ["contacts", "passed", "impacts", "streams", "stamps", "projections", "bakes", "missed",
             "dropped", "deferred"]
-    return {"report": m.group(1).replace("\\", "/"), **dict(zip(keys, cells))}
+    return {"report": m.group(1).replace("\\", "/"), **dict(zip(keys, cells)),
+            **timing((ROOT / m.group(1)).parent)}
+
+
+def timing(run_dir: Path) -> dict:
+    """Frame and painter cost of one bench run, from its result.json."""
+    result = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
+    frames = sorted(result["frames"]["frameMs"])
+    perf = result["painter"]["perf"]
+    wear = (result["painter"].get("wear") or {}).get("patches") or {}
+    return {"layersBaked": perf["bakeLayersTotal"], "bakeMsMax": round(perf["bakeMsMax"], 1),
+            "painterMsMax": round(perf["msMax"], 1), "frameMsP95": round(frames[int(len(frames) * .95)], 1),
+            "frameMsMax": round(frames[-1], 1), "framesOver25ms": sum(f > 25 for f in frames),
+            "slidePatches": wear.get("slidePatches"), "impactPatches": wear.get("impactPatches")}
 
 
 def run(entry: str) -> dict:
@@ -101,13 +115,21 @@ def run(entry: str) -> dict:
               "marks": marks}
     (folder / "state.json").write_text(json.dumps(result, indent=2) + "\n")
     print(f"   source={result['source']} keys={result['keys']} diffs={diffs} "
-          f"impacts={marks.get('impacts')} streams={marks.get('streams')} bakes={marks.get('bakes')} "
+          f"impacts={marks.get('impacts')} streams={marks.get('streams')} layers={marks.get('layersBaked')} "
+          f"patches={marks.get('slidePatches')}/{marks.get('impactPatches')} "
+          f"painterMax={marks.get('painterMsMax')} frameMax={marks.get('frameMsMax')} "
           f"missed={marks.get('missed')}", flush=True)
     return result
 
 
 def main() -> None:
-    entries = sys.argv[1:] or FLEET
+    global OUT
+    args = sys.argv[1:]
+    if "--out" in args:  # keep an earlier run's evidence: write this one elsewhere
+        i = args.index("--out")
+        OUT = (ROOT / args[i + 1]).resolve()
+        del args[i:i + 2]
+    entries = args or FLEET
     results = []
     for entry in entries:
         try:

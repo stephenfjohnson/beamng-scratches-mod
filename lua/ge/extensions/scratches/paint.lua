@@ -54,7 +54,7 @@ local soilColor = dofile("/lua/ge/extensions/scratches/soilColor.lua")
 -- session (a texture's first use costs ~15 ms inside the native bake).
 local patchModule = dofile("/lua/ge/extensions/scratches/patches.lua")
 local wear = { on = true, agg = patchModule.new(), now = 0, kick = false, frame = 0,
-               warm = nil, warmed = {}, painted = 0, warmedCount = 0 }
+               warm = nil, warmed = {}, painted = 0, warmedCount = 0, last = {}, hotKey = nil }
 local adapterReloaded = {}
 local editorPaused = false
 local api               = nil    -- editor_api_dynamicDecals module
@@ -166,6 +166,8 @@ local perfStats = {
   layerMsTotal = 0, layerCalls = 0,
   bakeMsTotal = 0, bakeMsMax = 0, bakeCalls = 0, bakeLayersTotal = 0,
   inputToBakeMaxMs = 0, inputToProjectMaxMs = 0,
+  -- Detector batches arrive outside onUpdate, so they are timed separately.
+  ingestMsTotal = 0, ingestMsMax = 0, ingestCalls = 0,
 }
 
 -- Add the time since t0 (os.clockhp seconds) to perfStats[totalKey], track
@@ -1150,8 +1152,7 @@ do
   end
   WEAR.slide = { set("scuff", "ab"), set("scrape", "abc", true), set("gouge", "abc", true) }
   WEAR.chip  = { set("chip", "ab"), set("chip", "cd", true), set("chip", "ef", true) }
-  local scoreA, scoreB = set("score", "a", true), set("score", "b", true)
-  WEAR.score = { scoreA, scoreA, scoreB }
+  WEAR.score = { set("score", "ab"), set("score", "cd", true), set("score", "ef", true) }
 end
 
 -- Long straight slides used to become one large projected rectangle. On roof
@@ -2258,7 +2259,12 @@ end
 -- Paint one patch decal handed out by the aggregator.
 local function enqueueWear(e, vid)
   local sets = e.kind == "slide" and WEAR.slide or (e.dir and WEAR.score or WEAR.chip)
-  local brush = pickFromSet(sets[e.tier])
+  -- The engine keeps only the last couple of brush textures loaded, so reuse
+  -- the family's last brush most of the time (mirroring still varies it).
+  local set = sets[e.tier]
+  local brush = wear.last[set]
+  if not brush or wear.hotKey ~= e.key or math.random() < 0.2 then brush = pickFromSet(set) end
+  wear.last[set], wear.hotKey = brush, e.key
   local normal = e.normal
   -- The bake builds its basis from cross(normal, +Z); keep it well defined on
   -- the roof and floor, and identical to the rotation computed for `flow`.
@@ -2314,7 +2320,7 @@ wear.pump = function()
   if hasPendingWork() or #bakeQueue > 0 then return end
   local veh = getPlayerVehicle(0)
   if not veh then return end
-  local e = wear.agg:next(wear.now)
+  local e = wear.agg:next(wear.now, wear.hotKey)
   if e then
     enqueueWear(e, veh:getId())
     wear.kick = true
@@ -2385,7 +2391,12 @@ M.ingest = function(vid, events, streams)
 
   local invM    = veh:getRefNodeMatrix():fullInverse()
   local rotOnly = invM:copy(); rotOnly:setColumn(3, vec3(0, 0, 0))
-  if wear.on then return ingestWear(events, streams, invM, rotOnly) end
+  if wear.on then
+    local ti = clockhp()
+    ingestWear(events, streams, invM, rotOnly)
+    perfAdd(ti, "ingestMsTotal", "ingestMsMax", "ingestCalls")
+    return
+  end
 
   if events then
     for i = 1, #events do
@@ -2407,6 +2418,9 @@ M.ingest = function(vid, events, streams)
     end
   end
 end
+
+-- Wheel fling throw angles, degrees above horizontal, one per deposit in turn.
+local FLING_LIFT = { 70, 35, 52, 84, 24, 60 }
 
 -- Contact positions are a conservative splash proxy, not a fluid simulation.
 -- Existing projection/hull aiming and all scheduler budgets remain in use.
@@ -2435,13 +2449,16 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
         if e[1] ~= "snow" then
           local velocity = veh:getVelocity()
           local localVelocity = rot:mulP3F(velocity)
-          -- Relative airflow opposes travel. Side-panel spray rises from the
-          -- tire; faster travel flattens the trail. Not fluid simulation.
+          -- Fling: the tread throws soil up and back. Successive deposits
+          -- step through a fan of throw angles, so a wheel builds a rooster
+          -- tail rather than one stripe; faster travel flattens and lengthens
+          -- it. A placement rule, not a fluid simulation.
           spraySpeed = math.abs(localVelocity.y)
           if spraySpeed > 0.5 then
-            flow = vec3(0, localVelocity.y > 0 and -1 or 1,
-                        math.max(0.08, 0.28-spraySpeed*0.008)):normalized()
-            trailLength=1.8+math.min(spraySpeed,20)*0.05
+            local phase = surfaceState.deposits % 6
+            local lift = math.rad(math.max(16, FLING_LIFT[phase + 1] - spraySpeed * 1.1))
+            flow = vec3(0, (localVelocity.y > 0 and -1 or 1) * math.cos(lift), math.sin(lift))
+            trailLength = math.min(1.45, 0.6 + spraySpeed * 0.05) * (0.85 + 0.05 * (phase % 4))
           end
         end
         local box = getSpawnAabb()
@@ -2457,13 +2474,12 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
           local phase = surfaceState.deposits % 8
           p.x = side > 0 and hi.x or lo.x
           if flow then
-            -- One elongated projection spans adjacent panels. The authored
-            -- heads sit left of texture center; move that center downstream
-            -- so the spray starts near the wheel, not ahead of it. Do not
-            -- restart the brush at a door seam or clamp its tail to a panel.
-            p.y=p.y+flow.y*trailLength*0.28+(phase%4-1.5)*0.08
-            p.z=lo.z+(hi.z-lo.z)*(0.32+math.floor(phase/4)*0.06)
-              +flow.z*trailLength*0.28
+            -- The fan's source is 7 % in from the brush's left edge
+            -- (tools/generate_fling.py). Put it at the back of the tyre, just
+            -- above the ground, and let the throw cross panel seams freely.
+            local back = flow.y > 0 and 1 or -1
+            p.y = p.y + back * 0.18 + flow.y * trailLength * 0.43
+            p.z = lo.z + 0.18 + flow.z * trailLength * 0.43
           else
             local inward=p.y>(lo.y+hi.y)*0.5 and -0.65 or 0.65
             p.y=math.max(lo.y+0.3,math.min(hi.y-0.3,p.y+inward+(phase%4-1.5)*0.24))
@@ -2487,11 +2503,12 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
         enqueueStamp(p, normal, {
           soil=true,r=c[1],g=c[2],b=c[3],a=0.95,
           scale=trailLength or 0.65,
-          width=flow and 0.48 or nil,flow=flow,skipMetal=true,noJitter=true,
+          width=flow and trailLength*0.5 or nil,flow=flow,skipMetal=true,noJitter=true,
           depth=projectionDepth,
           dist=flow and trailLength*2.2 or nil,
+          flipY=flow and (surfaceState.deposits%2==0 and 1 or -1) or nil,
           colorTex="/art/dynamicDecals/textures/soil_"..e[1]..
-            (flow and ("_splash_"..(surfaceState.deposits%2+1)..".png") or "_coverage.png"),
+            (flow and ("_fling_"..(surfaceState.deposits%(e[1]=="mud" and 3 or 2)+1)..".png") or "_coverage.png"),
           rot=flow and 0 or (surfaceState.deposits%4)*math.pi/2},vid)
       end
     end

@@ -138,5 +138,256 @@
    "bakeMsTotal": 182.1,
    "bakeMsMax": 15.5
   }
+ },
+ "pass2_note": "Second pass, same day: 512x256 / 256x256 brushes, loaded-brush reuse, wheel fling. cold-* runs restart the game before one sideslide; off = detector painting disabled.",
+ "pass2_vulkan_cold_first_crash": {
+  "sideslide_cold-on-0": {
+   "frames": 882,
+   "frameMsP95": 16.0,
+   "frameMsP99": 19.0,
+   "frameMsMax": 34.5,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 8.0,
+   "layersBaked": 48,
+   "bakeMsTotal": 95.8,
+   "bakeMsMax": 7.9
+  },
+  "sideslide_cold-off-1": {
+   "frames": 891,
+   "frameMsP95": 15.0,
+   "frameMsP99": 18.4,
+   "frameMsMax": 23.8,
+   "framesOver25ms": 0,
+   "framesOver50ms": 0,
+   "painterMsMax": 0.1,
+   "layersBaked": 0,
+   "bakeMsTotal": 0,
+   "bakeMsMax": 0
+  },
+  "sideslide_cold-on-2": {
+   "frames": 914,
+   "frameMsP95": 13.3,
+   "frameMsP99": 15.4,
+   "frameMsMax": 25.2,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 5.9,
+   "layersBaked": 47,
+   "bakeMsTotal": 78.2,
+   "bakeMsMax": 5.8
+  },
+  "sideslide_cold-off-3": {
+   "frames": 901,
+   "frameMsP95": 13.9,
+   "frameMsP99": 15.7,
+   "frameMsMax": 41.1,
+   "framesOver25ms": 4,
+   "framesOver50ms": 0,
+   "painterMsMax": 0.1,
+   "layersBaked": 0,
+   "bakeMsTotal": 0,
+   "bakeMsMax": 0
+  },
+  "sideslide_cold-on-4": {
+   "frames": 900,
+   "frameMsP95": 14.0,
+   "frameMsP99": 16.4,
+   "frameMsMax": 25.9,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 5.9,
+   "layersBaked": 50,
+   "bakeMsTotal": 100.5,
+   "bakeMsMax": 5.8
+  },
+  "sideslide_cold-off-5": {
+   "frames": 903,
+   "frameMsP95": 13.6,
+   "frameMsP99": 16.2,
+   "frameMsMax": 20.4,
+   "framesOver25ms": 0,
+   "framesOver50ms": 0,
+   "painterMsMax": 0.1,
+   "layersBaked": 0,
+   "bakeMsTotal": 0,
+   "bakeMsMax": 0
+  },
+  "sideslide_cold-on-6": {
+   "frames": 896,
+   "frameMsP95": 14.0,
+   "frameMsP99": 16.5,
+   "frameMsMax": 27.2,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 6.9,
+   "layersBaked": 46,
+   "bakeMsTotal": 82.3,
+   "bakeMsMax": 6.8
+  },
+  "sideslide_cold-on-7": {
+   "frames": 902,
+   "frameMsP95": 13.4,
+   "frameMsP99": 15.3,
+   "frameMsMax": 26.4,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 5.0,
+   "layersBaked": 49,
+   "bakeMsTotal": 83.4,
+   "bakeMsMax": 4.9
+  },
+  "sideslide_cold-on-8": {
+   "frames": 877,
+   "frameMsP95": 14.9,
+   "frameMsP99": 17.6,
+   "frameMsMax": 31.0,
+   "framesOver25ms": 3,
+   "framesOver50ms": 0,
+   "painterMsMax": 6.2,
+   "layersBaked": 47,
+   "bakeMsTotal": 94.6,
+   "bakeMsMax": 6.1
+  }
+ },
+ "pass2_vulkan_cold_small": {
+  "sideslide_small": {
+   "frames": 840,
+   "frameMsP95": 14.3,
+   "frameMsP99": 16.3,
+   "frameMsMax": 32.8,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 5.6,
+   "layersBaked": 49,
+   "bakeMsTotal": 82.1,
+   "bakeMsMax": 5.6
+  },
+  "rollover_small": {
+   "frames": 427,
+   "frameMsP95": 15.0,
+   "frameMsP99": 19.1,
+   "frameMsMax": 27.6,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 4.1,
+   "layersBaked": 58,
+   "bakeMsTotal": 81.1,
+   "bakeMsMax": 4.1
+  }
+ },
+ "pass2_vulkan_control_painting_off": {
+  "sideslide_ctl-off1": {
+   "frames": 890,
+   "frameMsP95": 14.0,
+   "frameMsP99": 16.1,
+   "frameMsMax": 21.2,
+   "framesOver25ms": 0,
+   "framesOver50ms": 0,
+   "painterMsMax": 0.2,
+   "layersBaked": 0,
+   "bakeMsTotal": 0,
+   "bakeMsMax": 0
+  },
+  "sideslide_ctl-off2": {
+   "frames": 869,
+   "frameMsP95": 13.5,
+   "frameMsP99": 16.6,
+   "frameMsMax": 28.6,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 0.1,
+   "layersBaked": 0,
+   "bakeMsTotal": 0,
+   "bakeMsMax": 0
+  },
+  "sideslide_ctl-off3": {
+   "frames": 842,
+   "frameMsP95": 13.3,
+   "frameMsP99": 15.6,
+   "frameMsMax": 25.6,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 0.1,
+   "layersBaked": 0,
+   "bakeMsTotal": 0,
+   "bakeMsMax": 0
+  }
+ },
+ "pass2_d3d12_cold_first_crash": {
+  "sideslide_d3d-cold-on-0": {
+   "frames": 619,
+   "frameMsP95": 18.2,
+   "frameMsP99": 24.9,
+   "frameMsMax": 318.6,
+   "framesOver25ms": 6,
+   "framesOver50ms": 3,
+   "painterMsMax": 15.1,
+   "layersBaked": 58,
+   "bakeMsTotal": 426.3,
+   "bakeMsMax": 14.9
+  },
+  "sideslide_d3d-cold-on-1": {
+   "frames": 978,
+   "frameMsP95": 15.3,
+   "frameMsP99": 19.2,
+   "frameMsMax": 25.6,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 10.0,
+   "layersBaked": 46,
+   "bakeMsTotal": 318.3,
+   "bakeMsMax": 10.0
+  },
+  "sideslide_d3d-cold-on-2": {
+   "frames": 978,
+   "frameMsP95": 14.4,
+   "frameMsP99": 18.6,
+   "frameMsMax": 35.4,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 10.3,
+   "layersBaked": 47,
+   "bakeMsTotal": 314.3,
+   "bakeMsMax": 10.2
+  }
+ },
+ "pass2_d3d12_warm": {
+  "rollover_d3d-warm": {
+   "frames": 482,
+   "frameMsP95": 16.6,
+   "frameMsP99": 19.3,
+   "frameMsMax": 23.1,
+   "framesOver25ms": 0,
+   "framesOver50ms": 0,
+   "painterMsMax": 9.2,
+   "layersBaked": 60,
+   "bakeMsTotal": 376.6,
+   "bakeMsMax": 9.1
+  },
+  "roofdrop_d3d-warm": {
+   "frames": 431,
+   "frameMsP95": 14.9,
+   "frameMsP99": 19.5,
+   "frameMsMax": 26.0,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 8.9,
+   "layersBaked": 18,
+   "bakeMsTotal": 116.5,
+   "bakeMsMax": 8.8
+  },
+  "sideslide_d3d-warm": {
+   "frames": 928,
+   "frameMsP95": 15.6,
+   "frameMsP99": 19.6,
+   "frameMsMax": 22.7,
+   "framesOver25ms": 0,
+   "framesOver50ms": 0,
+   "painterMsMax": 11.5,
+   "layersBaked": 46,
+   "bakeMsTotal": 322.6,
+   "bakeMsMax": 11.4
+  }
  }
 }

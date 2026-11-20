@@ -128,7 +128,7 @@ fixtures, not an unassisted stock-pool driving demonstration.
 
 The ETK adapter preserves original PBR stages in per-vehicle clones. Default damage
 is 4096x2048; explicit 2048x1024 and 1024x512 experimental damage targets are available.
-Separate soil stays 1024x512; original maps are never resized. Washing removes soil while scratches
+Separate soil is 2048x1024 (1024x512 before 2026-11-20); original maps are never resized. Washing removes soil while scratches
 remain; partial washing attenuates the whole soil cycle. This is not a spatial
 waterline/spray simulation. Drying restores original fields. Reset, switching,
 reload and editor suspension discard cosmetics. Extra body materials and unusual

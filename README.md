@@ -62,6 +62,13 @@ abrasion relief and specks of surviving paint that the 1.5 mm canvas can't hold.
 On plain light paint the exposed tone is darker so damage contrasts the right way.
 (The older dark-ETK image is [here](docs/showcase/scrapes-before-after.jpg).)
 
+![Eight vehicles after the same sideslide](docs/showcase/contact-patches-fleet.jpg)
+
+Ten vehicles were crash-tested with contact patches on Vulkan and six on D3D12,
+across dark, light and liveried paint
+([Vulkan](docs/evidence/contact-patches/fleet-vulkan/fleet.json),
+[D3D12](docs/evidence/contact-patches/fleet-d3d12/fleet.json)).
+
 ### Impact chips and gouges
 
 ![Front fender before and after a rollover](docs/showcase/impacts-before-after.jpg)
@@ -112,14 +119,17 @@ been driven live on the ETK 800 and through Gridmap mud on a Covet.
 
 ### Mud, dirt and snow build up as you drive
 
-![Tapered mud splashes on the Police ETK](docs/showcase/mud-splashes.jpg)
+![Mud flung up and back from the wheels of an ETK 800](docs/showcase/mud-fling.jpg)
 
 Rolling over real `MUD`, `DIRT` or `SNOW` ground materials deposits soil around
 the wheels and lower panels. No wheelspin is needed, and stationary wheelspin adds
-nothing. Mud and dirt land as droplet heads with tapered tails aligned against
-travel. Faster driving gives longer, flatter trails, and reversing flips them.
-Snow lands as soft coverage patches. Soil lives on its own layer above the paint
-and damage, capped at 96 deposits per cycle and scheduled with the scratches.
+nothing. Mud and dirt are **flung**: each deposit is a fan thrown up and back from
+the rear of the tyre, with drops stretched along their flight. Successive deposits
+step through throw angles from about 25° to 85°, so a wheel builds a rooster tail
+up the panel behind it; faster driving flattens and lengthens the throw, and
+reversing flips it. Snow lands as soft coverage patches. Soil lives on its own
+2048×1024 layer above the paint and damage, capped at 96 deposits per cycle.
+(The [earlier flat splashes](docs/showcase/mud-splashes.jpg) are what this replaced.)
 
 ![Snow buildup on a dark ETK](docs/showcase/snow.jpg)
 
@@ -127,8 +137,9 @@ and damage, capped at 96 deposits per cycle and scheduled with the scratches.
 
 ![Before: mud stopped at the rear door. After: one splash crosses every panel](docs/showcase/panel-seams-before-after.jpg)
 
-Each wheel splash is a single elongated projection that spans neighbouring
-panels, oriented in body space rather than restarted per panel. The ETK's rear
+Each wheel fling is a single projection that spans neighbouring panels,
+oriented in body space rather than restarted per panel (the image predates the
+fling artwork). The ETK's rear
 quarters use a different material from the doors. The adapter now clones and
 binds that material too, so mud no longer stops dead at the rear door.
 
@@ -188,20 +199,23 @@ abrasive. The contact's ground material decides which applies.
 
 - **One rich decal per contact patch.** Every baked layer costs a full-canvas
   pass in the engine, so the painter no longer bakes a decal per contact report.
-  Contacts fold into patches and at most one decal is baked every 70 ms.
-  Measured on BeamNG 0.40.6.0, Vulkan, RTX 3090, 4K, one 14 m/s sideslide in a
-  fresh process:
+  Contacts fold into patches and at most one decal is baked every 70 ms. The
+  engine keeps only about two brush textures loaded and a reload costs time in
+  proportion to the image size, so brushes are small (512×256) and the painter
+  reuses the loaded brush for the next patch of the same kind. Measured on
+  BeamNG 0.40.6.0, RTX 3090, 4K, one 14 m/s sideslide in a fresh process:
 
-  | One sideslide | Before | Contact patches |
-  | --- | ---: | ---: |
-  | Layers baked | 301 | **47** |
-  | Worst painter frame | 81.7 ms | **16.0 ms** |
-  | Frames over 25 ms / 50 ms | 23 / 5 | **6 / 0** |
-  | Frame time p95 / p99 / worst | 22.5 / 35.8 / 631 ms | **15.6 / 22.2 / 31 ms** |
+  | One sideslide | Before (Vulkan) | Now, Vulkan (6 runs) | Now, D3D12 (3 runs) |
+  | --- | ---: | ---: | ---: |
+  | Layers baked | 301 | 46–50 | 46–58 |
+  | Bake time in total | 623 ms | 78–101 ms | 314–426 ms |
+  | Worst painter frame | 81.7 ms | **5.0–8.0 ms** | 10.0–15.1 ms |
+  | Frame time p95 | 22.5 ms | 13.3–16.0 ms | 14.4–18.2 ms |
+  | Worst frame | 631 ms | 25–35 ms | 26–35 ms, and one 319 ms |
 
-  A sideslide still has three or four ~26 ms frames: the engine reloads a
-  brush texture that hasn't been used for a few seconds (10–16 ms each), and the
-  spawn-time warm-up does not prevent that.
+  Rare long frames remain and are not explained: on Vulkan one 562 ms and one
+  638 ms GPU-side pause in 22 painted runs (none in six runs with painting off),
+  and on D3D12 one 309 ms bake and one 319 ms game-Lua frame in thirteen runs.
   [All runs](docs/evidence/contact-patches/summary.json) and
   [investigation 13](investigations/13-contact-patches.md).
 - **Composite only when needed.** The canvas is re-composited only on frames
@@ -418,9 +432,9 @@ one decal for it:
   it has been dragged a tier deeper or has grown past what was painted.
 - `scratches_paint.setContactPatches(false)` restores the previous
   one-decal-per-contact pipeline for comparison.
-- **Soil** → mud/dirt droplet-and-tail splashes or snow patches from rolling
+- **Soil** → mud/dirt flings (a fan thrown up and back) or snow patches from rolling
   wheel contacts on soft ground, tinted from the terrain under the wheel and
-  baked into a separate 1024×512 soil target that water can fade.
+  baked into a separate 2048×1024 soil target that water can fade.
 
 Damage is coloured like layered paint: scuffed clear coat (haze), primer grey,
 and bare metal on harder or longer contacts. On light paint the palette shifts
@@ -679,9 +693,12 @@ affect you:
 - **Slightly slower spawns.** Each supported vehicle gets private materials, so
   the mod clears the JBeam cache before it spawns: about +180 ms per spawn,
   traffic included.
-- **Contact patches are new.** They were tuned and measured on one liveried car
-  (Sunburst rally) on Vulkan; plain paints, other vehicles and D3D12 have not
-  been re-checked in game with them yet.
+- **Rare half-second pauses.** About one painted crash in ten had a single long
+  frame (0.3–0.6 s) with no painter time in it, on either renderer. Painting-off
+  controls had none, in far fewer runs. Not explained yet.
+- **Contact patches are new.** Checked on ten vehicles on Vulkan and six on
+  D3D12 with the sideslide only. Washing and snow have not been driven since
+  the damage stage and soil resolution changed.
 - **No dark marks on dark paint.** Damage opacity follows the canvas red channel,
   so exposed material is always a grey lighter than black paint.
 - **First mud contact hitch.** The first terrain-texture read for soil tint takes

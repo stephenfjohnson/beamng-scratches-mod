@@ -1,0 +1,32 @@
+{
+  "model": "vivace",
+  "paint": "blue",
+  "part": "",
+  "source": "vivace_main",
+  "keys": [
+    "vivace"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261120-111630_sideslide_fleet-vivace-blue/report.md",
+    "contacts": "1637",
+    "passed": "659",
+    "impacts": "74",
+    "streams": "106",
+    "stamps": "55",
+    "projections": "55",
+    "bakes": "55",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "0",
+    "layersBaked": 55,
+    "bakeMsMax": 6.8,
+    "painterMsMax": 6.9,
+    "frameMsP95": 18.6,
+    "frameMsMax": 29.3,
+    "framesOver25ms": 2,
+    "slidePatches": 24,
+    "impactPatches": 30
+  }
+}

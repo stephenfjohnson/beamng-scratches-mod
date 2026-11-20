@@ -568,9 +568,11 @@ for _,side in ipairs({-1,1}) do
     -- Reconstruct +texture X in the engine's surface-normal decal basis.
     local alignment=(-side*math.cos(layer.decalRotation))*sample.flowY
       -math.sin(layer.decalRotation)*sample.flowZ
-    check(alignment>0.999,'splash follows flow on side '..side..' at speed '..speed)
-    check(layer.decalScale.x>=1.8 and layer.decalScale.z<layer.decalScale.x,
-      'splash is long enough to cross panels with a bounded narrow width')
+    check(alignment>0.999,'fling follows its throw on side '..side..' at speed '..speed)
+    check(sample.flowZ>0.25 and layer.decalScale.x>=0.6 and layer.decalScale.x<=1.45
+      and math.abs(layer.decalScale.z-layer.decalScale.x*0.5)<1e-6,
+      'fling is thrown upward as a bounded 2:1 fan')
+    check(layer.colorTex:find('soil_mud_fling_',1,true)~=nil,'wheel mud uses a fling brush')
     check(layer.decalScale.y>1 and layer.decalScale.y<2,
       'soil slab reaches recessed bodywork but stays short of the vehicle centerline')
   end
@@ -832,10 +834,10 @@ for _=1,150 do frame(1/60) end
 local warm=paint.getStats().wear
 local visibleWarm=false
 for _,l in ipairs(bakedLayers) do if l.name~="warm" or l.decalScale.x>0.02 then visibleWarm=true end end
-check(warm.warmed==16 and warm.warmPending==0 and #bakedLayers==16,"each wear brush set is warmed exactly once while idle ("..warm.warmed..")")
+check(warm.warmed==20 and warm.warmPending==0 and #bakedLayers==20,"each wear brush set is warmed exactly once while idle ("..warm.warmed..")")
 check(not visibleWarm,"warm-up layers are tagged and too small to show")
 for _=1,60 do frame(1/60) end
-check(#bakedLayers==16,"warm-up does not repeat")
+check(#bakedLayers==20,"warm-up does not repeat")
 bakedLayers={}
 -- Twelve door nodes dragged along +y, reported in four detector flushes.
 for _=1,4 do

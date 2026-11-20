@@ -1,0 +1,33 @@
+{
+  "model": "moonhawk",
+  "paint": "green",
+  "part": "",
+  "source": "moonhawk_main",
+  "keys": [
+    "moonhawk",
+    "moonhawk_nosecone_alt"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261120-111756_sideslide_fleet-moonhawk-green/report.md",
+    "contacts": "11930",
+    "passed": "2350",
+    "impacts": "14",
+    "streams": "156",
+    "stamps": "48",
+    "projections": "48",
+    "bakes": "48",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "0",
+    "layersBaked": 48,
+    "bakeMsMax": 6.5,
+    "painterMsMax": 6.6,
+    "frameMsP95": 15.9,
+    "frameMsMax": 27.0,
+    "framesOver25ms": 1,
+    "slidePatches": 30,
+    "impactPatches": 8
+  }
+}

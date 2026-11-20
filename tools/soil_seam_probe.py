@@ -28,7 +28,7 @@ def main():
                 'scratches_paint.stampAtLocal(vec3(x,y,0.25+i*0.13),vec3(side,0,0),'
                 '{soil=true,r=0.62,g=0.36,b=0.16,a=0.95,scale=2.3,width=0.48,depth=math.min(1.8,(b.maxExtents.x-b.minExtents.x)*0.9),'
                 'flow=vec3(0,1,0.1):normalized(),skipMetal=true,noJitter=true,dist=5.1,'
-                'colorTex="/art/dynamicDecals/textures/soil_mud_splash_1.png"}) end end end;return true')
+                'colorTex="/art/dynamicDecals/textures/soil_mud_fling_1.png"}) end end end;return true')
         time.sleep(1)
         for side in (-0.65,0.65):
             soil_probe.shot(args.output/('seams-left.png' if side<0 else 'seams-right.png'),side=side)

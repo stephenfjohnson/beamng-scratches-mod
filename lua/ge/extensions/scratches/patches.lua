@@ -173,20 +173,30 @@ function Agg:pending()
   return false
 end
 
+-- Which brush family a patch would be painted with right now.
+local function slideKey(p) return "slide" .. tierOf(p.energy, SLIDE_TIER_ENERGY) end
+local function impactKey(p)
+  local scored = p.slip:length() / p.samples >= 1.5
+  return (scored and "score" or "chip") .. tierOf(p.energy, IMPACT_TIER_ENERGY)
+end
+M.SAME_BRUSH_WINDOW = 0.35  -- s a patch may jump the queue to reuse the loaded brush
+
 -- The next decal to paint, or nil. At most one per `interval`; the patch that
--- has waited longest goes first.
-function Agg:next(now)
+-- has waited longest goes first, except that a patch needing the brush family
+-- `hot` (the one the engine still has loaded) goes ahead of patches that have
+-- waited up to SAME_BRUSH_WINDOW longer: a brush change costs a texture reload.
+function Agg:next(now, hot)
   if now - self.lastEmit < self.interval then return nil end
-  local pick, pickAt
-  for _, p in ipairs(self.slides) do
-    local due = slideDue(p, now)
-    if due and (not pickAt or due < pickAt) then pick, pickAt = p, due end
+  local pick, pickAt, same, sameAt
+  local function consider(p, due, key)
+    if not due then return end
+    if not pickAt or due < pickAt then pick, pickAt = p, due end
+    if hot and key(p) == hot and (not sameAt or due < sameAt) then same, sameAt = p, due end
   end
-  for _, p in ipairs(self.impacts) do
-    local due = impactDue(p, now)
-    if due and (not pickAt or due < pickAt) then pick, pickAt = p, due end
-  end
+  for _, p in ipairs(self.slides) do consider(p, slideDue(p, now), slideKey) end
+  for _, p in ipairs(self.impacts) do consider(p, impactDue(p, now), impactKey) end
   if not pick then return nil end
+  if same and sameAt - pickAt <= M.SAME_BRUSH_WINDOW then pick = same end
   self.lastEmit = now
   self.counts.emitted = self.counts.emitted + 1
   local p = pick
@@ -195,7 +205,7 @@ function Agg:next(now)
     p.tier = tierOf(p.energy, SLIDE_TIER_ENERGY)
     p.painted = { umin = p.umin, umax = p.umax, vmin = p.vmin, vmax = p.vmax }
     local centre = p.origin + p.dir * ((p.umin + p.umax) * 0.5) + p.side * ((p.vmin + p.vmax) * 0.5)
-    return { kind = "slide", id = p.id, pass = p.emits, tier = p.tier, energy = p.energy,
+    return { kind = "slide", id = p.id, pass = p.emits, tier = p.tier, energy = p.energy, key = "slide" .. p.tier,
       centre = centre, normal = p.normal, dir = p.dir, queuedAt = p.first,
       length = math.min(1.35, (p.umax - p.umin) + 0.26 + 0.10 * p.tier),
       width  = math.min(0.44, (p.vmax - p.vmin) + 0.09 + 0.035 * p.tier) }
@@ -204,6 +214,7 @@ function Agg:next(now)
   p.paintedRadius = p.radius
   local slipSpeed = p.slip:length() / p.samples
   return { kind = "impact", id = p.id, pass = p.emits, tier = p.tier, energy = p.energy,
+    key = (slipSpeed >= 1.5 and "score" or "chip") .. p.tier,
     centre = p.centre, normal = p.normal, queuedAt = p.first,
     dir = slipSpeed >= 1.5 and (p.slip * (1 / p.slip:length())) or nil,
     size = math.min(0.62, 2 * p.radius + 0.20 + 0.07 * p.tier + 0.05 * math.min(3, p.energy)) }
