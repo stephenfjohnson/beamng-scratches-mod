@@ -16,9 +16,10 @@ local skipFields = {name=true,mapTo=true,persistentId=true,parentGroup=true,
   internalName=true,class=true,className=true,superClass=true,hidden=true,
   locked=true,canSave=true,canSaveDynamicFields=true}
 -- Per quarter-second soil sample: tyres foul fast, rims take a lighter dusting.
-local GAIN = {mud={tyre=0.04,rim=0.014}, dirt={tyre=0.02,rim=0.007}, snow={tyre=0.035,rim=0.014}}
+-- "under" is the undercarriage: suspension, skid plates, exhaust, running boards.
+local GAIN = {mud={tyre=0.04,rim=0.014,under=0.03}, dirt={tyre=0.02,rim=0.007,under=0.012}, snow={tyre=0.035,rim=0.014,under=0.025}}
 local DEFAULT_TINT = {mud={0.23,0.17,0.11}, dirt={0.45,0.38,0.29}, snow={0.92,0.94,0.97}}
-local MAX_OPACITY = {tyre=0.95, rim=0.7}
+local MAX_OPACITY = {tyre=0.95, rim=0.7, under=0.88}
 
 local enabled = true
 local state
@@ -29,7 +30,7 @@ local applied = nil
 local sinceApply = 1
 
 local function newState()
-  return {tyre=0, rim=0, scrape=0, tint={0.4,0.33,0.25}, tinted=false, samples=0,
+  return {tyre=0, rim=0, under=0, underScrape=0, scrape=0, tint={0.4,0.33,0.25}, tinted=false, samples=0,
     scrapes=0, perWheel={}, applies=0, tintResolves=0}
 end
 state = newState()
@@ -53,7 +54,7 @@ end
 
 function M.steps()
   return {tyre=quantise(state.tyre), rim=quantise(state.rim), scrape=quantise(state.scrape),
-    tint=tintKey(state.tint)}
+    under=quantise(state.under), underScrape=quantise(state.underScrape), tint=tintKey(state.tint)}
 end
 
 -- ---- strength accounting (pure) ----
@@ -66,6 +67,7 @@ function M.expose(kind, resolveTint)
   if not gain then return false end
   state.tyre = math.min(1, state.tyre + gain.tyre)
   state.rim = math.min(1, state.rim + gain.rim)
+  state.under = math.min(1, state.under + gain.under)
   state.samples = state.samples + 1
   if kind ~= state.lastKind or state.samples % 8 == 1 then
     local c
@@ -95,6 +97,14 @@ function M.scrape(wheelId, slipSpeed)
   state.scrapes = state.scrapes + 1
   local id = tonumber(wheelId) or -1
   state.perWheel[id] = (state.perWheel[id] or 0) + 1
+  return true
+end
+
+-- The belly grounding out (a kerb, a crest, a rock): abrades the undercarriage
+-- materials. Permanent until reset, like rim abrasion.
+function M.scrapeUnder(amount)
+  if not enabled then return false end
+  state.underScrape = math.min(1, state.underScrape + (tonumber(amount) or 0.03))
   return true
 end
 
@@ -132,6 +142,11 @@ function M.classify(name, file)
   if f:find("^/?vehicles/common/tires/") or l:find("tire", 1, true) or l:find("tyre", 1, true) then return "tyre" end
   if f:find("^/?vehicles/common/wheels/") or l:find("wheel", 1, true) or l:find("hubcap", 1, true)
       or l:find("^rim_") or l:find("_rim") then return "rim" end
+  for _, yes in ipairs({"mechanical", "skidplate", "skid_plate", "exhaust", "suspension", "subframe",
+      "underbody", "undercarriage", "runningboard", "running_board", "sidestep", "side_step",
+      "nerfbar", "mudflap", "rallyparts"}) do
+    if l:find(yes, 1, true) then return "under" end
+  end
   return nil
 end
 
@@ -198,7 +213,7 @@ local function cloneWheel(vid, key, role, source)
   mat.canSave = false
   mat:setField("scratchesOwner", 0, OWNER)
   local dirtStage = count
-  local scrapeStage = (role == "rim" and count + 1 <= 3) and count + 1 or nil
+  local scrapeStage = (role ~= "tyre" and count + 1 <= 3) and count + 1 or nil
   local normal = source:getField("normalMap", 0)
   local function stage(st, fields)
     for f, value in pairs(fields) do mat:setField(f, st, tostring(value)) end
@@ -274,14 +289,15 @@ end
 local function applyEntry(entry, steps, tint)
   local mat = scenetree.findObject(entry.name)
   if not mat then return false end
-  local dirt = entry.role == "tyre" and steps.tyre or steps.rim
+  local dirt = entry.role == "tyre" and steps.tyre or (entry.role == "under" and (steps.under or 0) or steps.rim)
+  local scrape = entry.role == "under" and (steps.underScrape or 0) or steps.scrape
   mat:setField("opacityFactor", entry.dirtStage, tostring(dirt / STEPS * MAX_OPACITY[entry.role]))
   mat:setField("baseColorFactor", entry.dirtStage, string.format("%.3f %.3f %.3f 1", tint[1], tint[2], tint[3]))
   local layers = entry.count
   if dirt > 0 then layers = entry.count + 1 end
   if entry.scrapeStage then
-    mat:setField("opacityFactor", entry.scrapeStage, tostring(steps.scrape / STEPS * 0.9))
-    if steps.scrape > 0 then layers = entry.count + 2 end
+    mat:setField("opacityFactor", entry.scrapeStage, tostring(scrape / STEPS * 0.9))
+    if scrape > 0 then layers = entry.count + 2 end
   end
   mat:setField("activeLayers", 0, tostring(layers))
   -- setField, then flush, then reload: skipping flush re-reads stale state.
@@ -293,11 +309,13 @@ local function sync(force)
   if not attached then return false end
   local steps = M.steps()
   if not force and applied and applied.tyre == steps.tyre and applied.rim == steps.rim
-      and applied.scrape == steps.scrape and applied.tint == steps.tint then return false end
+      and applied.scrape == steps.scrape and applied.tint == steps.tint
+      and applied.under == steps.under and applied.underScrape == steps.underScrape then return false end
   if not force and sinceApply < MIN_APPLY_INTERVAL then return false end
   -- Tint alone is invisible while nothing is soiled.
-  if not force and applied and steps.tyre == 0 and steps.rim == 0
-      and applied.tyre == 0 and applied.rim == 0 and applied.scrape == steps.scrape then
+  if not force and applied and steps.tyre == 0 and steps.rim == 0 and steps.under == 0
+      and applied.tyre == 0 and applied.rim == 0 and applied.under == 0
+      and applied.scrape == steps.scrape and applied.underScrape == steps.underScrape then
     return false
   end
   for _, entry in ipairs(attached.entries) do pcall(applyEntry, entry, steps, state.tint) end
@@ -316,7 +334,8 @@ function M.update(dt, washFraction)
   if wash > 0 then
     state.tyre = math.max(0, state.tyre - dt * wash / 8)
     state.rim = math.max(0, state.rim - dt * wash / 8)
-    if state.tyre == 0 and state.rim == 0 then state.tinted = false; state.lastKind = nil end
+    state.under = math.max(0, state.under - dt * wash / 8)
+    if state.tyre == 0 and state.rim == 0 and state.under == 0 then state.tinted = false; state.lastKind = nil end
   end
   return sync(false)
 end
@@ -426,6 +445,7 @@ function M.isEnabled() return enabled end
 
 function M.snapshot()
   local out = {enabled=enabled, tyre=state.tyre, rim=state.rim, scrape=state.scrape,
+    under=state.under, underScrape=state.underScrape,
     steps=M.steps(), tint={state.tint[1], state.tint[2], state.tint[3]}, samples=state.samples,
     scrapes=state.scrapes, applies=state.applies, tintResolves=state.tintResolves,
     lastKind=state.lastKind, attached=attached and #attached.entries or 0, materials={}, perWheel={}}

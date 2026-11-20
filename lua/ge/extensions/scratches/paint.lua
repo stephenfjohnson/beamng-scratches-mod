@@ -2444,6 +2444,7 @@ end
 -- Tag a patch as an underside one (and as a low-part one when flagged 2).
 underside.mark = function(patch, flag)
   underside.stats.contacts = underside.stats.contacts + 1
+  pcall(wheelAdapter.scrapeUnder, 0.03)
   local lowPart = (tonumber(flag) or 0) >= 2
   if lowPart then underside.stats.parts = underside.stats.parts + 1 end
   if not patch then return end
