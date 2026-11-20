@@ -1467,7 +1467,11 @@ underside.classify = function(lp, ln, flag)
   local top = underside.zoneTop()
   local len = ln and vecLen(ln) or 0
   if top and len > 1e-3 and lp.z <= top and ln.z / len >= underside.NORMAL_MIN_Z then
-    return "under"
+    -- A body-node contact is only an underside one when z is the normal's
+    -- dominant axis, i.e. when the hull-face pick would have chosen the bottom
+    -- face anyway. Otherwise a slanted hit low on a door or bumper (normal
+    -- 45-60 degrees off vertical) would be pulled off its side face.
+    if lowPart or (ln.z > math.abs(ln.x) and ln.z > math.abs(ln.y)) then return "under" end
   end
   return lowPart and "drop" or nil
 end
