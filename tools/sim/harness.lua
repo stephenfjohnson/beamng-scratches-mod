@@ -1045,7 +1045,13 @@ do
   local wheelMark = ground._marks()[stats.alive]
   check(wheelMark.r < 0.6 and math.abs(wheelMark.r - wheelMark.g) < 0.05 and wheelMark.dx > 0.99, "the wheel mark is dark rubber or bare metal, along the drag")
   check(ground.addWheelScrape({0.6,9,0}, {1,0,0}, 6) == 0, "a wheel rubbing a wall leaves nothing on the ground")
-  for i = 1, 40 do ground.addStream({{0,20+i,0,0,0,1},{6,20+i,0,0,0,1}}, red) end
+  -- Six nodes dragged over the same 6 m: the line holds one live streak per
+  -- 0.2 m cell at most (two rows here: the line runs along a cell edge).
+  local onLine = 0
+  for _ = 1, 6 do onLine = onLine + ground.addStream({{0,20,0,0,0,1},{6,20,0,0,0,1}}, red) end
+  check(onLine > 15 and onLine <= 62 and ground.getStats().thinned > 40,
+    "ground already marked is not marked again by the next node over it ("..onLine..")")
+  for i = 1, 80 do ground.addStream({{0,20+i,0,0,0,1},{6,20+i,0,0,0,1}}, red) end
   stats = ground.getStats()
   check(stats.alive == ground._limits.max and stats.dropped > 0, "the ring is bounded and drops the oldest ("..stats.alive.." alive, "..stats.dropped.." dropped)")
   local bare = 0

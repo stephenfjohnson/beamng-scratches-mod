@@ -11,7 +11,8 @@ local M = {}
 local OWNER = "wheelAdapter-v1"
 local STEPS = 10
 local TEX = "/art/scratches/wheels/"
-local MIN_APPLY_INTERVAL = 0.3
+local MIN_APPLY_INTERVAL = 0.5
+local STAGGER_INTERVAL = 0.05  -- between clones that changed in the same step
 local skipFields = {name=true,mapTo=true,persistentId=true,parentGroup=true,
   internalName=true,class=true,className=true,superClass=true,hidden=true,
   locked=true,canSave=true,canSaveDynamicFields=true}
@@ -323,11 +324,21 @@ function M.needsRebuild(veh)
   return ok and (uncloned or 0) > 0, ok and missing or ""
 end
 
-local function applyEntry(entry, steps, tint)
-  local mat = scenetree.findObject(entry.name)
-  if not mat then return false end
+-- What one clone shows: its own dirt step, its abrasion step if it has that
+-- stage, and the tint only while there is dirt to tint.
+local function entrySig(entry, steps)
   local dirt = entry.role == "tyre" and steps.tyre or (entry.role == "under" and (steps.under or 0) or steps.rim)
   local scrape = entry.role == "under" and (steps.underScrape or 0) or steps.scrape
+  return dirt .. "|" .. (entry.scrapeStage and scrape or "-") .. "|" .. (dirt > 0 and steps.tint or "-"), dirt, scrape
+end
+
+-- Write one clone. A flush+reload costs about 3.5 ms (bench, 2026-11-20), so a
+-- clone whose own values did not move is left alone unless `all` is set.
+local function applyEntry(entry, steps, tint, all)
+  local mat = scenetree.findObject(entry.name)
+  if not mat then return false end
+  local sig, dirt, scrape = entrySig(entry, steps)
+  if not all and entry.lastSig == sig then return false end
   mat:setField("opacityFactor", entry.dirtStage, tostring(dirt / STEPS * MAX_OPACITY[entry.role]))
   mat:setField("baseColorFactor", entry.dirtStage, string.format("%.3f %.3f %.3f 1", tint[1], tint[2], tint[3]))
   local layers = entry.count
@@ -339,28 +350,52 @@ local function applyEntry(entry, steps, tint)
   mat:setField("activeLayers", 0, tostring(layers))
   -- setField, then flush, then reload: skipping flush re-reads stale state.
   mat:flush(); mat:reload()
+  entry.lastSig = sig
   return true
 end
 
+local staggering = false
 local function sync(force)
   if not attached then return false end
   if not force and not dirty and applied then return false end
   local steps = M.steps()
-  if not force and applied and applied.tyre == steps.tyre and applied.rim == steps.rim
-      and applied.scrape == steps.scrape and applied.tint == steps.tint
-      and applied.under == steps.under and applied.underScrape == steps.underScrape then dirty = false; return false end
-  if not force and sinceApply < MIN_APPLY_INTERVAL then return false end
-  -- Tint alone is invisible while nothing is soiled.
-  if not force and applied and steps.tyre == 0 and steps.rim == 0 and steps.under == 0
-      and applied.tyre == 0 and applied.rim == 0 and applied.under == 0
-      and applied.scrape == steps.scrape and applied.underScrape == steps.underScrape then
-    dirty = false
-    return false
+  -- A rebuild re-clones the materials clean (prepare drops `applied`), so
+  -- every clone is rewritten then, whatever its remembered signature says.
+  local all = force or not applied
+  if not all then
+    if applied.tyre == steps.tyre and applied.rim == steps.rim
+        and applied.scrape == steps.scrape and applied.tint == steps.tint
+        and applied.under == steps.under and applied.underScrape == steps.underScrape then
+      dirty = false; return false
+    end
+    if sinceApply < (staggering and STAGGER_INTERVAL or MIN_APPLY_INTERVAL) then return false end
+    -- Tint alone is invisible while nothing is soiled.
+    if steps.tyre == 0 and steps.rim == 0 and steps.under == 0
+        and applied.tyre == 0 and applied.rim == 0 and applied.under == 0
+        and applied.scrape == steps.scrape and applied.underScrape == steps.underScrape then
+      dirty = false
+      return false
+    end
   end
-  for _, entry in ipairs(attached.entries) do pcall(applyEntry, entry, steps, state.tint) end
+  -- One material reload per call: several clones that changed together are
+  -- written a few frames apart rather than all inside one frame.
+  local wrote, more = 0, false
+  for _, entry in ipairs(attached.entries) do
+    if all then
+      pcall(applyEntry, entry, steps, state.tint, true)
+      wrote = wrote + 1
+    elseif wrote == 0 then
+      local ok, did = pcall(applyEntry, entry, steps, state.tint, false)
+      if ok and did then wrote = 1 end
+    elseif entrySig(entry, steps) ~= entry.lastSig then
+      more = true
+    end
+  end
+  sinceApply = 0
+  staggering = more
+  if more then return true end
   applied = steps
   dirty = false
-  sinceApply = 0
   state.applies = state.applies + 1
   return true
 end

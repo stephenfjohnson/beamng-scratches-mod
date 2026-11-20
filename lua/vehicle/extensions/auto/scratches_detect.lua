@@ -414,9 +414,46 @@ local waterNodes = nil
 -- samples that follow carry it; the painter cakes the sills on that signal.
 local SURFACE_DEEP_WHEEL, SURFACE_DEEP_HOLD = 0.12, 1.5
 local surfaceDeep, surfaceDeepUntil = {}, {}
+-- Rest height of the lowest outer body edge (the sill) above the tyre bottoms,
+-- from the jbeam rest pose. The painter places sill and underside soil from
+-- it, so a pickup's higher rocker is not missed. nil = not worked out yet,
+-- false = could not be.
+local sillRest = nil
+local function restSill()
+  if sillRest ~= nil then return sillRest end
+  sillRest = false
+  local nodes = v.data.nodes
+  if not nodes then return false end
+  local wheelLo, xMax = math.huge, 0
+  local body = {}
+  for id, node in pairs(nodes) do
+    local p = node.pos
+    if p and finite(p.x) and finite(p.z) then
+      if node.wheelID then
+        if p.z < wheelLo then wheelLo = p.z end
+      elseif type(classifyNode(id)) == "string"
+          and not (node.partOrigin or ""):lower():find("mirror", 1, true) then
+        body[#body + 1] = p
+        if math.abs(p.x) > xMax then xMax = math.abs(p.x) end
+      end
+    end
+  end
+  if wheelLo == math.huge or xMax <= 0 then return false end
+  local lo = math.huge
+  for i = 1, #body do
+    local p = body[i]
+    if math.abs(p.x) >= xMax - 0.2 and p.z < lo then lo = p.z end
+  end
+  local h = lo - wheelLo
+  if finite(h) and h > 0.03 and h < 0.9 then sillRest = h end
+  return sillRest
+end
 local function resetSurface()
-  surfacePending, surfaceLast, waterNodes = {}, 0, nil
-  surfaceDeep, surfaceDeepUntil = {}, {}
+  surfaceLast, waterNodes = 0, nil
+  -- Cleared in place: this runs every frame in vehicles the player is not in.
+  if next(surfacePending) ~= nil then table.clear(surfacePending) end
+  if next(surfaceDeep) ~= nil then table.clear(surfaceDeep) end
+  if next(surfaceDeepUntil) ~= nil then table.clear(surfaceDeepUntil) end
 end
 local function surfaceContact(id, pos, normal, speed, force, material, depth)
   if not paintEnabled or not finite(speed) or not finite(force)
@@ -425,9 +462,13 @@ local function surfaceContact(id, pos, normal, speed, force, material, depth)
   if not kind then return end
   local node = v.data.nodes and v.data.nodes[id]
   if not node or (not node.wheelID and type(classifyNode(id)) ~= "string") then return end
+  -- Deep is per side of the car: one flank in a rut must not cake the other.
+  -- The jbeam x sign is only ever compared with itself here.
+  local restX = node.pos and node.pos.x
+  local sideKey = kind .. ((type(restX) == "number" and restX or 0) >= 0 and "+" or "-")
   if kind ~= "dirt" and (node.wheelID == nil
       or (type(depth) == "number" and finite(depth) and depth > SURFACE_DEEP_WHEEL)) then
-    surfaceDeep[kind] = true
+    surfaceDeep[sideKey] = true
   end
   local pending = surfacePending[kind]
   -- Rotate preference over the four standard wheels; retain the first
@@ -443,7 +484,9 @@ local function surfaceContact(id, pos, normal, speed, force, material, depth)
   elseif speed < 0.5 then return end
   if not (finite(pos.x) and finite(pos.y) and finite(pos.z)
       and finite(normal.x) and finite(normal.y) and finite(normal.z)) then return end
-  surfacePending[kind] = {pos.x,pos.y,pos.z,normal.x,normal.y,normal.z,node.wheelID ~= nil and 1 or 0,id,node.wheelID}
+  local sample = {pos.x,pos.y,pos.z,normal.x,normal.y,normal.z,node.wheelID ~= nil and 1 or 0,id,node.wheelID}
+  sample.side = sideKey
+  surfacePending[kind] = sample
 end
 local function flushSurface(now)
   if not enabled or not paintEnabled then resetSurface(); return end
@@ -477,9 +520,9 @@ local function flushSurface(now)
     end
   end
   local parts = {}
+  for key in pairs(surfaceDeep) do surfaceDeepUntil[key] = now + SURFACE_DEEP_HOLD end
   for _, kind in ipairs({"mud", "dirt", "snow"}) do
     local e = surfacePending[kind]
-    if surfaceDeep[kind] then surfaceDeepUntil[kind] = now + SURFACE_DEEP_HOLD end
     if e and not wet then
       -- Refresh the emitting node at send time: queued world contacts trail
       -- a moving vehicle by up to a quarter second otherwise.
@@ -489,13 +532,14 @@ local function flushSurface(now)
       end
       -- Field 9 (deep) is optional on the painter's side: older painters ignore it.
       parts[#parts+1] = string.format("{%q,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d,%d}",kind,
-        e[1],e[2],e[3],e[4],e[5],e[6],e[7],(surfaceDeepUntil[kind] or -1) > now and 1 or 0)
+        e[1],e[2],e[3],e[4],e[5],e[6],e[7],(surfaceDeepUntil[e.side or ""] or -1) > now and 1 or 0)
     end
   end
   surfacePending, surfaceDeep = {}, {}
   obj:queueGameEngineLua(string.format(
-    "if scratches_paint and scratches_paint.ingestSurface then scratches_paint.ingestSurface(%d,{%s},%s,%s,%.3f) end",
-    obj:getId(), table.concat(parts,","), tostring(wet), tostring(supported),submerged/math.max(1,#(waterNodes or {}))))
+    "if scratches_paint and scratches_paint.ingestSurface then scratches_paint.ingestSurface(%d,{%s},%s,%s,%.3f,%s) end",
+    obj:getId(), table.concat(parts,","), tostring(wet), tostring(supported),submerged/math.max(1,#(waterNodes or {})),
+    restSill() and string.format("%.3f", sillRest) or "nil"))
 end
 
 -- Wheel-side scrapes: a wheel node sliding on a hard surface while the ground
@@ -1172,6 +1216,7 @@ local function onReset()
   table.clear(nodeStreams)
   pendingDetectEvents = {}
   pendingStreams = {}
+  pendingWheelScrapes = {}
   bootstrapPainter()
   -- Wipe baked decals on the GE side so the reset cleans up cosmetics too.
   -- pcall-guarded on GE because scratches_paint may not be loaded yet on a

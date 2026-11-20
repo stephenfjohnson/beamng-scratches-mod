@@ -58,6 +58,8 @@ end
 -- Wheel/tyre soil and rim abrasion overlay (material-level; see the module).
 local wheelAdapter = dofile("/lua/ge/extensions/scratches/wheelAdapter.lua")
 local wheelReloaded, wheelAutoReload = {}, true
+local wheelFresh = {}   -- [vid] = clock of a spawn the player is seated from
+local loadedAt = (os.clockhp or os.clock)()
 -- Contact-patch wear (see patches.lua): contacts fold into patches and each
 -- patch is painted as one decal. `now` advances with real frame time so the
 -- mock harness can step it; `warm` lists brush sets not yet loaded this
@@ -178,6 +180,8 @@ local perfStats = {
   inputToBakeMaxMs = 0, inputToProjectMaxMs = 0,
   -- Detector batches arrive outside onUpdate, so they are timed separately.
   ingestMsTotal = 0, ingestMsMax = 0, ingestCalls = 0,
+  -- Ground marks are redrawn every frame, ready or not, outside the frame timer.
+  groundMsTotal = 0, groundMsMax = 0,
 }
 
 -- Add the time since t0 (os.clockhp seconds) to perfStats[totalKey], track
@@ -583,8 +587,12 @@ local function trySetup()
     -- unbound materials: once normally, and once more if the vehicle is
     -- replaced in place by another model or fitted with different wheels.
     if not adapter and wheelAutoReload and not adapterReloaded[vid] and wheelAdapter.isEnabled() then
+      -- needsRebuild also records this build's keys, so it runs either way.
       local need, missing = wheelAdapter.needsRebuild(veh)
-      if need and wheelReloaded[vid] ~= (jbeam .. ":" .. tostring(missing)) then
+      -- Fresh: just spawned with the player in it, or the car that was there
+      -- when the mod itself loaded.
+      local fresh = (wheelFresh[vid] and clockhp() - wheelFresh[vid] < 20) or clockhp() - loadedAt < 20
+      if need and fresh and wheelReloaded[vid] ~= (jbeam .. ":" .. tostring(missing)) then
         wheelReloaded[vid] = jbeam .. ":" .. tostring(missing)
         pendingSetup=false
         adapterModule.invalidateConstructionCache()
@@ -815,6 +823,8 @@ local function resetSurfaceState()
   surfaceSpots, surfaceWaterAge = {}, 1
   soilRemaining, waterFraction = 1, 0
   pcall(wheelAdapter.reset)
+  -- A repaired or different car scrapes from its paint again; the road keeps its marks.
+  if groundPaint then pcall(groundPaint.resetWear) end
 end
 M.getSurfaceState = function()
   local out = {}
@@ -855,7 +865,13 @@ end
 
 local materialCleanupPending = true
 local function onUpdate(dtReal, dtSim, dtRaw)
-  if groundPaint then pcall(groundPaint.update, dtSim) end
+  if groundPaint then
+    local tg = clockhp()
+    pcall(groundPaint.update, dtSim)
+    local groundMs = (clockhp() - tg) * 1000
+    perfStats.groundMsTotal = perfStats.groundMsTotal + groundMs
+    if groundMs > perfStats.groundMsMax then perfStats.groundMsMax = groundMs end
+  end
   if materialCleanupPending and adapterModule then
     materialCleanupPending = not adapterModule.collectUnusedMaterials()
     if not materialCleanupPending then pcall(wheelAdapter.collectUnused) end
@@ -949,6 +965,7 @@ end
 -- ---- vehicle lifecycle ----
 local function onVehicleSwitched(oldId, newId, player)
   pcall(wheelAdapter.detach)
+  if groundPaint then pcall(groundPaint.resetWear) end
   if adapter then
     adapter:detach()
     adapter=nil; api=nil
@@ -984,6 +1001,11 @@ local function onVehicleSwitched(oldId, newId, player)
 end
 
 local function onVehicleSpawned(vid)
+  -- Only a car the player is being seated in straight from its spawn may be
+  -- rebuilt to bind wheel clones. Rebuilding a car the player merely switches
+  -- into would repair it and throw away its damage.
+  local spawned = scenetree.findObjectById and scenetree.findObjectById(vid)
+  wheelFresh[vid] = (spawned and spawned.autoEnterVehicle ~= "false") and clockhp() or nil
   -- A respawn of a car we skipped (e.g. its livery was just removed) gets a
   -- fresh look; traffic spawns don't clear the memo.
   if vid == skippedVid then skippedVid = nil end
@@ -2452,7 +2474,7 @@ end
 -- Tag a patch as an underside one (and as a low-part one when flagged 2).
 underside.mark = function(patch, flag)
   underside.stats.contacts = underside.stats.contacts + 1
-  pcall(wheelAdapter.scrapeUnder, 0.03)
+  pcall(wheelAdapter.scrapeUnder, 0.008)
   local lowPart = (tonumber(flag) or 0) >= 2
   if lowPart then underside.stats.parts = underside.stats.parts + 1 end
   if not patch then return end
@@ -2630,6 +2652,7 @@ M.setSoilGeometry = function(underHeight, underDepth, sillHeight)
   soilGeom.underHeight = clamp(underHeight, 0.05, 0.9, soilGeom.underHeight)
   soilGeom.underDepth  = clamp(underDepth, 0.1, 0.35, soilGeom.underDepth)
   soilGeom.sillHeight  = clamp(sillHeight, 0.05, 0.9, soilGeom.sillHeight)
+  soilGeom.manual = true
   return soilGeom.underHeight, soilGeom.underDepth, soilGeom.sillHeight
 end
 
@@ -2691,7 +2714,11 @@ local function depositSoilExtras(vid, e, worldPos, cx, cy)
   local deep = (kind == "mud" or kind == "snow") and (e[9] == 1 or e[8] == 0)
   if deep and soilExtras.sills then
     surfaceState.deepSamples = (surfaceState.deepSamples or 0)+1
-    if surfaceState.deepSamples % SOIL_SILL_EVERY == 1 then
+    -- Counted per side: a global counter aliases with the detector's rotation
+    -- over the four wheels and feeds one flank for seconds at a time.
+    local sideCount = side > 0 and "deepR" or "deepL"
+    surfaceState[sideCount] = (surfaceState[sideCount] or 0)+1
+    if surfaceState[sideCount] % SOIL_SILL_EVERY == 1 then
       local n = surfaceState.sillDeposits or 0
       local a0, a1 = surfaceState.axleMin, surfaceState.axleMax
       if not a0 or not a1 or a1 - a0 < 1.2 then
@@ -2718,9 +2745,16 @@ end
 -- Contact positions are a conservative splash proxy, not a fluid simulation.
 -- Existing projection/hull aiming and all scheduler budgets remain in use.
 -- Sample: {kind, x,y,z, nx,ny,nz, wheel(0/1), deep(0/1, optional)}.
-M.ingestSurface = function(vid, samples, wet, supported, fraction)
+M.ingestSurface = function(vid, samples, wet, supported, fraction, sillRest)
   local veh = getPlayerVehicle(0)
   if not ready or not veh or veh:getId() ~= vid then return end
+  -- The detector measures where this car's sill sits at rest (a pickup's
+  -- rocker is twice as high as a saloon's). Manual tuning wins.
+  sillRest = tonumber(sillRest)
+  if sillRest and sillRest == sillRest and not soilGeom.manual then
+    soilGeom.sillHeight = math.max(0.05, math.min(0.9, sillRest + 0.06))
+    soilGeom.underHeight = math.max(0.05, math.min(0.9, sillRest + 0.02))
+  end
   surfaceState.waterSupported = supported == true
   if wet == true and supported == true then surfaceWaterAge = 0; waterFraction=math.max(0,math.min(1,tonumber(fraction) or 1)); return end
   local kinds = {mud=true,dirt=true,snow=true}
@@ -2792,8 +2826,10 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
             local back = flow.y > 0 and 1 or -1
             p.y = p.y + back * 0.18 + flow.y * trailLength * 0.43
             p.z = lo.z + 0.18 + flow.z * trailLength * 0.43
-          elseif pack then
-            -- Packed snow: on the arch lip around the tyre.
+          elseif pack or snowFling then
+            -- Packed snow: on the arch lip around the tyre. Also where snow
+            -- lands when there is no throw to speak of (creeping, sliding
+            -- sideways), rather than a flat patch in the middle of the door.
             p.y=math.max(lo.y+0.3,math.min(hi.y-0.3,p.y+(phase%4-1.5)*0.18))
             p.z=lo.z+0.42+(phase%2)*0.14
           else
@@ -2821,7 +2857,7 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
         surfaceState.deposits = surfaceState.deposits+1
         enqueueStamp(p, normal, {
           soil=true,r=c[1],g=c[2],b=c[3],a=0.95,
-          scale=trailLength or (pack and 0.5 or 0.65),
+          scale=trailLength or ((pack or (snowFling and e[8] == 1)) and 0.5 or 0.65),
           -- Mud fans are 2:1; a snow plume is puffier.
           width=flow and trailLength*(snow and 0.7 or 0.5) or nil,flow=flow,skipMetal=true,noJitter=true,
           depth=projectionDepth,
@@ -2858,7 +2894,7 @@ M.ingestWheelScrape = function(vid, scrapes)
     end
     if valid then
       wheelAdapter.scrape(e[7], e[8])
-      if groundPaint then pcall(groundPaint.addWheelScrape, vec3(e[1],e[2],e[3]), vec3(e[4],e[5],e[6]), e[8]) end
+      if groundPaint then pcall(groundPaint.addWheelScrape, vec3(e[1],e[2],e[3]), vec3(e[4],e[5],e[6]), e[8], e[7]) end
     end
   end
 end
@@ -4058,6 +4094,7 @@ M.onVehicleDestroyed  = function(vid)
   ownedSkins[vid] = nil
   adapterReloaded[vid] = nil
   wheelReloaded[vid] = nil
+  wheelFresh[vid] = nil
   materialCleanupPending = true -- after destruction, never during mesh teardown
 end
 -- A reset can rebuild the car's materials; re-bind on the next composite.

@@ -15,10 +15,10 @@
 -- drawing off and never reaches the painter.
 local M = {}
 
-local MAX_MARKS    = 400     -- ring size
+local MAX_MARKS    = 1200    -- ring size (a broadside slide is ~60 marks per metre)
 local LIFE         = 240     -- seconds a mark stays
 local FADE         = 25      -- it fades out over its last seconds
-local DRAW_DIST    = 150     -- metres from the camera
+local DRAW_DIST    = 80      -- metres from the camera (a streak is under a pixel beyond this)
 local SEG_MIN      = 0.25    -- one decal per 0.25-0.40 m of scrape
 local SEG_MAX      = 0.40
 local MIN_STEP     = 0.08    -- a stream shorter than this laid nothing
@@ -28,6 +28,8 @@ local MAX_PER_CALL = 24      -- marks one stream may lay
 local WEAR_PRIMER  = 5       -- metres of recent scraping before primer shows
 local WEAR_METAL   = 14      -- ... before bare metal shows
 local WEAR_COOL    = 1.5     -- metres of scrape memory forgotten per second
+local WEAR_CAP     = WEAR_METAL * 1.5  -- still always metal; back to paint ~11 s after scraping stops
+local CELL         = 0.2     -- ground grid: one live streak per cell (below SEG_MIN)
 local IMPACT_MIN   = 2500    -- N; softer ground hits leave nothing
 
 local TEX_DIR  = "art/scratches/ground/"
@@ -44,14 +46,18 @@ local marks   = {}   -- [1..MAX_MARKS] reused records; .born == nil means empty
 local head    = 0    -- last slot written
 local alive   = 0
 local wearRun = 0    -- metres scraped recently (drives paint -> primer -> metal)
+local lastStreamBatchAt = -1e9  -- module clock of the previous stream batch
+local cells   = {}   -- ground cell key -> ring slot of the live streak laid there
+local serial  = 0    -- every mark gets a new id, so a reused slot is never mistaken
 local stats   = { alive = 0, submitted = 0, dropped = 0, added = 0, culled = 0, drawErrors = 0 }
 
 local pool       = {}   -- decal structs handed to the engine, reused
+local poolId, poolA = {}, {}  -- which mark each pool slot holds, and the alpha last written
 local backend           -- function(pool, n); nil = resolve from the engine
 local backendFailed = false
 local colorCtor         -- ColorF or a plain-table stand-in
 
-local wheelTracks = {}  -- up to 4 {x,y,z,t}: where each dragged wheel last was
+local wheelTracks = {}  -- [wheel id] = {x,y,z,t}: where that dragged wheel last was
 local scratch = { 0, 0, 0 }
 
 -- Small deterministic generator: marks must not look stamped, but the module
@@ -72,7 +78,10 @@ local function addMark(x, y, z, dx, dy, dz, len, width, r, g, b, a, tex)
   head = head % MAX_MARKS + 1
   local m = marks[head]
   if not m then m = {}; marks[head] = m end
+  -- The slot is being reused: its old ground cell is free again.
+  if m.cell then if cells[m.cell] == head then cells[m.cell] = nil end; m.cell = nil end
   if m.born then stats.dropped = stats.dropped + 1 else alive = alive + 1 end
+  serial = serial + 1; m.id = serial
   m.x, m.y, m.z = x, y, z
   m.dx, m.dy, m.dz = dx / dl, dy / dl, dz / dl
   m.len, m.width = len, width
@@ -118,9 +127,19 @@ local function layStreak(ax, ay, az, bx, by, bz, colour, widthScale)
   local j = (rnd() - 0.5) * 0.03
   local px, py = -dy / len * j, dx / len * j
   local width = (0.09 + rnd() * 0.12) * (widthScale or 1)
-  return addMark((ax + bx) * 0.5 + px, (ay + by) * 0.5 + py, (az + bz) * 0.5,
+  -- Many nodes of one panel scrape side by side and nose to tail over the same
+  -- ground. One live streak per cell keeps them from spending the whole ring
+  -- on the last few metres of a slide.
+  local mx, my = (ax + bx) * 0.5 + px, (ay + by) * 0.5 + py
+  local key = math.floor(mx / CELL) * 2097152 + math.floor(my / CELL)
+  local slot = cells[key]
+  local held = slot and marks[slot]
+  if held and held.born and held.cell == key then stats.thinned = (stats.thinned or 0) + 1; return false end
+  local ok = addMark(mx, my, (az + bz) * 0.5,
     dx, dy, dz, len * (1.9 + rnd() * 0.5), width,
     tone[1], tone[2], tone[3], alpha, STREAKS[1 + math.floor(rnd() * #STREAKS) % #STREAKS])
+  if ok then marks[head].cell = key; cells[key] = head end
+  return ok
 end
 
 -- points: world-space {x,y,z,nx,ny,nz} along one slide. colour: {r,g,b} paint.
@@ -213,7 +232,7 @@ end
 -- A wheel dragged on its side (rim / sidewall on the road). worldPos and
 -- worldNormal are vec3 or {x,y,z}; slipSpeed in m/s. Call it as often as the
 -- contact is reported: marks are laid by distance travelled, not per call.
-M.addWheelScrape = function(worldPos, worldNormal, slipSpeed)
+M.addWheelScrape = function(worldPos, worldNormal, slipSpeed, wheelId)
   if not enabled then return 0 end
   local x, y, z = xyz(worldPos)
   if not x then return 0 end
@@ -221,23 +240,22 @@ M.addWheelScrape = function(worldPos, worldNormal, slipSpeed)
   if nz and math.abs(nz) < UP_NORMAL then return 0 end
   slipSpeed = finite(slipSpeed) and math.abs(slipSpeed) or 3
 
-  -- Which dragged wheel is this? The nearest recent track within a metre.
-  local track, stale
-  for i = 1, 4 do
-    local t = wheelTracks[i]
-    if not t then t = { t = -1e9 }; wheelTracks[i] = t end
-    if now - t.t < 0.75 then
-      local dx, dy, dz = x - t.x, y - t.y, z - t.z
-      local d2 = dx * dx + dy * dy + dz * dz
-      -- Reach grows with how far the wheel can have slid since its last
-      -- report, so a fast drag reported in batches still joins up.
-      local reach = 1 + slipSpeed * (now - t.t) * 1.5
-      if d2 < reach * reach and (not track or d2 < track.d2) then track = t; t.d2 = d2 end
-    end
-    if not stale or t.t < stale.t then stale = t end
+  -- One track per wheel, so two wheels dragged at once never get joined by a
+  -- mark across the car. No id (older callers) shares track 0.
+  local id = finite(wheelId) and wheelId or 0
+  local track = wheelTracks[id]
+  if not track then track = { t = -1e9 }; wheelTracks[id] = track end
+  local fresh = now - track.t < 0.75
+  if fresh then
+    local dx, dy, dz = x - track.x, y - track.y, z - track.z
+    track.d2 = dx * dx + dy * dy + dz * dz
+    -- Reach grows with how far the wheel can have slid since its last report,
+    -- so a fast drag reported in batches still joins up.
+    local reach = 1 + slipSpeed * (now - track.t) * 1.5
+    if track.d2 > reach * reach then fresh = false end
   end
-  if not track then
-    stale.x, stale.y, stale.z, stale.t = x, y, z, now
+  if not fresh then
+    track.x, track.y, track.z, track.t = x, y, z, now
     return 0
   end
   local d = math.sqrt(track.d2)
@@ -278,18 +296,35 @@ M.ingestWorld = function(veh, events, streams)
     -- few frames and the car's own colour never showed).
     local base, longest = wearRun, 0
     for i = 1, #streams do
-      colour = colour or M.vehicleColour(veh)
+      local st = streams[i]
+      local last = type(st) == "table" and st[#st]
       wearRun = base
-      laid = laid + M.addStream(streams[i], colour)
-      if wearRun - base > longest then longest = wearRun - base end
+      if type(last) == "table" and (tonumber(last[7]) or 0) >= 2 then
+        -- A low mechanical part (skid plate, exhaust, diff) grounding out: it
+        -- has no body paint to leave. A thin bare-metal line, outside the wear
+        -- memory.
+        wearRun = WEAR_CAP
+        laid = laid + M.addStream(st, METAL, 0.6)
+      else
+        colour = colour or M.vehicleColour(veh)
+        laid = laid + M.addStream(st, colour)
+        if wearRun - base > longest then longest = wearRun - base end
+      end
     end
-    wearRun = base + longest
+    -- Streams of different nodes flush on different frames but cover the same
+    -- 0.25 s of road (the detector's stream length): credit only the new part.
+    if longest > 0 then
+      wearRun = base + longest * math.min(1, (now - lastStreamBatchAt) / 0.25)
+      lastStreamBatchAt = now
+    else
+      wearRun = base
+    end
   end
   if type(events) == "table" then
     for i = 1, #events do
       local e = events[i]
       if type(e) == "table" and e[7] == "i" and finite(e[6]) and math.abs(e[6]) >= UP_NORMAL
-        and finite(e[8]) and e[8] >= IMPACT_MIN then
+        and finite(e[8]) and e[8] >= IMPACT_MIN and (tonumber(e[12]) or 0) < 2 then
         colour = colour or M.vehicleColour(veh)
         laid = laid + M.addImpact(e[1], e[2], e[3], e[4], e[5], e[6], e[8], colour)
       end
@@ -338,7 +373,7 @@ M.update = function(dt)
   if not enabled then return 0 end
   dt = finite(dt) and dt > 0 and dt or 0
   now = now + dt
-  wearRun = math.max(0, wearRun - WEAR_COOL * dt)
+  wearRun = math.max(0, math.min(wearRun, WEAR_CAP) - WEAR_COOL * dt)
   if alive == 0 then return 0 end
   local draw = resolveBackend()
   local cx, cy, cz
@@ -356,11 +391,19 @@ M.update = function(dt)
           n = n + 1
           local d = poolEntry(n)
           local fade = age > LIFE - FADE and (LIFE - age) / FADE or 1
-          d.texture = m.tex
-          d.position.x, d.position.y, d.position.z = m.x, m.y, m.z + 0.05
-          d.forwardVec.x, d.forwardVec.y, d.forwardVec.z = m.dx, m.dy, m.dz
-          d.color.r, d.color.g, d.color.b, d.color.a = m.r, m.g, m.b, m.a * fade
-          d.scale.x, d.scale.y, d.scale.z = m.width, m.len, DEPTH
+          -- Marks do not move: write a pool slot only when it holds another
+          -- mark than last frame (ids, not birth times, which repeat while
+          -- the sim is paused).
+          if poolId[n] ~= m.id then
+            poolId[n] = m.id; poolA[n] = nil
+            d.texture = m.tex
+            d.position.x, d.position.y, d.position.z = m.x, m.y, m.z + 0.05
+            d.forwardVec.x, d.forwardVec.y, d.forwardVec.z = m.dx, m.dy, m.dz
+            d.color.r, d.color.g, d.color.b = m.r, m.g, m.b
+            d.scale.x, d.scale.y, d.scale.z = m.width, m.len, DEPTH
+          end
+          local a = m.a * fade
+          if poolA[n] ~= a then d.color.a = a; poolA[n] = a end
         else
           stats.culled = stats.culled + 1
         end
@@ -385,12 +428,17 @@ end
 -- NOT call this: the car is repaired, the road is not.
 M.clear = function()
   for i = 1, MAX_MARKS do
-    if marks[i] then marks[i].born = nil end
+    if marks[i] then marks[i].born = nil; marks[i].cell = nil end
   end
-  for i = 1, #wheelTracks do wheelTracks[i].t = -1e9 end
-  alive, head, wearRun = 0, 0, 0
+  for _, track in pairs(wheelTracks) do track.t = -1e9 end
+  for key in pairs(cells) do cells[key] = nil end
+  alive, head, wearRun, lastStreamBatchAt = 0, 0, 0, -1e9
   stats.alive, stats.submitted, stats.culled = 0, 0, 0
 end
+
+-- The wear memory belongs to the car, not the road: a repaired or different
+-- car starts again from paint. The marks themselves stay.
+M.resetWear = function() wearRun = 0; lastStreamBatchAt = -1e9 end
 
 M.setEnabled = function(on)
   enabled = on and true or false
@@ -402,6 +450,7 @@ M.getStats = function()
   return { enabled = enabled, alive = alive, submitted = stats.submitted, dropped = stats.dropped,
            added = stats.added, culled = stats.culled, drawErrors = stats.drawErrors,
            capacity = MAX_MARKS, wearRun = wearRun, drawable = not backendFailed,
+           thinned = stats.thinned or 0,
            lastX = stats.lastX, lastY = stats.lastY, lastZ = stats.lastZ }
 end
 
