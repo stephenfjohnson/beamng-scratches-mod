@@ -1005,7 +1005,7 @@ local function onVehicleSpawned(vid)
   -- rebuilt to bind wheel clones. Rebuilding a car the player merely switches
   -- into would repair it and throw away its damage.
   local spawned = scenetree.findObjectById and scenetree.findObjectById(vid)
-  wheelFresh[vid] = (spawned and spawned.autoEnterVehicle ~= "false") and clockhp() or nil
+  if spawned and spawned.autoEnterVehicle ~= "false" then wheelFresh[vid] = clockhp() end
   -- A respawn of a car we skipped (e.g. its livery was just removed) gets a
   -- fresh look; traffic spawns don't clear the memo.
   if vid == skippedVid then skippedVid = nil end
@@ -4074,6 +4074,10 @@ M.onClientStartMission = function() if groundPaint then pcall(groundPaint.clear)
 M.onSpawnCCallback = function(vid)
   local veh=scenetree.findObjectById(vid)
   if not veh then return end
+  -- A vehicle is fresh for a short while after any spawn. This hook runs
+  -- before the first setup pass; onVehicleSpawned can come after it (a pickup
+  -- spawned over another car never bound its wheels with that hook alone).
+  wheelFresh[vid] = clockhp()
   if not adapterModule then adapterModule=dofile("/lua/ge/extensions/scratches/bodyAdapter.lua") end
   if not adapterModule.modelSupported(veh.JBeam) then return end
   if not adapterModule.editorActive() then
