@@ -228,7 +228,10 @@ M.addWheelScrape = function(worldPos, worldNormal, slipSpeed)
     if now - t.t < 0.75 then
       local dx, dy, dz = x - t.x, y - t.y, z - t.z
       local d2 = dx * dx + dy * dy + dz * dz
-      if d2 < 1 and (not track or d2 < track.d2) then track = t; t.d2 = d2 end
+      -- Reach grows with how far the wheel can have slid since its last
+      -- report, so a fast drag reported in batches still joins up.
+      local reach = 1 + slipSpeed * (now - t.t) * 1.5
+      if d2 < reach * reach and (not track or d2 < track.d2) then track = t; t.d2 = d2 end
     end
     if not stale or t.t < stale.t then stale = t end
   end
@@ -268,10 +271,18 @@ M.ingestWorld = function(veh, events, streams)
   local colour
   local laid = 0
   if type(streams) == "table" then
+    -- One batch is many nodes of the same panel scraping side by side. The
+    -- wear memory is metres the CAR scraped, so it advances by the longest
+    -- stream of the batch, not the sum (the sum reached bare metal within a
+    -- few frames and the car's own colour never showed).
+    local base, longest = wearRun, 0
     for i = 1, #streams do
       colour = colour or M.vehicleColour(veh)
+      wearRun = base
       laid = laid + M.addStream(streams[i], colour)
+      if wearRun - base > longest then longest = wearRun - base end
     end
+    wearRun = base + longest
   end
   if type(events) == "table" then
     for i = 1, #events do
