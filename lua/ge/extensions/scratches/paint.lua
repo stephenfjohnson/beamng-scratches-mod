@@ -2596,6 +2596,9 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
       -- Every third snow deposit packs into the arch instead of flying, so
       -- snow still builds up where the tyre feeds it.
       local pack = snowFling and e[8] == 1 and surfaceState.deposits % 3 == 2
+      -- Flung snow deposits counted without the packed ones, so the lift
+      -- table and all three snow fling brushes are actually cycled through.
+      local snowSeq = surfaceState.deposits - math.floor((surfaceState.deposits + 1) / 3)
       if e[8] == 1 then
         if (not snow or snowFling) and not pack then
           local velocity = veh:getVelocity()
@@ -2610,6 +2613,7 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
             local lift
             if snow then
               -- Powder: a taller, shorter plume that speed barely flattens.
+              phase = snowSeq % 6
               lift = math.rad(math.max(30, SNOW_FLING_LIFT[phase + 1] - spraySpeed * 0.6))
               trailLength = math.min(1.3, 0.62 + spraySpeed * 0.04) * (0.88 + 0.04 * (phase % 4))
             else
@@ -2674,7 +2678,7 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
           dist=flow and trailLength*2.2 or nil,
           flipY=flow and (surfaceState.deposits%2==0 and 1 or -1) or nil,
           colorTex=SOIL_TEX..e[1]..
-            (flow and ("_fling_"..(surfaceState.deposits%(FLING_VARIANTS[e[1]] or 2)+1)..".png") or "_coverage.png"),
+            (flow and ("_fling_"..((snow and snowSeq or surfaceState.deposits)%(FLING_VARIANTS[e[1]] or 2)+1)..".png") or "_coverage.png"),
           rot=flow and 0 or (surfaceState.deposits%4)*math.pi/2},vid)
       end
       -- Fail safe: the extras can never take the flank deposit down with them.
