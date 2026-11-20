@@ -27,6 +27,9 @@ local prepared, skipped, clones = {}, {}, {}
 local attached = nil
 local applied = nil
 local sinceApply = 1
+-- Set by anything that can move a step; lets the per-frame sync return
+-- without building the step table when nothing has changed.
+local dirty = true
 
 local function newState()
   return {tyre=0, rim=0, scrape=0, tint={0.4,0.33,0.25}, tinted=false, samples=0,
@@ -67,6 +70,7 @@ function M.expose(kind, resolveTint)
   state.tyre = math.min(1, state.tyre + gain.tyre)
   state.rim = math.min(1, state.rim + gain.rim)
   state.samples = state.samples + 1
+  dirty = true
   if kind ~= state.lastKind or state.samples % 8 == 1 then
     local c
     if kind ~= "snow" and type(resolveTint) == "function" then
@@ -93,6 +97,7 @@ function M.scrape(wheelId, slipSpeed)
   if slip ~= slip then slip = 0 end
   state.scrape = math.min(1, state.scrape + 0.02 + 0.02 * clamp01(slip / 8))
   state.scrapes = state.scrapes + 1
+  dirty = true
   local id = tonumber(wheelId) or -1
   state.perWheel[id] = (state.perWheel[id] or 0) + 1
   return true
@@ -226,6 +231,8 @@ end
 function M.prepare(_, vid, vdata)
   prepared[vid] = nil
   skipped[vid] = nil
+  -- A rebuild re-clones this vehicle's materials clean; forget what was written.
+  if attached and attached.vid == vid then applied = nil end
   if not enabled or not vdata then return end
   local keys = keysByVid[vid] or keysByModel[vdata.model]
   if not keys or not next(keys) then
@@ -291,17 +298,20 @@ end
 
 local function sync(force)
   if not attached then return false end
+  if not force and not dirty and applied then return false end
   local steps = M.steps()
   if not force and applied and applied.tyre == steps.tyre and applied.rim == steps.rim
-      and applied.scrape == steps.scrape and applied.tint == steps.tint then return false end
+      and applied.scrape == steps.scrape and applied.tint == steps.tint then dirty = false; return false end
   if not force and sinceApply < MIN_APPLY_INTERVAL then return false end
   -- Tint alone is invisible while nothing is soiled.
   if not force and applied and steps.tyre == 0 and steps.rim == 0
       and applied.tyre == 0 and applied.rim == 0 and applied.scrape == steps.scrape then
+    dirty = false
     return false
   end
   for _, entry in ipairs(attached.entries) do pcall(applyEntry, entry, steps, state.tint) end
   applied = steps
+  dirty = false
   sinceApply = 0
   state.applies = state.applies + 1
   return true
@@ -313,7 +323,8 @@ function M.update(dt, washFraction)
   sinceApply = sinceApply + dt
   if not enabled then return false end
   local wash = clamp01(tonumber(washFraction) or 0)
-  if wash > 0 then
+  if wash > 0 and (state.tyre > 0 or state.rim > 0) then
+    dirty = true
     state.tyre = math.max(0, state.tyre - dt * wash / 8)
     state.rim = math.max(0, state.rim - dt * wash / 8)
     if state.tyre == 0 and state.rim == 0 then state.tinted = false; state.lastKind = nil end
@@ -375,7 +386,10 @@ end
 -- Reset clears soil and abrasion alike, like body damage.
 function M.reset()
   state = newState()
-  if attached then sync(true) end
+  -- Immediate, but only when the materials actually show something: reset
+  -- runs on every vehicle reset and a forced write reloads every clone.
+  dirty = true
+  if attached then sinceApply = MIN_APPLY_INTERVAL; sync(false) end
 end
 
 function M.disableAll()
