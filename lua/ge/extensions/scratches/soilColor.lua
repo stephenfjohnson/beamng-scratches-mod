@@ -106,12 +106,21 @@ local function terrainColor(kind,pos)
   return rgb,source,mat:getField("internalName",0),basePath
 end
 
+M.wetTone={mud={0.70,0.65,0.58}}
+
 function M.resolve(kind,pos)
   local default=fallback[kind]
   if not default then return nil end
   if pos and finite(pos.x) and finite(pos.y) and finite(pos.z) then
     local ok,rgb,source,material,path=pcall(terrainColor,kind,pos)
-    if ok and rgb then return rgb,source,material,path end
+    if ok and rgb then
+      -- The terrain map is the colour of the ground as it lies, mostly dry and
+      -- sunlit. Mud on a panel is wet: darker and a little browner. Without
+      -- this, Gridmap mud on a yellow car was hard to see (2026-11-20).
+      local wet=M.wetTone[kind]
+      if wet then rgb={rgb[1]*wet[1],rgb[2]*wet[2],rgb[3]*wet[3]} end
+      return rgb,source,material,path
+    end
   end
   return {default[1],default[2],default[3]},"fallback"
 end

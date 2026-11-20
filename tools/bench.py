@@ -73,6 +73,8 @@ SCENARIOS = {
                       offset={"up": 1.2}, euler={"roll": 90}, vel={"fwd": 14}, maxTime=10),
     "rollover": dict(desc="thrown sideways at 15 m/s, leaning 70 deg into the motion - tumbles over the roof",
                      offset={"up": 1.2}, euler={"roll": 70}, vel={"right": 15}, maxTime=12),
+    "bellyflop": dict(desc="upright, dropped flat from 2.6 m at 12 m/s - the suspension bottoms out and the belly grounds",
+                      offset={"up": 2.6}, vel={"fwd": 12}, maxTime=8),
     "nosedive": dict(desc="pitched nose-down 40 deg, dropped from 1.6 m at 9 m/s",
                      offset={"up": 1.6}, euler={"pitch": -40}, vel={"fwd": 9}, maxTime=8),
 }

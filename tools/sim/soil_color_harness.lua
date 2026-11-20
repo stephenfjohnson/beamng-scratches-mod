@@ -27,7 +27,16 @@ GBitmap=function()
       return true
     end}
 end
-local function fresh() return dofile("lua/ge/extensions/scratches/soilColor.lua") end
+-- The terrain maths below is checked without the wet-mud tone on top of it.
+local function fresh() local m=dofile("lua/ge/extensions/scratches/soilColor.lua");m.wetTone={};return m end
+do
+  local wetModule=dofile("lua/ge/extensions/scratches/soilColor.lua")
+  local dry=fresh().resolve("mud",{x=0,y=0,z=0.3})
+  local wet=wetModule.resolve("mud",{x=0,y=0,z=0.3})
+  check(wet[1]<dry[1]*0.75 and wet[3]<dry[3]*0.62 and wet[3]/wet[1]<dry[3]/dry[1],
+    "terrain-sampled mud lands darker and browner than the dry ground")
+  loads,pixels=0,0
+end
 local color=fresh()
 local pos={x=0,y=0,z=0.3}
 local rgb,source,name,path=color.resolve("mud",pos)

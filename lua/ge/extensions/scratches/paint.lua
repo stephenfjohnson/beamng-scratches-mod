@@ -2588,16 +2588,21 @@ local SOIL_TEX = "/art/dynamicDecals/textures/soil_"
 -- Each has its own budget per wash cycle, on top of the 96 flank deposits.
 local soilExtras = { underside = true, sills = true, snowFling = true }
 local SOIL_UNDER_CAP, SOIL_SILL_CAP = 24, 32
-local SOIL_UNDER_EVERY = 3   -- every Nth wheel sample also dirties the floor
+local SOIL_UNDER_EVERY = 3   -- every Nth wheel sample also cakes the sill underside
 local SOIL_SILL_EVERY = 2    -- every Nth deep sample lays a sill band
 -- Metres above the spawn box's bottom (the ground under a resting car). The
 -- decal is a box centred on its anchor, so the underside slab spans
--- underHeight +- underDepth/2: it reaches the floor pan, never the cabin.
-local soilGeom = { underHeight = 0.28, underDepth = 0.32, sillHeight = 0.24 }
--- Underside placement per deposit: metres from the wheel towards mid-car, and
--- fraction of the half-width out from the centreline.
+-- underHeight +- underDepth/2. The painted floor pan is not in a car's skin UV
+-- layout (checked against sunburst2_skin_UVs.png: exterior panels only), so
+-- nothing projected at the floor can show. What does show from below is the
+-- sill: its underside and the bottom edge of its outer face. A thin slab there
+-- painted both in game (2026-11-20); a deeper one further inboard painted
+-- nothing.
+local soilGeom = { underHeight = 0.20, underDepth = 0.20, sillHeight = 0.24 }
+-- Sill-underside placement per deposit: metres from the wheel towards mid-car,
+-- and metres in from the spawn box's side (the box includes the mirrors).
 local UNDER_ALONG  = { 0.35, 0.95, 1.55, 0.65, 1.25, 0.10 }
-local UNDER_ACROSS = { 0.42, 0.25, 0.45, 0.12, 0.35, 0.42 }
+local UNDER_INSET  = { 0.10, 0.16, 0.12, 0.20, 0.08, 0.14 }
 local SILL_STEP = { 0, 0.5, 1, 0.25, 0.75 }
 
 M.setSoilExtras = function(underside, sills, snowFling)
@@ -2663,14 +2668,14 @@ local function depositSoilExtras(vid, e, worldPos, cx, cy)
     surfaceState.axleMin = math.min(surfaceState.axleMin or cy, cy)
     surfaceState.axleMax = math.max(surfaceState.axleMax or cy, cy)
     if soilExtras.underside and surfaceState.wheelSamples % SOIL_UNDER_EVERY == 0 then
-      -- Thrown straight up onto the floor: inboard of the wheel, walking from
-      -- the arch towards mid-car. The footprint stays inside 80 % of the
-      -- half-width so the shallow slab never crosses the sill's outer face.
+      -- Thrown up under the sill on the wheel's side, walking from the arch
+      -- towards mid-car. The slab is thin, so it takes the sill's underside
+      -- and bottom edge and stops short of the door.
       local phase = (surfaceState.underDeposits or 0) % 6
       local toward = cy > midY and -1 or 1
-      local size = math.max(0.4, math.min(0.7, halfW*0.7))
+      local size = math.max(0.4, math.min(0.55, halfW*0.6))
       local uy = math.max(lo.y+0.45, math.min(hi.y-0.45, cy + toward*UNDER_ALONG[phase+1]))
-      local up = vec3(midX + side*halfW*UNDER_ACROSS[phase+1], uy, lo.z + soilGeom.underHeight)
+      local up = vec3((side > 0 and hi.x or lo.x) - side*UNDER_INSET[phase+1], uy, lo.z + soilGeom.underHeight)
       depositSoilExtra(vid, "under", kind, e[8], worldPos, up, vec3(0,0,-1),
         "under:"..side..":"..math.floor(uy*2), 4,
         {scale=size, depth=soilGeom.underDepth, rot=phase*math.pi/2,

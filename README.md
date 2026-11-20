@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/stephenfjohnson/beamng-scratches-mod/releases/latest"><img src="https://img.shields.io/badge/Download-latest%20release-2ea44f?style=for-the-badge" alt="Download the latest release"></a>
+  <a href="https://github.com/stephenfjohnson/beamng-scratches-mod/releases"><img src="https://img.shields.io/badge/Download-latest%20release-2ea44f?style=for-the-badge" alt="Download the latest release"></a>
 </p>
 
 <p align="center">
@@ -139,7 +139,7 @@ edges. The [known issues](docs/known-issues.md) page says what is still missing.
 
 ## Install
 
-1. **Download** `scratches_mod.zip` from the [latest release](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/latest).
+1. **Download** `scratches_mod.zip` from the [newest release](https://github.com/stephenfjohnson/beamng-scratches-mod/releases).
 2. **Drop it in your mods folder.** Don't unzip it. In the BeamNG launcher, open
    your user folder and put the ZIP in `mods`. For most people that is
    `%LOCALAPPDATA%\BeamNG\BeamNG.drive\current\mods\`.

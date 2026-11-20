@@ -672,13 +672,13 @@ do
   local state=paint.getSurfaceState()
   check(state.lastFlank.pack==true and state.lastFlank.flowY==nil and state.lastFlank.z<0.6,
     'every third snow deposit packs low into the wheel arch')
-  -- The third wheel sample also throws one deposit up onto the floor.
+  -- The third wheel sample also throws one deposit up under the sill.
   local under=state.lastSample
   check(under.where=='under' and state.underDeposits==1 and state.deposits==3,
     'every third wheel sample adds an underside deposit on its own budget')
-  check(under.normalZ==-1 and under.normalX==0 and under.depth<=0.35
-    and under.z+under.depth*0.5<0.5 and math.abs(under.x)+under.scale*0.5<=0.8,
-    'underside deposit projects straight up through a shallow slab inboard of the sills')
+  check(under.normalZ==-1 and under.normalX==0 and under.depth<=0.22
+    and under.z+under.depth*0.5<0.35 and math.abs(under.x)>0.6 and math.abs(under.x)<1.0,
+    'underside deposit projects straight up through a thin slab under the sill')
   paint.setSyntheticAnchors(true) -- the anchor normal is only written under synthetic anchors
   for _=1,6 do frame(0.26) end
   paint.setSyntheticAnchors(false)
