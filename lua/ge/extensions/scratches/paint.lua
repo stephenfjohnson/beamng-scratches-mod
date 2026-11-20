@@ -815,6 +815,7 @@ end
 local surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false,
   underDeposits=0, sillDeposits=0, wheelSamples=0, deepSamples=0}
 local surfaceWaterAge = 1
+local floorSoil -- floor-pan film and soil ink; set up below
 local soilRemaining, waterFraction = 1, 0
 local surfaceSpots = {}
 local function resetSurfaceState()
@@ -822,6 +823,7 @@ local function resetSurfaceState()
     underDeposits=0, sillDeposits=0, wheelSamples=0, deepSamples=0}
   surfaceSpots, surfaceWaterAge = {}, 1
   soilRemaining, waterFraction = 1, 0
+  if floorSoil then floorSoil.tone = nil end
   pcall(wheelAdapter.reset)
   -- A repaired or different car scrapes from its paint again; the road keeps its marks.
   if groundPaint then pcall(groundPaint.resetWear) end
@@ -835,19 +837,47 @@ M.getSurfaceState = function()
   out.visualWetnessSupported = adapter ~= nil
   return out
 end
+-- Soil on the painted floor pan. Every body face outside the car's skin UV
+-- layout (the floor, inner arches, some aero) reads ONE texel of the canvas:
+-- its bottom-left corner (found by quadrant search in game, 2026-11-20). No
+-- projection can reach those faces, but a UV-space fill of that corner can, so
+-- the floor carries one even film whose strength steps up as the wheels roll
+-- through soil. `tick` is filled in below, once the fill exists.
+floorSoil = { on = true, cooldown = 0, steps = 6, max = 1, interval = 1.2,
+  gain = { mud = 0.03, dirt = 0.012, snow = 0.025 },
+  texture = "/art/dynamicDecals/textures/soil_floor_fill.png" }
+
+-- The colour to bake for a soil of colour c. The soil stage's opacity is the
+-- canvas red channel (bodyAdapter soilTone), so a dark soil baked as it is
+-- comes out thin: Gridmap mud at r=0.43 was 43 % opaque at best. Bake it
+-- scaled up to full strength and let the stage's colour factor carry the
+-- brightness. One factor serves the whole canvas, so it follows the first soil
+-- of a wash cycle and only steps up for a clearly lighter one (snow over mud).
+floorSoil.ink = function(c)
+  if not (adapter and adapter.soilTone) then return c[1], c[2], c[3] end
+  local top = math.max(c[1], c[2], c[3], 0.05)
+  if not floorSoil.tone or top > floorSoil.tone * 1.2 then floorSoil.tone = top end
+  local ok, applied = pcall(adapter.soilTone, adapter, floorSoil.tone)
+  applied = ok and tonumber(applied) or 1
+  return math.min(1, c[1]/applied), math.min(1, c[2]/applied), math.min(1, c[3]/applied)
+end
+
 local function updateSurface(dt)
   dt = math.max(0, math.min(0.25, tonumber(dt) or 0))
   surfaceWaterAge = surfaceWaterAge + dt
+  if floorSoil.tick then floorSoil.tick(dt) end
   if surfaceWaterAge <= 0.5 then
     surfaceState.wetness = math.min(1, surfaceState.wetness + dt * 0.8 * waterFraction)
     if adapter and surfaceState.deposits + (surfaceState.underDeposits or 0)
-        + (surfaceState.sillDeposits or 0) > 0 then
+        + (surfaceState.sillDeposits or 0) + (surfaceState.floorBakes or 0) > 0 then
       soilRemaining = math.max(0,soilRemaining-dt*waterFraction/8)
       if soilRemaining == 0 then
         adapter:clearSoil()
         surfaceSpots = {}
         surfaceState.deposits = 0
         surfaceState.underDeposits, surfaceState.sillDeposits = 0, 0
+        surfaceState.floorLevel, surfaceState.floorBakes = 0, 0
+        floorSoil.tone = nil
         soilRemaining = 1
       end
     end
@@ -1702,6 +1732,56 @@ end
 -- vec3) with surface aim along `localNormal` (vehicle-local vec3).
 -- The world wrapper M.stampAt converts world -> local then calls this.
 -- Queued, not immediate: the stamp is projected and baked by onUpdate.
+-- Paint the soil canvas in UV space instead of projecting onto the car: one
+-- flat colour, or a texture laid over the whole canvas (scale/offset in UV).
+-- This reaches texels no projection can. A texture fill maps texel for texel
+-- (not stretched), ignores the colour's alpha, and replaces what was there.
+M.soilFill = function(r, g, b, a, texture, scaleX, scaleY, offsetX, offsetY)
+  if not (ready and adapter and api) then return false, "not ready" end
+  local types = api.layerTypes or {fill = 1, textureFill = 2}
+  local layer = { blendMode = api.blendModesMap and api.blendModesMap.Normal or 1,
+    color = Point4F(r or 1, g or 1, b or 1, a or 1), colorPaletteMapId = 0,
+    enabled = true, locked = false, name = "soil", children = {},
+    uid = api.getRandomUid and api.getRandomUid() or tostring(os.clock()) }
+  if texture then
+    layer.type = types.textureFill
+    layer.fillTexturePath = texture
+    layer.scale = Point2F(scaleX or 1, scaleY or 1)
+    layer.offset = Point2F(offsetX or 0, offsetY or 0)
+  else
+    layer.type = types.fill
+  end
+  local ok, err = pcall(function() adapter:bakeSoil({layer}) end)
+  combineDirty = true
+  return ok, err and tostring(err) or nil
+end
+
+-- One film step at a time. A fill replaces the corner texel, and its strength
+-- is its red channel, so the colour is scaled by the level. Each step is
+-- written twice: a fill texture left unused for a few seconds is evicted, and
+-- the first fill after that draws nothing (seen in game).
+floorSoil.tick = function(dt)
+  floorSoil.cooldown = math.max(0, floorSoil.cooldown - dt)
+  if not (floorSoil.on and ready and adapter) or floorSoil.cooldown > 0 or surfaceWaterAge <= 0.5 then return end
+  local want = math.min(floorSoil.steps, math.floor((surfaceState.floorLevel or 0) * floorSoil.steps + 1e-6))
+  local repeatFill = floorSoil.again and floorSoil.again == surfaceState.floorBakes
+  if want <= (surfaceState.floorBakes or 0) and not repeatFill then return end
+  local kind = surfaceState.floorKind or "mud"
+  local c = soilColor.resolve(kind, surfaceState.floorPos)
+  if not c then return end
+  local r, g, b = floorSoil.ink(c)
+  if repeatFill then
+    floorSoil.again = nil
+    floorSoil.cooldown = floorSoil.interval
+  else
+    surfaceState.floorBakes = want
+    floorSoil.again = want
+    floorSoil.cooldown = 0.7
+  end
+  local level = (surfaceState.floorBakes or 0) / floorSoil.steps * floorSoil.max
+  M.soilFill(r * level, g * level, b * level, 1, floorSoil.texture)
+end
+
 M.stampAtLocal = function(localPos, localNormal, opts)
   if not ready then log('W', logTag, "stampAtLocal: not ready"); return end
   if not resolveDecalProjection() then return end
@@ -2631,7 +2711,8 @@ local UNDER_ALONG  = { 0.35, 0.95, 1.55, 0.65, 1.25, 0.10 }
 local UNDER_INSET  = { 0.10, 0.16, 0.12, 0.20, 0.08, 0.14 }
 local SILL_STEP = { 0, 0.5, 1, 0.25, 0.75 }
 
-M.setSoilExtras = function(underside, sills, snowFling)
+M.setSoilExtras = function(underside, sills, snowFling, floor)
+  if floor ~= nil then floorSoil.on = floor and true or false end
   if underside ~= nil then soilExtras.underside = underside and true or false end
   if sills ~= nil then soilExtras.sills = sills and true or false end
   if snowFling ~= nil then soilExtras.snowFling = snowFling and true or false end
@@ -2671,7 +2752,8 @@ local function depositSoilExtra(vid, where, kind, wheel, worldPos, p, normal, sp
   surfaceState.lastSample = sample
   surfaceSpots[spot] = (surfaceSpots[spot] or 0)+1
   surfaceState[counter] = (surfaceState[counter] or 0)+1
-  opts.soil, opts.r, opts.g, opts.b, opts.a = true, c[1], c[2], c[3], 0.95
+  local inkR, inkG, inkB = floorSoil.ink(c)
+  opts.soil, opts.r, opts.g, opts.b, opts.a = true, inkR, inkG, inkB, 0.95
   opts.skipMetal, opts.noJitter = true, true
   enqueueStamp(p, normal, opts, vid)
   return true
@@ -2770,6 +2852,10 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction, sillRest)
     if valid then
       surfaceState[e[1]] = math.min(1, surfaceState[e[1]] + 0.025)
       wheelAdapter.expose(e[1], function() return (soilColor.resolve(e[1], vec3(e[2],e[3],e[4]))) end)
+      if floorSoil.on and e[8] == 1 then
+        surfaceState.floorLevel = math.min(1, (surfaceState.floorLevel or 0) + (floorSoil.gain[e[1]] or 0))
+        surfaceState.floorKind, surfaceState.floorPos = e[1], vec3(e[2],e[3],e[4])
+      end
       local worldPos=vec3(e[2],e[3],e[4])
       local p = inv:mulP3F(worldPos)
       local contactX, contactY = p.x, p.y
@@ -2849,6 +2935,7 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction, sillRest)
       if surfaceState.deposits < 96 and (surfaceSpots[key] or 0) < 12
           and surfaceWaterAge > 0.5 then
         local c,source,material,texture=soilColor.resolve(e[1],worldPos)
+        local inkR, inkG, inkB = floorSoil.ink(c)
         flank.color=c
         flank.colorSource=source
         flank.terrainMaterial=material
@@ -2856,7 +2943,7 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction, sillRest)
         surfaceSpots[key] = (surfaceSpots[key] or 0)+1
         surfaceState.deposits = surfaceState.deposits+1
         enqueueStamp(p, normal, {
-          soil=true,r=c[1],g=c[2],b=c[3],a=0.95,
+          soil=true,r=inkR,g=inkG,b=inkB,a=0.95,
           scale=trailLength or ((pack or (snowFling and e[8] == 1)) and 0.5 or 0.65),
           -- Mud fans are 2:1; a snow plume is puffier.
           width=flow and trailLength*(snow and 0.7 or 0.5) or nil,flow=flow,skipMetal=true,noJitter=true,

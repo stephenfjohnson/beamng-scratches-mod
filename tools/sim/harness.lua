@@ -1047,6 +1047,26 @@ local streamStats=paint.getStats()
 check(streamStats.stamp.streamsMerged==1,"adjacent stream bands share a projection")
 check(streamStats.stamp.streamLayersExpected==4 and streamStats.stamp.streamSubstrokesTotal==4 and streamStats.perf.bakeLayersTotal==4,"merged bands retain exactly one haze and one segment each without alias duplication")
 paint.setPanelGrouping(false)
+-- Floor pan: body faces outside the skin layout read one corner texel of the
+-- soil canvas, so the floor gets a film from a UV-space fill, stepped up as the
+-- wheels roll through soil. That needs the body adapter's soil canvas; this
+-- harness runs the legacy path, where the level builds and nothing is baked.
+-- (The soil tone it relies on is checked in adapter_harness.lua.)
+do
+  local bakesBefore=counters.bakes
+  for _=1,12 do paint.ingestSurface(playerVid,{{'mud',101,-1,0.3,0,0,1,1}},false,true) end
+  local state=paint.getSurfaceState()
+  check(state.floorLevel and state.floorLevel>0.3,'wheel samples build the floor film level')
+  local ok,why=paint.soilFill(1,0,0,1)
+  check(ok==false and why=='not ready','a soil fill without the body adapter is refused, not thrown')
+  paint.setSoilExtras(nil,nil,nil,false)
+  paint.ingestSurface(playerVid,{{'mud',101,-1,0.3,0,0,1,1}},false,true)
+  check(paint.getSurfaceState().floorLevel==state.floorLevel,'the floor film can be switched off')
+  paint.setSoilExtras(nil,nil,nil,true)
+  for _=1,40 do frame(.02) end
+  paint.clearStamps()
+  for _=1,4 do frame(.02) end
+end
 -- Ground paint: a slide whose contact normal is vertical leaves marks on the
 -- road along its path; walls leave none; the ring is bounded; marks fade and
 -- expire; a vehicle reset keeps them and a level change does not.
