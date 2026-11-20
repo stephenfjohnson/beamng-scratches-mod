@@ -402,6 +402,72 @@ local okF, errF = pcall(function() for _ = 1, 40 do frame() end end)
 check(okF, "a throwing job does not abort onUpdate: " .. tostring(errF))
 check(counters.bakes > b1, "the job after a failed one still bakes")
 decalProjection.getDecalData = realGetDecalData
+
+-- 2d) Underside contacts on the detector. A low mechanical part (skidplate)
+-- is dropped for any ordinary contact, but accepted and flagged 2 when the
+-- ground faces the belly; glass, wheels and soft ground stay rejected.
+obj.getDirectionVectorUp = function() return vec3(0, 0, 1) end
+v.data.nodes[40] = { nodeMaterial = METAL, partOrigin = "pickup_skidplate_F", pos = vec3(0, -1.5, 0.15) }
+v.data.nodes[41] = { nodeMaterial = METAL, partOrigin = "pickup_body", pos = vec3(0, 0, 1.6) }
+v.data.nodes[42] = { nodeMaterial = METAL, partOrigin = "pickup_windshield", pos = vec3(0, 0.5, 0.2) }
+v.data.nodes[43] = { nodeMaterial = METAL, partOrigin = "pickup_engine_i6", pos = vec3(0, -1.6, 1.2) }
+v.data.nodes[44] = { nodeMaterial = METAL, partOrigin = "pickup_exhaust", pos = vec3(0.3, 1.0, 0.2) }
+v.data.nodes[45] = { nodeMaterial = METAL, partOrigin = "pickup_body", pos = vec3(0.8, 0.2, 0.2) }
+local function contactN(id, z, nx, ny, nz, slipVel, normalForce, surface, x)
+  _G.onNodeCollision(id, vec3(x or 100, -1.5, z), vec3(nx, ny, nz), vec3(0, 0, 0), 0, vec3(0, 0, 0),
+                     slipVel, 0, normalForce, 0.01, surface or ASPHALT, METAL)
+end
+local function detectPayload()
+  detect.updateGFX(1 / 60)
+  local out = {}
+  for _, q in ipairs(queuedGE) do
+    if q:find("scratches_paint.ingest,", 1, true) then out[#out + 1] = q end
+  end
+  queuedGE = {}
+  return table.concat(out, " ")
+end
+detectPayload()
+obj.simTime = obj.simTime + 0.5
+contactN(40, 0.15, 1, 0, 0, 0, 5000)    -- kerb face against the skidplate: sideways
+contactN(42, 0.2, 0, 0, 1, 0, 5000)     -- glass, even from below
+contactN(43, 1.2, 0, 0, 1, 0, 5000)     -- an engine node high on the car
+contactN(40, 0.15, 0, 0, 1, 0, 5000, 18) -- skidplate ploughing mud
+contactN(30, 0, 0, 0, 1, 0, 5000)       -- wheel
+check(detectPayload() == "", "excluded-part contact with a sideways normal is still rejected (as are glass, high parts, wheels, mud)")
+obj.simTime = obj.simTime + 0.5
+contactN(40, 0.15, 0, 0, 1, 0, 5000)
+local underPayload = detectPayload()
+check(underPayload:find(',"i",5000,0.00,0.00,0.00,2}', 1, true) ~= nil,
+  "excluded-part underside contact is accepted and flagged as a low part")
+obj.simTime = obj.simTime + 0.5
+contactN(45, 0.2, 0, 0, 1, 0, 5000)
+contactN(41, 1.6, 0, 0, 1, 0, 5000)
+underPayload = detectPayload()
+check(underPayload:find(',"i",5000,0.00,0.00,0.00,1}', 1, true) ~= nil
+  and underPayload:find(',"i",5000,0.00,0.00,0.00,0}', 1, true) ~= nil,
+  "a low body node is flagged as an underside contact, a high one is not")
+-- An exhaust dragged along the road: every stream point carries the flag.
+for step = 1, 600 do
+  obj.simTime = obj.simTime + dtPhys
+  contactN(44, 0.2, 0, 0, 1, 8, 300, nil, 100 + step * 0.01)
+end
+obj.simTime = obj.simTime + 0.2
+underPayload = detectPayload()
+check(underPayload:find("0.000,0.000,1.000,2},{", 1, true) ~= nil,
+  "an underside slide stream ships its points with the low-part flag")
+detect.setUndersideScrapes(false)
+obj.simTime = obj.simTime + 0.5
+contactN(40, 0.15, 0, 0, 1, 0, 5000)
+contactN(45, 0.2, 0, 0, 1, 0, 5000)
+underPayload = detectPayload()
+check(not underPayload:find(",2}", 1, true) and underPayload:find(',"i",5000,0.00,0.00,0.00,0}', 1, true) ~= nil,
+  "detector setUndersideScrapes(false) restores the plain deny-list and sends no flags")
+detect.setUndersideScrapes(true)
+obj.getDirectionVectorUp = nil
+obj.simTime = obj.simTime + 0.5
+contactN(40, 0.15, 0, 0, 1, 0, 5000)
+check(detectPayload() == "", "without the engine's up-vector call low parts stay rejected")
+obj.simTime = obj.simTime + 0.5
 local failedLogged = false
 for i = #logLines, 1, -1 do
   if logLines[i]:find("projection job failed", 1, true) then failedLogged = true; table.remove(logLines, i) end
@@ -938,6 +1004,54 @@ bakedLayers={}
 paint.ingest(playerVid,{{100.3,1.5,1.8,0,0,-1,"i",9000,0,6,0}},nil)
 for _=1,60 do frame(1/60) end
 check(#bakedLayers==1 and bakedLayers[1].colorTex:find("w2_score_",1,true),"a glancing impact uses a scored brush aligned to its slip")
+-- Underside scrapes: a low part dragged under the car (flag 2, ground normal
+-- up into the car) forms a slide patch on the BOTTOM face, painted straight
+-- up with a shallow box that stays in the lower shell (box 0..1.8 m here).
+bakedLayers={}
+local us0=paint.getStats().underside
+local slides0=paint.getStats().wear.patches.slidePatches
+check(us0.enabled==true,"underside scrapes are on by default")
+paint.ingest(playerVid,nil,{{{100,-1.0,0.2,0,0,1,2},{100,-0.6,0.2,0,0,1,2}}})
+for _=1,60 do frame(1/60) end
+local us=paint.getStats().underside
+check(us.contacts-us0.contacts==1 and us.parts-us0.parts==1 and paint.getStats().wear.patches.slidePatches==slides0+1,"an underside slide stream forms a bottom-face patch")
+local ul=bakedLayers[#bakedLayers]
+check(#bakedLayers>=1 and ul.decalNorm.z<-0.99 and math.abs(ul.decalNorm.x)<1e-6 and ul.surfaceNormal.z<-0.99,"underside patch decal has a -z normal")
+check(ul and ul.decalScale.y>=0.10 and ul.decalScale.y<=0.35+1e-6,"underside patch decal has a bounded depth ("..tostring(ul and ul.decalScale.y)..")")
+check(ul and ul.decalPos.z>0.2 and ul.decalPos.z-ul.decalScale.y*0.5>=0.2-0.05 and ul.decalPos.z+ul.decalScale.y*0.5<=0.756+1e-6,"low-part box starts at the contact and reaches up, never past the lower shell")
+check(ul and math.abs(ul.decalPos.x)<1e-6 and ul.decalPos.y>-1.1 and ul.decalPos.y<-0.5,"underside decal stays under the contact")
+-- A low part that is not an underside contact is never painted.
+local impacts0=paint.getStats().wear.patches.impactSamples
+bakedLayers={}
+paint.ingest(playerVid,{{101,0,0.3,-1,0,0,"i",6000,0,0,0,2},{100,0.5,1.5,0,0,1,"i",6000,0,0,0,2}},nil)
+for _=1,40 do frame(1/60) end
+check(paint.getStats().underside.dropped-us.dropped==2 and paint.getStats().wear.patches.impactSamples==impacts0 and #bakedLayers==0,"a low-part contact with a sideways normal, or high on the car, is dropped")
+-- An old-shape (unflagged) body contact low on the car with the ground normal
+-- up is an underside contact too: straddling box, not lifted.
+paint.ingest(playerVid,{{100.5,1.0,0.25,0,0,1,"i",6000,0,0,0}},nil)
+for _=1,40 do frame(1/60) end
+check(#bakedLayers==1 and bakedLayers[1].decalNorm.z<-0.99 and math.abs(bakedLayers[1].decalScale.y-0.25)<1e-6 and math.abs(bakedLayers[1].decalPos.z-0.25)<1e-6,"a sill/floor contact is painted on the bottom face with a shallow box")
+-- Tall contact near the top of the zone: the box is clamped under the cap.
+bakedLayers={}
+paint.ingest(playerVid,{{99.5,-2.0,0.72,0,0,1,"i",6000,0,0,0,2}},nil)
+for _=1,40 do frame(1/60) end
+check(#bakedLayers==1 and bakedLayers[1].decalPos.z+bakedLayers[1].decalScale.y*0.5<=0.756+1e-6,"underside box top is capped inside the lower shell")
+-- Switched off: low parts are dropped, body contacts take the previous path.
+paint.setUndersideScrapes(false)
+bakedLayers={}
+local usOff=paint.getStats().underside
+paint.ingest(playerVid,nil,{{{100.3,-1.9,0.2,0,0,1,2},{100.3,-1.5,0.2,0,0,1,2}}})
+paint.ingest(playerVid,{{99.4,1.9,0.25,0,0,1,"i",6000,0,0,0}},nil)
+for _=1,60 do frame(1/60) end
+check(usOff.enabled==false and paint.getStats().underside.dropped-usOff.dropped==1 and paint.getStats().underside.contacts==usOff.contacts,"setUndersideScrapes(false) drops low-part contacts and tags nothing")
+check(#bakedLayers==1 and math.abs(bakedLayers[1].decalPos.z-0.25)<1e-6 and bakedLayers[1].decalScale.y<=0.34,"with underside scrapes off a body contact is painted as before")
+paint.setUndersideScrapes(true)
+-- Legacy one-decal-per-contact pipeline never paints low parts.
+paint.setContactPatches(false)
+local usLegacy=paint.getStats().underside.dropped
+paint.ingest(playerVid,{{100,-1.0,0.2,0,0,1,"i",6000,0,0,0,2}},{{{100,-1.0,0.2,0,0,1,2},{100,-0.6,0.2,0,0,1,2}}})
+check(paint.getStats().underside.dropped-usLegacy==2 and paint.getStats().queue.stamps==0,"the legacy pipeline drops low-part contacts")
+paint.setContactPatches(true)
 paint.clearStamps()
 check(paint.getStats().wear.patches.slidesLive==0 and paint.getStats().wear.patches.impactsLive==0,"reset forgets every patch")
 decalProjection.bakeLayers=bakeBeforeCapture

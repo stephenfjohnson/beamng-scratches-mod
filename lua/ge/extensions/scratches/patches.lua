@@ -207,6 +207,7 @@ function Agg:next(now, hot)
     local centre = p.origin + p.dir * ((p.umin + p.umax) * 0.5) + p.side * ((p.vmin + p.vmax) * 0.5)
     return { kind = "slide", id = p.id, pass = p.emits, tier = p.tier, energy = p.energy, key = "slide" .. p.tier,
       centre = centre, normal = p.normal, dir = p.dir, queuedAt = p.first,
+      under = p.under, underPart = p.underPart,   -- painter tags (underside patch)
       length = math.min(1.35, (p.umax - p.umin) + 0.26 + 0.10 * p.tier),
       width  = math.min(0.44, (p.vmax - p.vmin) + 0.09 + 0.035 * p.tier) }
   end
@@ -216,6 +217,7 @@ function Agg:next(now, hot)
   return { kind = "impact", id = p.id, pass = p.emits, tier = p.tier, energy = p.energy,
     key = (slipSpeed >= 1.5 and "score" or "chip") .. p.tier,
     centre = p.centre, normal = p.normal, queuedAt = p.first,
+    under = p.under, underPart = p.underPart,
     dir = slipSpeed >= 1.5 and (p.slip * (1 / p.slip:length())) or nil,
     size = math.min(0.62, 2 * p.radius + 0.20 + 0.07 * p.tier + 0.05 * math.min(3, p.energy)) }
 end

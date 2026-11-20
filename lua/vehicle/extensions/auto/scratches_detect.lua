@@ -81,6 +81,9 @@ local nodeLastContactTime = {} -- nid -> simTime onNodeCollision last fired for 
 -- Values: a body material name (paintable) or one of the REJ_* sentinels.
 local nodeClass = {}
 local REJ_NO_NODE, REJ_WHEEL, REJ_BODY_MAT, REJ_PART = 1, 2, 3, 4
+-- A low mechanical part (skidplate, exhaust, differential ...): rejected like
+-- REJ_PART unless the contact is an underside one (see undersideContact).
+local REJ_LOW_PART = 5
 
 -- Per-node slide stream. Each entry is a small table of contact-point samples
 -- collected while the node is in active slide contact. Flushed when the node
@@ -217,6 +220,22 @@ local EXCLUDE_PART_PATTERNS = {
   "windshield", "doorglass",
 }
 
+-- The subset of the deny-list that is what actually touches the ground when a
+-- car bottoms out. A contact on one of these is still dropped, EXCEPT when it
+-- is an underside contact (ground facing the belly, node low on the car): the
+-- painter then anchors a shallow box straight up onto the floor above instead
+-- of using the node's own normal, so nothing can project through to the hood
+-- or the glass. Everything else on the deny-list (wheels, brakes, glass ...)
+-- is rejected outright.
+local LOW_PART_PATTERNS = {
+  "skidplate", "exhaust", "engine", "suspension", "axle", "driveshaft",
+  "halfshaft", "differential", "gearbox", "transmission", "fuel_tank",
+}
+local HARD_PART_PATTERNS = { "wheel", "brakerotor", "brake_rotor", "windshield", "doorglass" }
+local undersideOn = true        -- M.setUndersideScrapes(false) restores the plain deny-list
+local UNDER_NORMAL_DOT = 0.5    -- ground normal vs the car's up axis (60 degrees)
+local UNDER_ZONE_FRAC, UNDER_ZONE_MIN = 0.45, 0.30  -- rest height above the lowest body node
+
 local function buildSets()
   if materials then return true end
   if not particles or not particles.getMaterialsParticlesTable then return false end
@@ -278,7 +297,7 @@ local function flushStream(id1)
     stats.streamFallbacks = stats.streamFallbacks + 1
     local p = s.points[1]
     pendingDetectEvents[#pendingDetectEvents + 1] = {
-      p.x, p.y, p.z, p.nx, p.ny, p.nz, "s", p.f or 0,
+      p.x, p.y, p.z, p.nx, p.ny, p.nz, "s", p.f or 0, 0, 0, 0, p.u or 0,
     }
     return
   end
@@ -287,8 +306,15 @@ local function flushStream(id1)
   -- Normals only steer the camera axis, so 3 decimals is plenty.
   local parts = {}
   for i, p in ipairs(s.points) do
-    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f}",
-      p.x, p.y, p.z, p.nx, p.ny, p.nz)
+    -- Optional 7th field: 1 = underside contact on a body node, 2 = on a low
+    -- mechanical part. Omitted (the old shape) for every other point.
+    if (p.u or 0) > 0 then
+      parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d}",
+        p.x, p.y, p.z, p.nx, p.ny, p.nz, p.u)
+    else
+      parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f}",
+        p.x, p.y, p.z, p.nx, p.ny, p.nz)
+    end
   end
 
   stats.streamsFlushed    = stats.streamsFlushed + 1
@@ -312,9 +338,68 @@ local function classifyNode(id1)
   -- `true` does plain (non-pattern) substring search.
   local partLower = (node.partOrigin or node.partPath or ""):lower()
   for _, pat in ipairs(EXCLUDE_PART_PATTERNS) do
-    if partLower:find(pat, 1, true) then return REJ_PART end
+    if partLower:find(pat, 1, true) then
+      for _, hard in ipairs(HARD_PART_PATTERNS) do
+        if partLower:find(hard, 1, true) then return REJ_PART end
+      end
+      for _, low in ipairs(LOW_PART_PATTERNS) do
+        if partLower:find(low, 1, true) then return REJ_LOW_PART end
+      end
+      return REJ_PART
+    end
   end
   return bodyName
+end
+
+-- ---- underside contacts ----
+-- The car's up axis, fetched at most once per physics step. nil when the
+-- engine call is missing or fails: nothing is then treated as underside.
+local upVec, upVecTime = nil, -1
+local function carUp()
+  if not (obj and obj.getDirectionVectorUp) then return nil end
+  local now = (obj.getSimTime and obj:getSimTime()) or 0
+  if now ~= upVecTime then
+    upVecTime = now
+    local ok, up = pcall(obj.getDirectionVectorUp, obj)
+    if ok and up and finite(up.x) and finite(up.y) and finite(up.z) then upVec = up else upVec = nil end
+  end
+  return upVec
+end
+
+-- Rest height (jbeam z) below which a node counts as low on the car. false =
+-- unknown (no node positions): the height test then passes.
+local lowZone = nil
+local function nodeIsLow(id1)
+  local nodes = v.data.nodes
+  if lowZone == nil then
+    local lo, hi = math.huge, -math.huge
+    for _, n in pairs(nodes or {}) do
+      local z = type(n) == "table" and not n.wheelID and n.pos and n.pos.z
+      if type(z) == "number" and finite(z) then
+        if z < lo then lo = z end
+        if z > hi then hi = z end
+      end
+    end
+    lowZone = hi >= lo and (lo + math.max(UNDER_ZONE_MIN, (hi - lo) * UNDER_ZONE_FRAC)) or false
+  end
+  if not lowZone then return true end
+  local node = nodes and nodes[id1]
+  local z = node and node.pos and node.pos.z
+  if type(z) ~= "number" then return true end
+  return z <= lowZone
+end
+
+-- True when the surface faces the car's belly (its normal points up into the
+-- car) and the node sits low on the car: bottoming out on a kerb, rock or
+-- crest, or sliding on the belly.
+local function undersideContact(id1, normal)
+  if not undersideOn then return false end
+  local up = carUp()
+  if not up then return false end
+  local d = normal.x * up.x + normal.y * up.y + normal.z * up.z
+  if not (d == d) or d < UNDER_NORMAL_DOT then return false end
+  local ok, low = pcall(nodeIsLow, id1)
+  return ok and low == true
 end
 
 -- Surface exposure is independent of scratch eligibility: tire contacts can
@@ -425,6 +510,16 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
   if bodyName == REJ_BODY_MAT then stats.rejBodyMat = stats.rejBodyMat + 1; return end
   if bodyName == REJ_PART then stats.rejPartExcluded = stats.rejPartExcluded + 1; return end
   if bodyName == REJ_NO_NODE then stats.rejNoNode = stats.rejNoNode + 1; return end
+  -- Underside flag for the wire format: 0 none, 1 body node, 2 low mechanical
+  -- part (only ever accepted as an underside contact).
+  local under = 0
+  if bodyName == REJ_LOW_PART then
+    if not undersideContact(id1, normal) then
+      stats.rejPartExcluded = stats.rejPartExcluded + 1
+      return
+    end
+    under, bodyName = 2, "UNDERSIDE_PART"
+  end
   local node = v.data.nodes[id1]
 
   -- surface material: materialId1 is what the node hit (the ground-model
@@ -515,6 +610,8 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
     return
   end
   if paintEnabled and obj and obj.queueGameEngineLua then
+    if under == 0 and undersideContact(id1, normal) then under = 1 end
+    if under > 0 then stats.undersideContacts = (stats.undersideContacts or 0) + 1 end
     -- `now` is the simTime resolved in the magnitude section above.
     if impactHit then
       local lastImpact = nodeImpactLast[id1] or 0
@@ -531,7 +628,7 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
           sx, sy, sz = slipVec.x, slipVec.y, slipVec.z
         end
         pendingDetectEvents[#pendingDetectEvents + 1] = {
-          pos.x, pos.y, pos.z, normal.x, normal.y, normal.z, "i", normalForce, sx, sy, sz,
+          pos.x, pos.y, pos.z, normal.x, normal.y, normal.z, "i", normalForce, sx, sy, sz, under,
         }
       end
       -- Fall through — slide branch can also fire on this tick.
@@ -576,6 +673,7 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
       pts[#pts + 1] = {
         x = px, y = py, z = pz,
         nx = normal.x, ny = normal.y, nz = normal.z,
+        u  = under,        -- underside flag (0/1/2), see flushStream
         f  = normalForce,  -- (I) force per sample; drives the fallback's
                            --     synth-camera distance if the stream ends
                            --     up <STREAM_MIN_POINTS.
@@ -609,8 +707,9 @@ local function flushDetectEvents()
   local parts = {}
   for i = 1, n do
     local e = pendingDetectEvents[i]
-    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%q,%.0f,%.2f,%.2f,%.2f}",
-      e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8] or 0, e[9] or 0, e[10] or 0, e[11] or 0)
+    -- 12th field: underside flag (0 none, 1 body node, 2 low mechanical part).
+    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%q,%.0f,%.2f,%.2f,%.2f,%d}",
+      e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8] or 0, e[9] or 0, e[10] or 0, e[11] or 0, e[12] or 0)
   end
   local streams = table.concat(pendingStreams, ",")
   pendingDetectEvents = {}
@@ -917,6 +1016,14 @@ M.setThresholds = function(slip, perp, normalForce)
   if normalForce then MIN_NORMAL_FORCE = normalForce end
   log('I', logTag, string.format("thresholds: slipVel>=%.2f perpVel>=%.2f normalForce>=%.0f",
     SLIP_THRESHOLD, PERP_THRESHOLD, MIN_NORMAL_FORCE))
+end
+
+-- Underside scrapes: flag belly contacts for the painter and let low
+-- mechanical parts through when they are what touches the ground. false =
+-- the plain part deny-list, no flags.
+M.setUndersideScrapes = function(b)
+  undersideOn = b and true or false
+  log('I', logTag, "undersideScrapes = " .. tostring(undersideOn))
 end
 
 M.setPaintEnabled = function(b)
