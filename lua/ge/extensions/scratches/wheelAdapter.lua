@@ -260,6 +260,22 @@ function M.prepare(_, vid, vdata)
   skipped[vid] = nil
   -- A rebuild re-clones this vehicle's materials clean; forget what was written.
   if attached and attached.vid == vid then applied = nil end
+  -- The engine caches this vdata between builds, so overrides written for an
+  -- earlier build (another model on the same vehicle id, other wheels) would
+  -- ride along forever and make stale keys look rendered. Start clean.
+  if vdata then
+    for _, flex in pairs(vdata.flexbodies or {}) do
+      if type(flex) == "table" and type(flex.materialOverride) == "table" then
+        local kept = {}
+        for _, override in ipairs(flex.materialOverride) do
+          if not (type(override) == "table" and tostring(override[2]):match("^scratches_%d+_whl_")) then
+            kept[#kept+1] = override
+          end
+        end
+        flex.materialOverride = kept
+      end
+    end
+  end
   if not enabled or not vdata then return end
   local keys = (modelByVid[vid] == vdata.model and keysByVid[vid]) or keysByModel[vdata.model]
   if not keys or not next(keys) then
@@ -438,7 +454,8 @@ function M.disableAll()
   end
 end
 
--- Delete our clones of vehicles that no longer exist and that no mesh uses.
+-- Delete our clones that no mesh uses: those of vehicles that no longer
+-- exist, and those a live vehicle left behind when it changed model or wheels.
 function M.collectUnused()
   local liveIds, referenced = {}, {}
   for _, veh in ipairs(getAllVehicles()) do
@@ -449,9 +466,21 @@ function M.collectUnused()
     local mat = scenetree.findObject(id)
     local name = mat and mat:getName()
     local owner = name and tonumber(tostring(name):match("^scratches_(%d+)_whl_"))
-    if owner and not liveIds[owner] and not referenced[name] and mat:getField("scratchesOwner", 0) == OWNER then
-      mat:delete()
-      clones[name] = nil
+    if owner and not referenced[name] and mat:getField("scratchesOwner", 0) == OWNER then
+      -- A live owner keeps what its current build knows or has just prepared
+      -- (a clone made in Phase2 is not on a mesh until construction ends).
+      local wanted = false
+      if liveIds[owner] then
+        local key = tostring(name):match("^scratches_%d+_whl_(.+)$")
+        wanted = (keysByVid[owner] and keysByVid[owner][key]) and true or false
+        for _, entry in ipairs(prepared[owner] and prepared[owner].entries or {}) do
+          if entry.name == name then wanted = true end
+        end
+      end
+      if not wanted then
+        mat:delete()
+        clones[name] = nil
+      end
     end
   end
   for _, t in ipairs({prepared, skipped, keysByVid, modelByVid}) do
