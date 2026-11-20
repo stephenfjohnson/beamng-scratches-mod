@@ -794,6 +794,72 @@ local streamStats=paint.getStats()
 check(streamStats.stamp.streamsMerged==1,"adjacent stream bands share a projection")
 check(streamStats.stamp.streamLayersExpected==4 and streamStats.stamp.streamSubstrokesTotal==4 and streamStats.perf.bakeLayersTotal==4,"merged bands retain exactly one haze and one segment each without alias duplication")
 paint.setPanelGrouping(false)
+-- Ground paint: a slide whose contact normal is vertical leaves marks on the
+-- road along its path; walls leave none; the ring is bounded; marks fade and
+-- expire; a vehicle reset keeps them and a level change does not.
+do
+  local ground = dofile("/lua/ge/extensions/scratches/groundPaint.lua") -- private instance
+  local drawn, drawnPool = 0, nil
+  ground._setBackend(function(pool, n) drawn = n; drawnPool = pool end)
+  local red = {0.8, 0.1, 0.1}
+  check(ground.addStream({{0,0,0,1,0,0},{2,0,0,1,0,0}}, red) == 0, "a slide along a wall leaves nothing on the ground")
+  check(ground.addStream({{0,0,0,0,0,1},{0.03,0,0,0,0,1}}, red) == 0, "a slide that went nowhere leaves nothing on the ground")
+  local laid = ground.addStream({{0,0,0,0,0,1},{2,0,0,0,0,1}}, red)
+  check(laid >= 5 and laid <= 9, "a 2 m ground scrape lays one mark per 0.25-0.4 m ("..laid..")")
+  local first = ground._marks()[1]
+  check(first.dx > 0.99 and first.len > 0.25 and first.len < 0.7 and first.width < 0.2, "a ground mark lies along the scrape")
+  check(first.r > first.g + 0.2 and first.g > 0.1 and first.a < 0.7, "paint transfer keeps the car's hue, chalkier and translucent")
+  ground.update(1/60)
+  check(drawn == laid and ground.getStats().submitted == laid, "every nearby mark is submitted each frame ("..drawn..")")
+  check(drawnPool[1].scale.y == first.len and drawnPool[1].color.a == first.a and drawnPool[1].texture == first.tex, "the decal carries the mark's size, tint and texture")
+  local poolEntry = drawnPool[1]
+  ground.update(1/60)
+  check(drawnPool[1] == poolEntry, "the decal pool is reused between frames")
+  core_camera = { getPosition = function() return vec3(1000, 0, 0) end }
+  drawn = 0; ground.update(1/60)
+  check(drawn == 0 and ground.getStats().submitted == 0 and ground.getStats().culled == laid, "marks far from the camera are not submitted")
+  core_camera = nil
+  check(ground.addImpact(5,5,0, 0,0,1, 500, red) == 0 and ground.addImpact(5,5,0, 1,0,0, 30000, red) == 0, "soft hits and wall hits chip nothing onto the ground")
+  check(ground.addImpact(5,5,0, 0,0,1, 12000, red) >= 2, "a hard hit on the ground leaves a smear and chips")
+  check(ground.addWheelScrape({0,9,0}, {0,0,1}, 6) == 0, "the first wheel-side report only starts a track")
+  check(ground.addWheelScrape(vec3(0.3,9,0), vec3(0,0,1), 6) == 1, "a dragged wheel lays a mark once it has moved")
+  local stats = ground.getStats()
+  local wheelMark = ground._marks()[stats.alive]
+  check(wheelMark.r < 0.6 and math.abs(wheelMark.r - wheelMark.g) < 0.05 and wheelMark.dx > 0.99, "the wheel mark is dark rubber or bare metal, along the drag")
+  check(ground.addWheelScrape({0.6,9,0}, {1,0,0}, 6) == 0, "a wheel rubbing a wall leaves nothing on the ground")
+  for i = 1, 40 do ground.addStream({{0,20+i,0,0,0,1},{6,20+i,0,0,0,1}}, red) end
+  stats = ground.getStats()
+  check(stats.alive == ground._limits.max and stats.dropped > 0, "the ring is bounded and drops the oldest ("..stats.alive.." alive, "..stats.dropped.." dropped)")
+  local bare = 0
+  for _, m in ipairs(ground._marks()) do if math.abs(m.r - m.g) < 0.02 and m.r < 0.4 then bare = bare + 1 end end
+  check(bare > 50, "a long hard scrape wears through to bare metal ("..bare..")")
+  ground.update(ground._limits.life - ground._limits.fade / 2)
+  local a = drawnPool[1].color.a
+  check(a > 0 and a < 0.4, "marks fade over their last seconds ("..a..")")
+  ground.update(ground._limits.fade)
+  check(ground.getStats().alive == 0, "marks expire")
+  ground.addStream({{0,0,0,0,0,1},{2,0,0,0,0,1}}, red)
+  ground._setBackend(function() error("decal manager gone") end)
+  check(pcall(ground.update, 1/60) and ground.getStats().drawErrors == 1, "a throwing decal manager is contained")
+  ground.setEnabled(false)
+  check(ground.getStats().alive == 0 and ground.addStream({{0,0,0,0,0,1},{2,0,0,0,0,1}}, red) == 0, "switched off: marks forgotten, nothing new laid")
+end
+paint.clearGroundPaint()
+paint.ingest(playerVid,nil,{{{100,0,.6,0,0,1},{101,0,.6,0,0,1}}})
+local groundAlive=paint.getStats().ground.alive
+check(groundAlive>=2,"a ground slide reaching the painter marks the road ("..groundAlive..")")
+paint.ingest(playerVid,nil,{{{100,0,.6,1,0,0},{101,0,.6,1,0,0}}})
+check(paint.getStats().ground.alive==groundAlive,"a wall slide reaching the painter does not mark the road")
+paint.onVehicleResetted(playerVid)
+check(paint.getStats().ground.alive==groundAlive,"a vehicle reset keeps the road marked")
+paint.onClientEndMission()
+check(paint.getStats().ground.alive==0,"leaving the level clears the road marks")
+paint.setGroundPaint(false)
+paint.ingest(playerVid,nil,{{{100,0,.6,0,0,1},{101,0,.6,0,0,1}}})
+check(paint.getStats().ground.alive==0 and paint.getStats().ground.enabled==false,"setGroundPaint(false) switches road marks off")
+paint.setGroundPaint(true)
+for _=1,40 do frame(.02) end
+paint.clearStamps();paint.resetPaintStats()
 -- Synthetic anchors: no native projection pass, and every layer is anchored at
 -- its own contact point with an outward normal (sign resolved against the hull
 -- face even when the detector's collision normal points into the car).

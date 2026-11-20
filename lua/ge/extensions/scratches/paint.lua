@@ -48,6 +48,13 @@ end
 local adapter = nil
 local adapterModule = nil
 local soilColor = dofile("/lua/ge/extensions/scratches/soilColor.lua")
+-- Paint / rubber left on the road. Optional: a load failure leaves it nil and
+-- every call site is guarded.
+local groundPaint
+do
+  local ok, mod = pcall(dofile, "/lua/ge/extensions/scratches/groundPaint.lua")
+  if ok and type(mod) == "table" then groundPaint = mod end
+end
 -- Contact-patch wear (see patches.lua): contacts fold into patches and each
 -- patch is painted as one decal. `now` advances with real frame time so the
 -- mock harness can step it; `warm` lists brush sets not yet loaded this
@@ -818,6 +825,7 @@ end
 
 local materialCleanupPending = true
 local function onUpdate(dtReal, dtSim, dtRaw)
+  if groundPaint then pcall(groundPaint.update, dtSim) end
   if materialCleanupPending and adapterModule then
     materialCleanupPending = not adapterModule.collectUnusedMaterials()
   end
@@ -2388,6 +2396,9 @@ M.ingest = function(vid, events, streams)
     return
   end
   if not resolveDecalProjection() then return end
+  -- World-space contacts, before they are converted to the car's frame: what
+  -- scraped the road leaves paint on it.
+  if groundPaint then pcall(groundPaint.ingestWorld, veh, events, streams) end
 
   local invM    = veh:getRefNodeMatrix():fullInverse()
   local rotOnly = invM:copy(); rotOnly:setColumn(3, vec3(0, 0, 0))
@@ -2905,6 +2916,7 @@ M.getStats = function()
                damageWidth = adapter and adapter:getDamageWidth() or 0, coverageCoalescing=coverage~=nil, panelGrouping=panelGrouping,
                fullRateCombine = fullRateCombine, syntheticAnchors = syntheticAnchors },
     anchors = { synthesized = syntheticAnchorCount },
+    ground = groundPaint and groundPaint.getStats() or { enabled = false, alive = 0, submitted = 0, dropped = 0 },
     wear = { enabled = wear.on, painted = wear.painted, warmed = wear.warmedCount,
              warmPending = wear.warm and #wear.warm or -1, pending = wear.agg:pending(),
              patches = wear.agg:stats() },
@@ -2944,6 +2956,10 @@ M.setContactPatches = function(enabled, interval)
 end
 -- true (default): projection-free anchors from the detector's contact points.
 -- false: legacy native projection per job. Applies to work captured afterwards.
+-- Paint and rubber left on the road (groundPaint.lua). Off also forgets the
+-- marks already laid. clearGroundPaint wipes them without switching it off.
+M.setGroundPaint = function(enabled) if groundPaint then groundPaint.setEnabled(enabled) end end
+M.clearGroundPaint = function() if groundPaint then groundPaint.clear() end end
 M.setSyntheticAnchors = function(enabled) syntheticAnchors=enabled and true or false end
 M.setBakeBudget = function(n)
   BAKE_LAYERS_PER_FRAME=math.max(1,math.min(24,math.floor(tonumber(n) or 6)))
@@ -3627,6 +3643,7 @@ local function onExtensionLoaded()
 end
 
 local function onExtensionUnloaded()
+  if groundPaint then pcall(groundPaint.clear) end
   if adapterModule then adapterModule.disableAll() end
   if adapter then adapter:detach(); adapter=nil end
   resetSurfaceState()
@@ -3650,6 +3667,10 @@ M.onExtensionUnloaded = onExtensionUnloaded
 M.onUpdate            = onUpdate
 M.onVehicleSwitched   = onVehicleSwitched
 M.onVehicleSpawned    = onVehicleSpawned
+-- Ground marks belong to the level: gone when it is. A vehicle reset keeps
+-- them (the car is repaired, the road is not).
+M.onClientEndMission   = function() if groundPaint then pcall(groundPaint.clear) end end
+M.onClientStartMission = function() if groundPaint then pcall(groundPaint.clear) end end
 M.onSpawnCCallback = function(vid)
   local veh=scenetree.findObjectById(vid)
   if not veh then return end
