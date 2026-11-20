@@ -798,12 +798,16 @@ end
 
 -- Washable exposure state is deliberately separate from irreversible baked
 -- decals. Never clear the scratch canvas to simulate washing.
-local surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false}
+-- deposits counts flank deposits only (cap 96). Underside and sill deposits
+-- have their own counters and caps, so they can never starve the visible fling.
+local surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false,
+  underDeposits=0, sillDeposits=0, wheelSamples=0, deepSamples=0}
 local surfaceWaterAge = 1
 local soilRemaining, waterFraction = 1, 0
 local surfaceSpots = {}
 local function resetSurfaceState()
-  surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false}
+  surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false,
+    underDeposits=0, sillDeposits=0, wheelSamples=0, deepSamples=0}
   surfaceSpots, surfaceWaterAge = {}, 1
   soilRemaining, waterFraction = 1, 0
   pcall(wheelAdapter.reset)
@@ -822,12 +826,14 @@ local function updateSurface(dt)
   surfaceWaterAge = surfaceWaterAge + dt
   if surfaceWaterAge <= 0.5 then
     surfaceState.wetness = math.min(1, surfaceState.wetness + dt * 0.8 * waterFraction)
-    if adapter and surfaceState.deposits > 0 then
+    if adapter and surfaceState.deposits + (surfaceState.underDeposits or 0)
+        + (surfaceState.sillDeposits or 0) > 0 then
       soilRemaining = math.max(0,soilRemaining-dt*waterFraction/8)
       if soilRemaining == 0 then
         adapter:clearSoil()
         surfaceSpots = {}
         surfaceState.deposits = 0
+        surfaceState.underDeposits, surfaceState.sillDeposits = 0, 0
         soilRemaining = 1
       end
     end
@@ -1688,7 +1694,19 @@ local function buildClusters(inputs)
       local dy = s.localPos.y - c.cy
       local dz = s.localPos.z - c.cz
       local radius=panelGrouping and math.max(CLUSTER_RADIUS,1.2) or CLUSTER_RADIUS
-      if (dx*dx + dy*dy + dz*dz) < radius*radius and
+      -- A cluster shares one camera, aimed along its averaged normal. Soil is
+      -- placed on chosen faces (flank, underside), so a soil stamp never joins
+      -- a cluster facing another way: an upward underside stamp averaged with
+      -- a sideways flank stamp would be shot edge-on.
+      local first = c.members[1]
+      local facesAgree = true
+      if (s.soil or first.soil) and s.localNormal and first.localNormal then
+        local la, lb = vecLen(s.localNormal), vecLen(first.localNormal)
+        if la > 1e-3 and lb > 1e-3 then
+          facesAgree = s.localNormal:dot(first.localNormal) / (la * lb) >= 0.5
+        end
+      end
+      if facesAgree and (dx*dx + dy*dy + dz*dz) < radius*radius and
         (not panelGrouping or (#c.members<MAX_LAYERS_PER_FLUSH and averageNormals(c.members):dot(s.localNormal)>=.9)) then
         local k = #c.members
         c.cx = (c.cx * k + s.localPos.x) / (k + 1)
@@ -2556,9 +2574,136 @@ end
 
 -- Wheel fling throw angles, degrees above horizontal, one per deposit in turn.
 local FLING_LIFT = { 70, 35, 52, 84, 24, 60 }
+-- Powder is lighter than mud: thrown steeper, and speed flattens it less.
+local SNOW_FLING_LIFT = { 78, 50, 66, 86, 42, 72 }
+local FLING_VARIANTS = { mud = 3, dirt = 2, snow = 3 }
+local SOIL_TEX = "/art/dynamicDecals/textures/soil_"
+
+-- Soil beyond the flank fling: the underside, and the sills in deep mud/snow.
+-- Each has its own budget per wash cycle, on top of the 96 flank deposits.
+local soilExtras = { underside = true, sills = true, snowFling = true }
+local SOIL_UNDER_CAP, SOIL_SILL_CAP = 24, 32
+local SOIL_UNDER_EVERY = 3   -- every Nth wheel sample also dirties the floor
+local SOIL_SILL_EVERY = 2    -- every Nth deep sample lays a sill band
+-- Metres above the spawn box's bottom (the ground under a resting car). The
+-- decal is a box centred on its anchor, so the underside slab spans
+-- underHeight +- underDepth/2: it reaches the floor pan, never the cabin.
+local soilGeom = { underHeight = 0.28, underDepth = 0.32, sillHeight = 0.24 }
+-- Underside placement per deposit: metres from the wheel towards mid-car, and
+-- fraction of the half-width out from the centreline.
+local UNDER_ALONG  = { 0.35, 0.95, 1.55, 0.65, 1.25, 0.10 }
+local UNDER_ACROSS = { 0.42, 0.25, 0.45, 0.12, 0.35, 0.42 }
+local SILL_STEP = { 0, 0.5, 1, 0.25, 0.75 }
+
+M.setSoilExtras = function(underside, sills, snowFling)
+  if underside ~= nil then soilExtras.underside = underside and true or false end
+  if sills ~= nil then soilExtras.sills = sills and true or false end
+  if snowFling ~= nil then soilExtras.snowFling = snowFling and true or false end
+  return soilExtras.underside, soilExtras.sills, soilExtras.snowFling
+end
+M.getSoilExtras = function()
+  return { underside = soilExtras.underside, sills = soilExtras.sills, snowFling = soilExtras.snowFling,
+    underCap = SOIL_UNDER_CAP, sillCap = SOIL_SILL_CAP, underHeight = soilGeom.underHeight,
+    underDepth = soilGeom.underDepth, sillHeight = soilGeom.sillHeight }
+end
+-- Live tuning for cars whose floor or sills sit unusually high (trucks).
+M.setSoilGeometry = function(underHeight, underDepth, sillHeight)
+  local function clamp(v, lo, hi, old)
+    v = tonumber(v)
+    if not v or v ~= v then return old end
+    return math.max(lo, math.min(hi, v))
+  end
+  soilGeom.underHeight = clamp(underHeight, 0.05, 0.9, soilGeom.underHeight)
+  soilGeom.underDepth  = clamp(underDepth, 0.1, 0.35, soilGeom.underDepth)
+  soilGeom.sillHeight  = clamp(sillHeight, 0.05, 0.9, soilGeom.sillHeight)
+  return soilGeom.underHeight, soilGeom.underDepth, soilGeom.sillHeight
+end
+
+-- One underside or sill deposit, against that type's own budget.
+local function depositSoilExtra(vid, where, kind, wheel, worldPos, p, normal, spot, spotCap, opts)
+  local counter = where == "under" and "underDeposits" or "sillDeposits"
+  local cap = where == "under" and SOIL_UNDER_CAP or SOIL_SILL_CAP
+  if (surfaceState[counter] or 0) >= cap or (surfaceSpots[spot] or 0) >= spotCap
+      or surfaceWaterAge <= 0.5 then return false end
+  local c,source,material,texture=soilColor.resolve(kind,worldPos)
+  local sample = {kind=kind,wheel=wheel,where=where,x=p.x,y=p.y,z=p.z,
+    normalX=normal.x,normalY=normal.y,normalZ=normal.z,
+    depth=opts.depth,scale=opts.scale,width=opts.width,brush=opts.colorTex,
+    color=c,colorSource=source,terrainMaterial=material,terrainTexture=texture}
+  surfaceState[where == "under" and "lastUnder" or "lastSill"] = sample
+  surfaceState.lastSample = sample
+  surfaceSpots[spot] = (surfaceSpots[spot] or 0)+1
+  surfaceState[counter] = (surfaceState[counter] or 0)+1
+  opts.soil, opts.r, opts.g, opts.b, opts.a = true, c[1], c[2], c[3], 0.95
+  opts.skipMetal, opts.noJitter = true, true
+  enqueueStamp(p, normal, opts, vid)
+  return true
+end
+
+-- Underside and sill deposits for one accepted sample. cx/cy is the sample's
+-- own car-local position (the flank path moves its copy onto the body side).
+local function depositSoilExtras(vid, e, worldPos, cx, cy)
+  if not (soilExtras.underside or soilExtras.sills) then return end
+  local box = getSpawnAabb()
+  if not box then return end
+  local lo, hi = box.minExtents, box.maxExtents
+  local midX, midY = (lo.x+hi.x)*0.5, (lo.y+hi.y)*0.5
+  local halfW, length = (hi.x-lo.x)*0.5, hi.y-lo.y
+  if halfW < 0.3 or length < 1 then return end
+  local side = cx >= midX and 1 or -1
+  local kind = e[1]
+  if e[8] == 1 then
+    surfaceState.wheelSamples = (surfaceState.wheelSamples or 0)+1
+    -- Wheel samples reveal where the axles are.
+    surfaceState.axleMin = math.min(surfaceState.axleMin or cy, cy)
+    surfaceState.axleMax = math.max(surfaceState.axleMax or cy, cy)
+    if soilExtras.underside and surfaceState.wheelSamples % SOIL_UNDER_EVERY == 0 then
+      -- Thrown straight up onto the floor: inboard of the wheel, walking from
+      -- the arch towards mid-car. The footprint stays inside 80 % of the
+      -- half-width so the shallow slab never crosses the sill's outer face.
+      local phase = (surfaceState.underDeposits or 0) % 6
+      local toward = cy > midY and -1 or 1
+      local size = math.max(0.4, math.min(0.7, halfW*0.7))
+      local uy = math.max(lo.y+0.45, math.min(hi.y-0.45, cy + toward*UNDER_ALONG[phase+1]))
+      local up = vec3(midX + side*halfW*UNDER_ACROSS[phase+1], uy, lo.z + soilGeom.underHeight)
+      depositSoilExtra(vid, "under", kind, e[8], worldPos, up, vec3(0,0,-1),
+        "under:"..side..":"..math.floor(uy*2), 4,
+        {scale=size, depth=soilGeom.underDepth, rot=phase*math.pi/2,
+         colorTex=SOIL_TEX..kind.."_coverage.png"})
+    end
+  end
+  -- Deep: the detector flagged it (field 9), or a body node itself is in the
+  -- mud/snow (field 8 == 0). Old 8-field wheel samples are never deep.
+  local deep = (kind == "mud" or kind == "snow") and (e[9] == 1 or e[8] == 0)
+  if deep and soilExtras.sills then
+    surfaceState.deepSamples = (surfaceState.deepSamples or 0)+1
+    if surfaceState.deepSamples % SOIL_SILL_EVERY == 1 then
+      local n = surfaceState.sillDeposits or 0
+      local a0, a1 = surfaceState.axleMin, surfaceState.axleMax
+      if not a0 or not a1 or a1 - a0 < 1.2 then
+        a0, a1 = lo.y + length*0.2, hi.y - length*0.2
+      end
+      -- Between the wheel arches, stepping along the sill deposit by deposit.
+      local y0, y1 = a0 + 0.5, a1 - 0.5
+      if y1 < y0 then y0 = (a0+a1)*0.5; y1 = y0 end
+      local step = n % 5
+      local sp = vec3(side > 0 and hi.x or lo.x, y0 + (y1-y0)*SILL_STEP[step+1],
+        lo.z + soilGeom.sillHeight + (n%3)*0.03)
+      -- Rotation 0 keeps the brush upright on either flank (decal up = car
+      -- up), so the heavy edge is at the bottom. The slab reaches in past the
+      -- mirror overhang to the sill, well short of the centreline.
+      depositSoilExtra(vid, "sill", kind, e[8], worldPos, sp, vec3(side,0,0),
+        "sill:"..side..":"..step, 5,
+        {scale=math.max(0.6, math.min(1.1, (y1-y0)*0.5+0.35)), width=0.34,
+         depth=math.min(0.9, halfW*0.9), rot=0, flipX=(n%2==0) and 1 or -1,
+         colorTex=SOIL_TEX..kind.."_band_"..(n%2+1)..".png"})
+    end
+  end
+end
 
 -- Contact positions are a conservative splash proxy, not a fluid simulation.
 -- Existing projection/hull aiming and all scheduler budgets remain in use.
+-- Sample: {kind, x,y,z, nx,ny,nz, wheel(0/1), deep(0/1, optional)}.
 M.ingestSurface = function(vid, samples, wet, supported, fraction)
   local veh = getPlayerVehicle(0)
   if not ready or not veh or veh:getId() ~= vid then return end
@@ -2579,10 +2724,16 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
       wheelAdapter.expose(e[1], function() return (soilColor.resolve(e[1], vec3(e[2],e[3],e[4]))) end)
       local worldPos=vec3(e[2],e[3],e[4])
       local p = inv:mulP3F(worldPos)
+      local contactX, contactY = p.x, p.y
       local normal = rot:mulP3F(vec3(e[5],e[6],e[7]))
       local flow, spraySpeed, trailLength, projectionDepth
+      local snow = e[1] == "snow"
+      local snowFling = snow and soilExtras.snowFling
+      -- Every third snow deposit packs into the arch instead of flying, so
+      -- snow still builds up where the tyre feeds it.
+      local pack = snowFling and e[8] == 1 and surfaceState.deposits % 3 == 2
       if e[8] == 1 then
-        if e[1] ~= "snow" then
+        if (not snow or snowFling) and not pack then
           local velocity = veh:getVelocity()
           local localVelocity = rot:mulP3F(velocity)
           -- Fling: the tread throws soil up and back. Successive deposits
@@ -2592,9 +2743,16 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
           spraySpeed = math.abs(localVelocity.y)
           if spraySpeed > 0.5 then
             local phase = surfaceState.deposits % 6
-            local lift = math.rad(math.max(16, FLING_LIFT[phase + 1] - spraySpeed * 1.1))
+            local lift
+            if snow then
+              -- Powder: a taller, shorter plume that speed barely flattens.
+              lift = math.rad(math.max(30, SNOW_FLING_LIFT[phase + 1] - spraySpeed * 0.6))
+              trailLength = math.min(1.3, 0.62 + spraySpeed * 0.04) * (0.88 + 0.04 * (phase % 4))
+            else
+              lift = math.rad(math.max(16, FLING_LIFT[phase + 1] - spraySpeed * 1.1))
+              trailLength = math.min(1.45, 0.6 + spraySpeed * 0.05) * (0.85 + 0.05 * (phase % 4))
+            end
             flow = vec3(0, (localVelocity.y > 0 and -1 or 1) * math.cos(lift), math.sin(lift))
-            trailLength = math.min(1.45, 0.6 + spraySpeed * 0.05) * (0.85 + 0.05 * (phase % 4))
           end
         end
         local box = getSpawnAabb()
@@ -2616,6 +2774,10 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
             local back = flow.y > 0 and 1 or -1
             p.y = p.y + back * 0.18 + flow.y * trailLength * 0.43
             p.z = lo.z + 0.18 + flow.z * trailLength * 0.43
+          elseif pack then
+            -- Packed snow: on the arch lip around the tyre.
+            p.y=math.max(lo.y+0.3,math.min(hi.y-0.3,p.y+(phase%4-1.5)*0.18))
+            p.z=lo.z+0.42+(phase%2)*0.14
           else
             local inward=p.y>(lo.y+hi.y)*0.5 and -0.65 or 0.65
             p.y=math.max(lo.y+0.3,math.min(hi.y-0.3,p.y+inward+(phase%4-1.5)*0.24))
@@ -2624,28 +2786,38 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
           normal = vec3(side,0,0)
         end
       end
-      surfaceState.lastSample = {kind=e[1],wheel=e[8],x=p.x,y=p.y,z=p.z,
+      local flank = {kind=e[1],wheel=e[8],where="flank",x=p.x,y=p.y,z=p.z,pack=pack or nil,
+        deep=e[9]==1 or nil,
         flowY=flow and flow.y,flowZ=flow and flow.z,trailLength=trailLength,depth=projectionDepth}
+      surfaceState.lastSample = flank
+      surfaceState.lastFlank = flank
       local key = e[1]..":"..math.floor(p.x*3)..":"..math.floor(p.y*3)..":"..math.floor(p.z*3)
       if surfaceState.deposits < 96 and (surfaceSpots[key] or 0) < 12
           and surfaceWaterAge > 0.5 then
         local c,source,material,texture=soilColor.resolve(e[1],worldPos)
-        surfaceState.lastSample.color=c
-        surfaceState.lastSample.colorSource=source
-        surfaceState.lastSample.terrainMaterial=material
-        surfaceState.lastSample.terrainTexture=texture
+        flank.color=c
+        flank.colorSource=source
+        flank.terrainMaterial=material
+        flank.terrainTexture=texture
         surfaceSpots[key] = (surfaceSpots[key] or 0)+1
         surfaceState.deposits = surfaceState.deposits+1
         enqueueStamp(p, normal, {
           soil=true,r=c[1],g=c[2],b=c[3],a=0.95,
-          scale=trailLength or 0.65,
-          width=flow and trailLength*0.5 or nil,flow=flow,skipMetal=true,noJitter=true,
+          scale=trailLength or (pack and 0.5 or 0.65),
+          -- Mud fans are 2:1; a snow plume is puffier.
+          width=flow and trailLength*(snow and 0.7 or 0.5) or nil,flow=flow,skipMetal=true,noJitter=true,
           depth=projectionDepth,
           dist=flow and trailLength*2.2 or nil,
           flipY=flow and (surfaceState.deposits%2==0 and 1 or -1) or nil,
-          colorTex="/art/dynamicDecals/textures/soil_"..e[1]..
-            (flow and ("_fling_"..(surfaceState.deposits%(e[1]=="mud" and 3 or 2)+1)..".png") or "_coverage.png"),
+          colorTex=SOIL_TEX..e[1]..
+            (flow and ("_fling_"..(surfaceState.deposits%(FLING_VARIANTS[e[1]] or 2)+1)..".png") or "_coverage.png"),
           rot=flow and 0 or (surfaceState.deposits%4)*math.pi/2},vid)
+      end
+      -- Fail safe: the extras can never take the flank deposit down with them.
+      local ok, err = pcall(depositSoilExtras, vid, e, worldPos, contactX, contactY)
+      if not ok and not surfaceState.extrasError then
+        surfaceState.extrasError = tostring(err)
+        log('W', logTag, "soil extras failed: "..tostring(err))
       end
     end
   end
