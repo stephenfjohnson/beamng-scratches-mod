@@ -29,8 +29,10 @@ visual changes and reproducible timings for performance claims.
 
 ## Documentation and merging
 
-Update README feature status, examples, compatibility notes and CHANGELOG in
-the same change as implementation. Clearly distinguish mock-tested logic from
+Update the [feature write-ups](docs/features.md), examples, compatibility notes,
+[known issues](docs/known-issues.md) and CHANGELOG in the same change as
+implementation. The README is the short player-facing front page: keep it in
+plain language and put technical detail in [`docs/`](docs/README.md). Clearly distinguish mock-tested logic from
 in-game verification. Do not advertise unsupported features or imply a local
 ZIP is a public download. Review older branches before integrating overlapping
 work. Merge only after the milestone checks pass; preserve unrelated work.

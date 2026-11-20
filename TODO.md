@@ -1,7 +1,7 @@
 # TODO
 
 Open work for scratches_mod, swept on 2026-11-15. Everything that shipped is on
-`master` and shown in the [README](README.md). This list holds what remains:
+`master` and shown in the [README](README.md) and the [feature write-ups](docs/features.md). This list holds what remains:
 release blockers first, then quality, verification, compatibility, tech debt,
 and the ideas still parked on archived branches.
 
@@ -91,6 +91,80 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 
 ## Needs live verification
 
+Added 2026-11-20 with snow fling, the wheel and undercarriage overlay, underside
+scrapes and ground transfer. Driven on Vulkan, BeamNG 0.40.6.0, mostly on the
+Sunburst rally car; wheel binding was also checked on eleven other vehicles.
+
+- [x] **Fan of long lines across the hood and roof after a roll** (2026-11-20).
+  The aerial. It stands a metre clear of the roof and is the first thing
+  dragged along the ground when the car goes over; a decal anchored at its tip
+  was projected from above the tip down through the roof, hood and bumper,
+  magnified, as straight lines fanning out from the aerial's base. Aerials (and
+  the rear window) no longer report contacts. `tools/bench.py run endo`
+  reproduced it three times in three before, none in three after.
+- [ ] **A decal anchored off the surface projects through.** The aerial was the
+  bad case, but any contact node that stands clear of the skin under it (a
+  wing on struts, a roof bar, a light pod) is painted onto what lies beneath,
+  larger than life. Nothing checks the distance from a contact to the panel.
+- [x] **Contacts from parts that have broken off** are dropped
+  (`stamp.strayDropped`): a bumper lying 30 m away kept reporting, 42 of 132
+  contacts in one crash were not on the car.
+- [x] **Hood and nose contacts were taken for underside ones.** The underside
+  zone was 42 % of the spawn box, which an aerial stretches to 2.18 m, so it
+  reached hood height; it now stops 0.55 m above the floor, and a body contact
+  must be within about 37 degrees of straight up. The shared camera of a
+  cluster also follows the stamps' resolved facing: an up and a down normal
+  used to cancel and aim it along the car.
+- [ ] **Belly scrapes are counted, not yet seen.** The `bellyflop` bench
+  scenario (`tools/bench.py run bellyflop`) grounds the car: 52 underside
+  contacts, 40 patches painted, undercarriage abrasion at step 4 of 10. From
+  below the skid plate looks no different. Canvas marks can only land on
+  exterior panels (see the next item), and the abrasion overlay is grey on a
+  grey plate. Needs a car with painted bumper and sill undersides in view, and
+  probably a stronger abrasion look.
+- [x] **Mud on the painted floor.** A car's skin UV layout holds exterior panels
+  only (checked against `sunburst2_skin_UVs.png`), so no projection reaches the
+  floor pan. Every face outside the layout reads one texel of the canvas, its
+  bottom-left corner, and a UV-space texture fill of that corner does reach it:
+  the floor now gets an even film that steps up as the wheels roll through soil
+  (`soil_floor_fill_1..6`, `tools/generate_floor_fill.py`).
+- [ ] **The floor film is off by default** (owner's call, 2026-11-20). That one
+  texel is read by everything else outside the skin layout too: on the Sunburst
+  rally car the window frames, pillars and the top of the rear wing, which
+  must not be coloured. The code stays:
+  `scratches_paint.setSoilExtras(nil, nil, nil, true)` turns it on (four of its
+  six steps, about half strength; pass 6 for 0.72). One even colour, no lumps.
+  To ship it, the film needs a way to reach the floor without the trim.
+- [x] **Mud was half transparent.** The soil stage takes its opacity from the
+  soil canvas red channel, so brown mud at r = 0.43 was 43 % opaque at best.
+  Soil is now baked at full red with its brightness in the stage's colour
+  factor (`bodyAdapter soilTone`). The same limit still holds for the damage
+  stage ("Weak dark marks" above).
+- [ ] **Undercarriage parts are found by name** (`mechanical`, `skidplate`,
+  `exhaust`, `suspension`, `rallyparts`, `runningboard`, `mudflap` ...). The
+  ETK 800 and the city bus have no material that matches, so only their wheels
+  get dirty. Engine-bay parts that share a matched material get dirty too.
+- [ ] **Snow fling on real snow.** Gridmap has no snow; the captures fed snow
+  samples at the wheel positions of a moving car. Drive it on a snow map.
+- [ ] **Sill bands in really deep mud.** Seen only with the deep flag fed in by
+  hand; Gridmap's mud strip is too shallow to set it. Sill and underside
+  heights now come from the car's own rest pose (Sunburst 0.26 m, D-Series
+  0.41 m).
+- [ ] **Ground marks use the car's base paint**, so a liveried panel leaves the
+  colour under its livery. Marks are also laid on loose ground (dirt, sand,
+  gravel), where paint transfer is unlikely.
+- [ ] **Ground mark cost.** Marks are resubmitted every frame while they live
+  (four minutes): submitting 225 costs 0.25 ms in the engine, plus the Lua loop.
+  Up to 1200 marks. Not measured at the cap.
+- [ ] **Wheel overlay needs one rebuild per new car.** A model's wheel materials
+  are only known after its first build, so a freshly spawned car is rebuilt
+  once (2 to 4 s from spawn to bound in these tests). A car you switch into
+  later is not rebuilt, since that would repair it, so its wheels stay clean
+  until you reload it. Traffic was not checked.
+- [x] **D3D12** (2026-11-20, one run each): the sideslide and the mud drive render the same
+  as on Vulkan (scrapes, muddy wheels and undercarriage, sill undersides, 251
+  ground marks). Worst bake 19.6 ms, worst painter frame 19.7 ms. Snow and the
+  belly flop were not run there.
 - [ ] Terrain tint for **dirt and snow**, and on maps other than Gridmap v2.
   Only Gridmap mud has been checked.
 - [ ] Dirt fling artwork and **reverse-direction** flings in game (mock-checked only).
@@ -123,7 +197,7 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 
 ## Tech debt
 
-- [ ] **No CI.** The 358-check harness and preflight only run locally
+- [ ] **No CI.** The 505-check harness and preflight only run locally
   (`python tools/package.py`). A GitHub Action with Lua 5.1 would guard `master`.
 - [ ] **`paint.lua` is near Lua's local limit.** About 3,500 lines and 163
   top-level locals; Lua 5.1 caps a function at 200. Split the scheduler, soil

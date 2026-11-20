@@ -1,5 +1,70 @@
 # Changelog
 
+## Unreleased — underside, wheels, snow fling, ground transfer; README and docs split
+
+Driven live on Vulkan, BeamNG 0.40.6.0: Gridmap mud strip, a simulated snow
+drive (Gridmap has no snow), the bench sideslide and a new `bellyflop` scenario,
+mostly on the Sunburst rally car, with wheel binding checked on eleven other
+vehicles. Painter worst frame with all of it on: 5.4 ms (sideslide) and 5.8 ms
+(bellyflop). On D3D12 the sideslide and the mud drive were run once each and
+render the same; worst bake there 19.6 ms.
+
+<!-- NEW-FEATURES-START -->
+- **Snow fling.** Snow wheel deposits take the fling path with their own powder
+  brushes (`soil_snow_fling_1..3`), with a packed patch at the arch every third
+  deposit. `scratches_paint.setSoilExtras(underside, sills, snowFling)`.
+- **Wheels and undercarriage.** New `wheelAdapter.lua`: per-vehicle clones of the
+  tyre, rim and undercarriage materials (skid plates, suspension, exhaust, mud
+  flaps, running boards) get a tiling soil stage whose strength follows what the
+  wheels rolled through, tinted like the body soil; it washes off with the body.
+  Rims and undercarriage also get an abrasion stage, driven by wheel-side scrapes
+  and by belly contacts. `scratches_paint.setWheelDirt(false)` turns it off.
+- **Underside.** Belly contacts form bottom-face patches with a shallow box, and
+  low mechanical parts are accepted for underside contacts only
+  (`setUndersideScrapes`). Soil is also projected up from below and, in deep mud
+  or snow, laid in bands along the sills (`soil_*_band_*`). On the Sunburst the
+  painted floor pan does not take canvas marks, so what shows underneath is the
+  undercarriage overlay; belly scrapes have not been driven in game yet.
+- **Ground transfer.** New `groundPaint.lua`: slide streams and ground impacts
+  leave streaks on the road in the car's paint, then primer and metal as the
+  scrape wears through; wheel-side scrapes leave dark marks. Up to 400 marks,
+  fading after a few minutes. `scratches_paint.setGroundPaint(false)`.
+- **Wet mud tone.** Terrain-sampled mud is darkened and browned (`soilColor.wetTone`);
+  dry-ground colour was hard to see on bright paint.
+- Underside soil is projected under the sills, not at the floor pan: a car's
+  skin UV layout has no floor in it, so nothing showed there.
+- **Mud on the painted floor, off by default.** Faces outside the skin layout
+  read one corner texel of the canvas; a UV-space texture fill of that corner
+  gives the floor a film that steps up with the soil rolled through
+  (`soil_floor_fill_1..6`, `scratches_paint.soilFill`). The window frames and
+  wing top of the Sunburst rally car share that texel, so it stays off until it
+  can reach the floor alone (`setSoilExtras(nil, nil, nil, true)` to try it).
+- **Fixed: a fan of long straight lines across the hood and roof after a
+  roll.** The aerial reported contacts when it was dragged along the ground,
+  and a decal anchored at its tip was projected down through the car. Aerials
+  and the rear window no longer report. Also: contacts from parts that have
+  broken off are dropped, hood and nose contacts are no longer taken for
+  underside ones, and a cluster's camera follows its stamps' facing. New bench
+  scenarios `endo`, `barrel`, `tumble`, `roofslide`, `hoodslide`.
+- **Opaque mud.** Soil opacity is the soil canvas red channel, so dark mud was
+  mostly transparent. Soil is baked at full red and the stage's colour factor
+  carries its brightness (`bodyAdapter soilTone`).
+- Fixed after a six-way code review of the above: wheel clones were all
+  reloaded on any change (13 to 16 ms frames; now one clone at a time, only the
+  ones that changed); a car replaced in place kept the previous car's wheel
+  materials; switching into a car rebuilt and repaired it; ground marks spent
+  the whole ring on the end of a slide (now one streak per 0.2 m cell, 1200
+  marks); wear ran to bare metal within a few frames; deep-soil sill bands
+  landed on the wrong side; sill height was fixed at a saloon's.
+<!-- NEW-FEATURES-END -->
+- README rewritten as a short, image-led front page for players (hero, tour,
+  three-step install, plain-language caveats). The technical content moved,
+  unchanged apart from links, into [`docs/`](docs/README.md):
+  [features](docs/features.md), [install](docs/install.md),
+  [how it works](docs/how-it-works.md), [performance](docs/performance.md),
+  [development](docs/development.md), [debug panel](docs/debug-panel.md) and
+  [known issues](docs/known-issues.md).
+
 ## Unreleased — contact patches: realistic scrapes, no crash hitching (Vulkan)
 
 Measured on BeamNG 0.40.6.0, Vulkan and D3D12

@@ -419,6 +419,24 @@ function M.create(veh,part)
   function result:clearSoil()
     soil:clearBakedTextures(); soil:flushDynamicTextures(); soil:combineTextures(soilSet)
   end
+  -- The soil stage takes both its colour and its opacity from the soil canvas,
+  -- and the opacity is the canvas RED channel (in game, 2026-11-20: a green
+  -- fill is invisible, a yellow one opaque, brown mud at r=0.43 mostly
+  -- transparent). So soil is baked at full red and its brightness is carried
+  -- here, in the stage's colour factor. Twentieths; returns the level in use.
+  local soilToneBucket = 20
+  function result:soilTone(level)
+    local t = math.max(1, math.min(20, math.floor((tonumber(level) or 1)*20+0.5)))
+    if t ~= soilToneBucket then
+      soilToneBucket = t
+      local value = string.format("%.2f %.2f %.2f 1", t/20, t/20, t/20)
+      for _,entry in ipairs(entries) do
+        local mat=entry.material
+        mat:setField("baseColorFactor",soilStage,value); mat:flush(); mat:reload()
+      end
+    end
+    return soilToneBucket/20
+  end
   function result:appearance(wet, remaining)
     local w,s = math.floor(wet*10+0.5), math.floor(remaining*20+0.5)
     if w==wetBucket and s==soilBucket then return end

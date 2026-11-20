@@ -48,6 +48,18 @@ end
 local adapter = nil
 local adapterModule = nil
 local soilColor = dofile("/lua/ge/extensions/scratches/soilColor.lua")
+-- Paint / rubber left on the road. Optional: a load failure leaves it nil and
+-- every call site is guarded.
+local groundPaint
+do
+  local ok, mod = pcall(dofile, "/lua/ge/extensions/scratches/groundPaint.lua")
+  if ok and type(mod) == "table" then groundPaint = mod end
+end
+-- Wheel/tyre soil and rim abrasion overlay (material-level; see the module).
+local wheelAdapter = dofile("/lua/ge/extensions/scratches/wheelAdapter.lua")
+local wheelReloaded, wheelAutoReload = {}, true
+local wheelFresh = {}   -- [vid] = clock of a spawn the player is seated from
+local loadedAt = (os.clockhp or os.clock)()
 -- Contact-patch wear (see patches.lua): contacts fold into patches and each
 -- patch is painted as one decal. `now` advances with real frame time so the
 -- mock harness can step it; `warm` lists brush sets not yet loaded this
@@ -141,6 +153,7 @@ local stampStats = {
   jobsFailed          = 0,  -- projection jobs that threw (logged, then skipped)
   framesDeferred      = 0,  -- frames that hit the projection budget with work left over
   foreignDropped      = 0,  -- batches from a vehicle that isn't the player car
+  strayDropped        = 0,  -- contacts that were not on the car (broken-off parts)
   combinesRun         = 0,  -- composites actually run (light or full)
   rebinds             = 0,  -- of those, full api.onUpdate_ texture-set re-binds
   spotsSkipped        = 0,  -- marks skipped: that spot was already painted enough
@@ -168,6 +181,8 @@ local perfStats = {
   inputToBakeMaxMs = 0, inputToProjectMaxMs = 0,
   -- Detector batches arrive outside onUpdate, so they are timed separately.
   ingestMsTotal = 0, ingestMsMax = 0, ingestCalls = 0,
+  -- Ground marks are redrawn every frame, ready or not, outside the frame timer.
+  groundMsTotal = 0, groundMsMax = 0,
 }
 
 -- Add the time since t0 (os.clockhp seconds) to perfStats[totalKey], track
@@ -568,6 +583,24 @@ local function trySetup()
     if adapterModule.editorActive() then
       editorPaused=true; pendingSetup=false; skippedVid=vid; return false
     end
+    -- Wheel clones bind at construction like the body's. A car built before
+    -- its wheel materials were known gets one rebuild per distinct set of
+    -- unbound materials: once normally, and once more if the vehicle is
+    -- replaced in place by another model or fitted with different wheels.
+    if not adapter and wheelAutoReload and not adapterReloaded[vid] and wheelAdapter.isEnabled() then
+      -- needsRebuild also records this build's keys, so it runs either way.
+      local need, missing = wheelAdapter.needsRebuild(veh)
+      -- Fresh: just spawned with the player in it, or the car that was there
+      -- when the mod itself loaded.
+      local fresh = (wheelFresh[vid] and clockhp() - wheelFresh[vid] < 20) or clockhp() - loadedAt < 20
+      if need and fresh and wheelReloaded[vid] ~= (jbeam .. ":" .. tostring(missing)) then
+        wheelReloaded[vid] = jbeam .. ":" .. tostring(missing)
+        pendingSetup=false
+        adapterModule.invalidateConstructionCache()
+        veh:reload()
+        return false
+      end
+    end
     if not adapter then
       local ok, result = pcall(adapterModule.create, veh, part)
       if not ok then
@@ -616,6 +649,10 @@ local function trySetup()
   ready = true
   rebindDirty = true
   pendingSetup = false
+  if adapter then
+    local okWheels, wheels = pcall(wheelAdapter.attach, veh)
+    log('I', logTag, "wheel overlay: " .. (okWheels and (tostring(wheels) .. " material(s)") or tostring(wheels)))
+  end
   log('I', logTag, "decals API initialized for " .. jbeam .. " (layers=" .. tostring(api.getLayerCount and api.getLayerCount() or "?") .. ")")
 
   -- Discover which materials on this vehicle have a .skin.dynamicTextures
@@ -774,14 +811,23 @@ end
 
 -- Washable exposure state is deliberately separate from irreversible baked
 -- decals. Never clear the scratch canvas to simulate washing.
-local surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false}
+-- deposits counts flank deposits only (cap 96). Underside and sill deposits
+-- have their own counters and caps, so they can never starve the visible fling.
+local surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false,
+  underDeposits=0, sillDeposits=0, wheelSamples=0, deepSamples=0}
 local surfaceWaterAge = 1
+local floorSoil -- floor-pan film and soil ink; set up below
 local soilRemaining, waterFraction = 1, 0
 local surfaceSpots = {}
 local function resetSurfaceState()
-  surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false}
+  surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false,
+    underDeposits=0, sillDeposits=0, wheelSamples=0, deepSamples=0}
   surfaceSpots, surfaceWaterAge = {}, 1
   soilRemaining, waterFraction = 1, 0
+  if floorSoil then floorSoil.tone = nil end
+  pcall(wheelAdapter.reset)
+  -- A repaired or different car scrapes from its paint again; the road keeps its marks.
+  if groundPaint then pcall(groundPaint.resetWear) end
 end
 M.getSurfaceState = function()
   local out = {}
@@ -792,17 +838,52 @@ M.getSurfaceState = function()
   out.visualWetnessSupported = adapter ~= nil
   return out
 end
+-- Soil on the painted floor pan. Every body face outside the car's skin UV
+-- layout (the floor, inner arches, some aero) reads ONE texel of the canvas:
+-- its bottom-left corner (found by quadrant search in game, 2026-11-20). No
+-- projection can reach those faces, but a UV-space fill of that corner can, so
+-- the floor carries one even film whose strength steps up as the wheels roll
+-- through soil. `tick` is filled in below, once the fill exists.
+-- The catch: that texel is shared. On the Sunburst rally car the window
+-- frames, pillars and the top of the rear wing read it too, so the film stops
+-- at `limit` of its six steps (about half strength) unless asked for more.
+-- OFF by default (owner's call, 2026-11-20: the trim and wing must not be
+-- coloured). scratches_paint.setSoilExtras(nil, nil, nil, true) turns it on.
+floorSoil = { on = false, cooldown = 0, steps = 6, limit = 4, interval = 1.2,
+  gain = { mud = 0.03, dirt = 0.012, snow = 0.025 },
+  texture = "/art/dynamicDecals/textures/soil_floor_fill_%d.png" }
+
+-- The colour to bake for a soil of colour c. The soil stage's opacity is the
+-- canvas red channel (bodyAdapter soilTone), so a dark soil baked as it is
+-- comes out thin: Gridmap mud at r=0.43 was 43 % opaque at best. Bake it
+-- scaled up to full strength and let the stage's colour factor carry the
+-- brightness. One factor serves the whole canvas, so it follows the first soil
+-- of a wash cycle and only steps up for a clearly lighter one (snow over mud).
+floorSoil.ink = function(c)
+  if not (adapter and adapter.soilTone) then return c[1], c[2], c[3] end
+  local top = math.max(c[1], c[2], c[3], 0.05)
+  if not floorSoil.tone or top > floorSoil.tone * 1.2 then floorSoil.tone = top end
+  local ok, applied = pcall(adapter.soilTone, adapter, floorSoil.tone)
+  applied = ok and tonumber(applied) or 1
+  return math.min(1, c[1]/applied), math.min(1, c[2]/applied), math.min(1, c[3]/applied)
+end
+
 local function updateSurface(dt)
   dt = math.max(0, math.min(0.25, tonumber(dt) or 0))
   surfaceWaterAge = surfaceWaterAge + dt
+  if floorSoil.tick then floorSoil.tick(dt) end
   if surfaceWaterAge <= 0.5 then
     surfaceState.wetness = math.min(1, surfaceState.wetness + dt * 0.8 * waterFraction)
-    if adapter and surfaceState.deposits > 0 then
+    if adapter and surfaceState.deposits + (surfaceState.underDeposits or 0)
+        + (surfaceState.sillDeposits or 0) + (surfaceState.floorBakes or 0) > 0 then
       soilRemaining = math.max(0,soilRemaining-dt*waterFraction/8)
       if soilRemaining == 0 then
         adapter:clearSoil()
         surfaceSpots = {}
         surfaceState.deposits = 0
+        surfaceState.underDeposits, surfaceState.sillDeposits = 0, 0
+        surfaceState.floorLevel, surfaceState.floorBakes = 0, 0
+        floorSoil.tone, floorSoil.again = nil, nil
         soilRemaining = 1
       end
     end
@@ -814,12 +895,22 @@ local function updateSurface(dt)
     surfaceState.wetness = math.max(0, surfaceState.wetness - dt / 20)
   end
   if adapter then adapter:appearance(surfaceState.wetness,soilRemaining) end
+  -- Wheels wash at the body's rate; rim abrasion is untouched by water.
+  pcall(wheelAdapter.update, dt, surfaceWaterAge <= 0.5 and waterFraction or 0)
 end
 
 local materialCleanupPending = true
 local function onUpdate(dtReal, dtSim, dtRaw)
+  if groundPaint then
+    local tg = clockhp()
+    pcall(groundPaint.update, dtSim)
+    local groundMs = (clockhp() - tg) * 1000
+    perfStats.groundMsTotal = perfStats.groundMsTotal + groundMs
+    if groundMs > perfStats.groundMsMax then perfStats.groundMsMax = groundMs end
+  end
   if materialCleanupPending and adapterModule then
     materialCleanupPending = not adapterModule.collectUnusedMaterials()
+    if not materialCleanupPending then pcall(wheelAdapter.collectUnused) end
   end
   if editorPaused and adapterModule and not adapterModule.editorActive() then
     editorPaused=false; skippedVid=nil; pendingSetup=true; setupAttemptTimer=SETUP_RETRY
@@ -909,6 +1000,8 @@ end
 
 -- ---- vehicle lifecycle ----
 local function onVehicleSwitched(oldId, newId, player)
+  pcall(wheelAdapter.detach)
+  if groundPaint then pcall(groundPaint.resetWear) end
   if adapter then
     adapter:detach()
     adapter=nil; api=nil
@@ -944,6 +1037,11 @@ local function onVehicleSwitched(oldId, newId, player)
 end
 
 local function onVehicleSpawned(vid)
+  -- Only a car the player is being seated in straight from its spawn may be
+  -- rebuilt to bind wheel clones. Rebuilding a car the player merely switches
+  -- into would repair it and throw away its damage.
+  local spawned = scenetree.findObjectById and scenetree.findObjectById(vid)
+  if spawned and spawned.autoEnterVehicle ~= "false" then wheelFresh[vid] = clockhp() end
   -- A respawn of a car we skipped (e.g. its livery was just removed) gets a
   -- fresh look; traffic spawns don't clear the memo.
   if vid == skippedVid then skippedVid = nil end
@@ -1359,9 +1457,20 @@ end
 -- view that's OUTSIDE the owning hull face at `localPos` looking IN.
 -- BeamNG/Torque convention: col0=right(+X), col1=forward(+Y), col2=up(+Z),
 -- col3=position. (Verified in lua/ge/spawn.lua lines 98-101.)
-local function buildSyntheticCameraLocal(localPos, localNormal, dist)
+-- `facing`, when given, is a normal already resolved against the hull (see
+-- anchorNormal): the camera then looks straight down its dominant axis, sign
+-- included, rather than re-deriving the face from the position.
+local function buildSyntheticCameraLocal(localPos, localNormal, dist, facing)
   dist = dist or 0.5
-  local outward = chooseHullOutward(localPos, localNormal)
+  local outward
+  if facing and vecLen(facing) > 1e-3 then
+    local ax, ay, az = math.abs(facing.x), math.abs(facing.y), math.abs(facing.z)
+    if az >= ax and az >= ay then outward = vec3(0, 0, facing.z >= 0 and 1 or -1)
+    elseif ay >= ax then outward = vec3(0, facing.y >= 0 and 1 or -1, 0)
+    else outward = vec3(facing.x >= 0 and 1 or -1, 0, 0) end
+  else
+    outward = chooseHullOutward(localPos, localNormal)
+  end
 
   local fwd = -outward                  -- camera looks inward toward impact
   local camPos = localPos + outward * dist  -- camera placed outside the body
@@ -1394,6 +1503,71 @@ local function anchorNormal(localPos, localNormal)
     if d >= 0.35 then return n end
   end
   return outward
+end
+
+-- ---- underside contacts ----
+-- Bottoming out on a kerb, rock or crest, or sliding on the belly. Such a
+-- contact is painted on the BOTTOM face: normal exactly (0,0,-1) and a shallow
+-- depth box that never climbs past the lower shell, so it cannot reach the
+-- hood, cabin or roof from below (thin panels share texels front and back).
+-- The detector flags these on the wire (0/nil none, 1 body node, 2 low
+-- mechanical part such as a skidplate or exhaust); a flag-2 contact is only
+-- ever painted as an underside one, and dropped when it cannot be.
+-- (One table: the chunk is close to Lua's 200-local limit.)
+local underside = {
+  on = true,
+  stats = { contacts = 0, parts = 0, dropped = 0, painted = 0 },
+  NORMAL_MIN_Z = 0.5,                 -- low part: local normal points up into the car
+  NORMAL_BODY_Z = 0.8,                -- body node: within ~37 degrees of straight up
+  -- Height of the underside zone above the box floor. The spawn box includes
+  -- aerials (the rally Sunburst's is 2.18 m tall), so a share of its height
+  -- alone put the hood inside the "underside": hence the hard ceiling.
+  ZONE_FRAC = 0.30, ZONE_MIN = 0.40, ZONE_MAX = 0.55,
+  DEPTH_BODY = 0.25, DEPTH_PART = 0.35, -- m, full depth of the box
+  PART_SINK = 0.04,                   -- m of the part box left below the contact
+}
+
+-- Top of the underside zone (car-local z), or nil without a vehicle box.
+underside.zoneTop = function()
+  local box = getSpawnAabb()
+  if not box then return nil end
+  local minZ, maxZ = box.minExtents.z, box.maxExtents.z
+  if not (minZ and maxZ and maxZ > minZ) then return nil end
+  return math.min((minZ + maxZ) * 0.5, minZ + math.min(underside.ZONE_MAX,
+    math.max(underside.ZONE_MIN, (maxZ - minZ) * underside.ZONE_FRAC)))
+end
+
+-- "under" for an underside contact, "drop" for a low-part contact that is not
+-- one (or with the feature off), nil for everything else (the usual path).
+underside.classify = function(lp, ln, flag)
+  local lowPart = (tonumber(flag) or 0) >= 2
+  if not underside.on then return lowPart and "drop" or nil end
+  local top = underside.zoneTop()
+  local len = ln and vecLen(ln) or 0
+  if top and len > 1e-3 and lp.z <= top and ln.z / len >= underside.NORMAL_MIN_Z then
+    -- A body-node contact is only an underside one when z is the normal's
+    -- dominant axis, i.e. when the hull-face pick would have chosen the bottom
+    -- face anyway. Otherwise a slanted hit low on a door or bumper (normal
+    -- 45-60 degrees off vertical) would be pulled off its side face.
+    -- A nose-down landing tilts the ground normal 40 degrees and more off the
+    -- car's up axis: that is the front of the car, not its belly.
+    if lowPart or ln.z / len >= underside.NORMAL_BODY_Z then return "under" end
+  end
+  return lowPart and "drop" or nil
+end
+
+-- Box for an underside patch: returns its centre and full depth. A body-node
+-- contact is on the skin, so the box straddles it. A low part hangs below the
+-- floor, so its box starts just under the contact and reaches straight up.
+-- Either way the box top is capped at the underside zone.
+underside.box = function(centre, lowPart)
+  local depth = lowPart and underside.DEPTH_PART or underside.DEPTH_BODY
+  local bottom = lowPart and (centre.z - underside.PART_SINK) or (centre.z - depth * 0.5)
+  local top = bottom + depth
+  local cap = underside.zoneTop()
+  if cap and top > cap then top = math.max(bottom + 0.10, cap) end
+  if cap and top > cap then bottom = cap - 0.10; top = cap end
+  return vec3(centre.x, centre.y, (bottom + top) * 0.5), top - bottom
 end
 
 -- Replace the projection readback with the known contact point/normal. The
@@ -1582,6 +1756,60 @@ end
 -- vec3) with surface aim along `localNormal` (vehicle-local vec3).
 -- The world wrapper M.stampAt converts world -> local then calls this.
 -- Queued, not immediate: the stamp is projected and baked by onUpdate.
+-- Paint the soil canvas in UV space instead of projecting onto the car: one
+-- flat colour, or a texture laid over the whole canvas (scale/offset in UV).
+-- This reaches texels no projection can. Found in game (2026-11-20): a texture
+-- fill maps texel for texel (not stretched); the colour's alpha is ignored and
+-- the texture's alpha is the strength; and a fill whose texture path was
+-- already baked since the last clear is skipped, so a second fill needs
+-- another file.
+M.soilFill = function(r, g, b, a, texture, scaleX, scaleY, offsetX, offsetY)
+  if not (ready and adapter and api) then return false, "not ready" end
+  local types = api.layerTypes or {fill = 1, textureFill = 2}
+  local layer = { blendMode = api.blendModesMap and api.blendModesMap.Normal or 1,
+    color = Point4F(r or 1, g or 1, b or 1, a or 1), colorPaletteMapId = 0,
+    enabled = true, locked = false, name = "soil", children = {},
+    uid = api.getRandomUid and api.getRandomUid() or tostring(os.clock()) }
+  if texture then
+    layer.type = types.textureFill
+    layer.fillTexturePath = texture
+    layer.scale = Point2F(scaleX or 1, scaleY or 1)
+    layer.offset = Point2F(offsetX or 0, offsetY or 0)
+  else
+    layer.type = types.fill
+  end
+  local ok, err = pcall(function() adapter:bakeSoil({layer}) end)
+  combineDirty = true
+  return ok, err and tostring(err) or nil
+end
+
+-- One film step at a time. Each step has its own texture: the same block in
+-- the corner, a little more opaque, since a path already baked is skipped. A
+-- step is sent twice: a texture left unused for a few seconds is evicted and
+-- the first fill after that draws nothing; the repeat is skipped if it did.
+floorSoil.tick = function(dt)
+  floorSoil.cooldown = math.max(0, floorSoil.cooldown - dt)
+  if not (floorSoil.on and ready and adapter) or floorSoil.cooldown > 0 or surfaceWaterAge <= 0.5 then return end
+  local want = math.min(floorSoil.limit, math.floor((surfaceState.floorLevel or 0) * floorSoil.steps + 1e-6))
+  local step = surfaceState.floorBakes or 0
+  local repeatFill = floorSoil.again == step and step > 0
+  if want <= step and not repeatFill then return end
+  local kind = surfaceState.floorKind or "mud"
+  local c = soilColor.resolve(kind, surfaceState.floorPos)
+  if not c then return end
+  if repeatFill then
+    floorSoil.again = nil
+    floorSoil.cooldown = floorSoil.interval
+  else
+    step = step + 1
+    surfaceState.floorBakes = step
+    floorSoil.again = step
+    floorSoil.cooldown = 0.7
+  end
+  local r, g, b = floorSoil.ink(c)
+  M.soilFill(r, g, b, 1, string.format(floorSoil.texture, step))
+end
+
 M.stampAtLocal = function(localPos, localNormal, opts)
   if not ready then log('W', logTag, "stampAtLocal: not ready"); return end
   if not resolveDecalProjection() then return end
@@ -1604,7 +1832,15 @@ local function buildClusters(inputs)
       local dy = s.localPos.y - c.cy
       local dz = s.localPos.z - c.cz
       local radius=panelGrouping and math.max(CLUSTER_RADIUS,1.2) or CLUSTER_RADIUS
-      if (dx*dx + dy*dy + dz*dz) < radius*radius and
+      -- A cluster shares one camera, so every member must face the way the
+      -- first one does. Two stamps facing apart average to nothing useful: an
+      -- underside patch (down) beside a hood patch (up) cancelled to a sliver
+      -- pointing along the car, the camera was aimed down the length of the
+      -- car, and the marks were shot edge-on: a fan of lines from bumper to
+      -- roof (seen in game, 2026-11-20). Normals are compared after resolving
+      -- them against the hull, the way they are anchored.
+      local facesAgree = anchorNormal(s.localPos, s.localNormal):dot(c.facing) >= 0.5
+      if facesAgree and (dx*dx + dy*dy + dz*dz) < radius*radius and
         (not panelGrouping or (#c.members<MAX_LAYERS_PER_FLUSH and averageNormals(c.members):dot(s.localNormal)>=.9)) then
         local k = #c.members
         c.cx = (c.cx * k + s.localPos.x) / (k + 1)
@@ -1620,6 +1856,7 @@ local function buildClusters(inputs)
       clusters[#clusters + 1] = {
         cx = s.localPos.x, cy = s.localPos.y, cz = s.localPos.z,
         members = {s}, queuedAt = s.queuedAt or clockhp(),
+        facing = anchorNormal(s.localPos, s.localNormal),
       }
     end
   end
@@ -1936,7 +2173,7 @@ local function runClusterJob(cluster, projM, bakeList)
     for _,s in ipairs(cluster.members) do extent=math.max(extent,distLocal(centroid,s.localPos)+s.scale) end
     clusterDist=math.max(clusterDist or .5,(extent+.05)*2.2)
   end
-  local camLocal = buildSyntheticCameraLocal(centroid, averageNormals(cluster.members), clusterDist)
+  local camLocal = buildSyntheticCameraLocal(centroid, averageNormals(cluster.members), clusterDist, cluster.facing)
   setScratchProjectionFence(true)
   if not syntheticAnchors then
     local tp = clockhp()
@@ -2282,8 +2519,18 @@ local function enqueueWear(e, vid)
     opts.depth = math.max(0.16, math.min(0.34, e.size * 0.6))
     if e.dir then opts.flow = e.dir else opts.rot = math.random() * 2 * math.pi end
   end
+  local centre = e.centre
+  if e.under then
+    -- Bottom face only: straight-up box, shallow, capped below the cabin.
+    local ok, c, depth = pcall(underside.box, e.centre, e.underPart)
+    if ok and c and depth then
+      centre, opts.depth = c, depth
+      normal = vec3(0, 0.03, -1):normalized()
+      underside.stats.painted = underside.stats.painted + 1
+    end
+  end
   wear.painted = wear.painted + 1
-  enqueueStamp(e.centre, normal, opts, vid)
+  enqueueStamp(centre, normal, opts, vid)
 end
 
 -- Load one brush set with an invisible stamp inside the cabin, so a crash
@@ -2329,20 +2576,71 @@ wear.pump = function()
   end
 end
 
+-- Tag a patch as an underside one (and as a low-part one when flagged 2).
+underside.mark = function(patch, flag)
+  underside.stats.contacts = underside.stats.contacts + 1
+  pcall(wheelAdapter.scrapeUnder, 0.008)
+  local lowPart = (tonumber(flag) or 0) >= 2
+  if lowPart then underside.stats.parts = underside.stats.parts + 1 end
+  if not patch then return end
+  patch.under = true
+  if lowPart then patch.underPart = true end
+end
+
+-- Is this car-local contact point on the car? A part that breaks off in a
+-- crash (a bumper, a light pod) keeps reporting contacts from wherever it
+-- lands. In one end-over-end crash 42 of 132 contacts were off the car, some
+-- 30 m away, and the decals anchored out there were projected back across the
+-- hood and roof as a fan of long straight lines (2026-11-20). The spawn box
+-- already includes mirrors and aerials, so the margin only has to allow for a
+-- panel bulging outwards. No box (no vehicle data yet): let it through.
+local STRAY_MARGIN = 0.15
+-- Metres a contact may lie outside the car's box and still be painted; a
+-- negative value switches the test off.
+M.setStrayMargin = function(m)
+  m = tonumber(m)
+  if m and m == m then STRAY_MARGIN = m end
+  return STRAY_MARGIN
+end
+local function onTheCar(lp)
+  if STRAY_MARGIN < 0 then return true end
+  local box = getSpawnAabb()
+  if not box then return true end
+  local lo, hi = box.minExtents, box.maxExtents
+  if lp.x < lo.x - STRAY_MARGIN or lp.x > hi.x + STRAY_MARGIN
+      or lp.y < lo.y - STRAY_MARGIN or lp.y > hi.y + STRAY_MARGIN
+      or lp.z < lo.z - STRAY_MARGIN or lp.z > hi.z + STRAY_MARGIN then
+    stampStats.strayDropped = stampStats.strayDropped + 1
+    return false
+  end
+  return true
+end
+
 -- Detector batch -> patches. Impacts carry an optional world slip velocity.
 local function ingestWear(events, streams, invM, rotOnly)
   local agg, now = wear.agg, wear.now
   for i = 1, events and #events or 0 do
     local e = events[i]
     local lp = invM:mulP3F(vec3(e[1], e[2], e[3]))
-    local n = anchorNormal(lp, rotOnly:mulP3F(vec3(e[4], e[5], e[6])))
-    if e[7] == "i" then
-      local slip = e[9] and rotOnly:mulP3F(vec3(e[9], e[10], e[11])) or nil
-      if slip then slip = slip - n * slip:dot(n) end
-      agg:addImpact(lp, n, severityOf(e[8]), slip, now)
-    elseif (e[8] or 0) >= 400 then
-      -- Pressed, barely dragged: a faint chip, no direction.
-      agg:addImpact(lp, n, severityOf(e[8]) * 0.5, nil, now)
+    local ln = rotOnly:mulP3F(vec3(e[4], e[5], e[6]))
+    local under = "stray"
+    if onTheCar(lp) then under = underside.classify(lp, ln, e[12]) end
+    if under == "stray" then
+      -- not on the car: nothing to paint
+    elseif under == "drop" then
+      underside.stats.dropped = underside.stats.dropped + 1
+    else
+      local n = under and vec3(0, 0, -1) or anchorNormal(lp, ln)
+      local patch
+      if e[7] == "i" then
+        local slip = e[9] and rotOnly:mulP3F(vec3(e[9], e[10], e[11])) or nil
+        if slip then slip = slip - n * slip:dot(n) end
+        patch = agg:addImpact(lp, n, severityOf(e[8]), slip, now)
+      elseif (e[8] or 0) >= 400 then
+        -- Pressed, barely dragged: a faint chip, no direction.
+        patch = agg:addImpact(lp, n, severityOf(e[8]) * 0.5, nil, now)
+      end
+      if under then underside.mark(patch, e[12]) end
     end
   end
   for si = 1, streams and #streams or 0 do
@@ -2355,16 +2653,28 @@ local function ingestWear(events, streams, invM, rotOnly)
         local p = points[k]
         if p[4] and p[5] and p[6] then nx, ny, nz = nx + p[4], ny + p[5], nz + p[6] end
       end
-      local n = anchorNormal(anchor, rotOnly:mulP3F(vec3(nx, ny, nz)))
-      local move = vec3(last[1] - first[1], last[2] - first[2], last[3] - first[3])
-      local dist = move:length()
-      local dir = rotOnly:mulP3F(move)
-      dir = dir - n * dir:dot(n)
-      local dlen = dir:length()
-      if dlen > 1e-4 then
-        agg:addSlide(anchor, n, dir * (1 / dlen), math.min(dist, 4), now)
+      local ln = rotOnly:mulP3F(vec3(nx, ny, nz))
+      -- A stream is flagged by its points' optional 7th field (the anchor's).
+      local under = "stray"
+      if onTheCar(anchor) then under = underside.classify(anchor, ln, last[7]) end
+      if under == "stray" then
+        -- not on the car: nothing to paint
+      elseif under == "drop" then
+        underside.stats.dropped = underside.stats.dropped + 1
       else
-        agg:addImpact(anchor, n, 0, nil, now)
+        local n = under and vec3(0, 0, -1) or anchorNormal(anchor, ln)
+        local move = vec3(last[1] - first[1], last[2] - first[2], last[3] - first[3])
+        local dist = move:length()
+        local dir = rotOnly:mulP3F(move)
+        dir = dir - n * dir:dot(n)
+        local dlen = dir:length()
+        local patch
+        if dlen > 1e-4 then
+          patch = agg:addSlide(anchor, n, dir * (1 / dlen), math.min(dist, 4), now)
+        else
+          patch = agg:addImpact(anchor, n, 0, nil, now)
+        end
+        if under then underside.mark(patch, last[7]) end
       end
     end
   end
@@ -2377,7 +2687,9 @@ end
 --   events  : list of {x,y,z,nx,ny,nz,kind,sev}
 --             kind "i" = collision impact, "s" = 1-point slide fallback;
 --             sev = normalForce in N.
---   streams : list of point lists, each {{x,y,z,nx,ny,nz}, ...} (>= 2 points)
+--             optional fields 9-11 = world slip velocity, 12 = underside
+--             flag (0/nil none, 1 body node, 2 low mechanical part).
+--   streams : list of point lists, each {{x,y,z,nx,ny,nz[,under]}, ...} (>= 2 points)
 -- A batch from any vehicle other than the current player car is dropped —
 -- it would be converted with the wrong car's matrix.
 M.ingest = function(vid, events, streams)
@@ -2388,6 +2700,9 @@ M.ingest = function(vid, events, streams)
     return
   end
   if not resolveDecalProjection() then return end
+  -- World-space contacts, before they are converted to the car's frame: what
+  -- scraped the road leaves paint on it.
+  if groundPaint then pcall(groundPaint.ingestWorld, veh, events, streams) end
 
   local invM    = veh:getRefNodeMatrix():fullInverse()
   local rotOnly = invM:copy(); rotOnly:setColumn(3, vec3(0, 0, 0))
@@ -2403,7 +2718,12 @@ M.ingest = function(vid, events, streams)
       local e = events[i]
       local lp = invM:mulP3F(vec3(e[1], e[2], e[3]))
       local ln = rotOnly:mulP3F(vec3(e[4], e[5], e[6]))
-      if e[7] == "i" then
+      if not onTheCar(lp) then
+        -- a broken-off part: nothing to paint
+      elseif (tonumber(e[12]) or 0) >= 2 then
+        -- Low mechanical parts are only painted by the contact-patch pipeline.
+        underside.stats.dropped = underside.stats.dropped + 1
+      elseif e[7] == "i" then
         enqueueImpact(lp, ln, e[8], vid)
       else
         enqueueStamp(lp, ln, styleForEvent(nil, e[8]), vid)
@@ -2414,19 +2734,178 @@ M.ingest = function(vid, events, streams)
   if streams then
     for si = 1, #streams do
       local points = streams[si]
-      if points and #points >= 2 then enqueueSlide(points, invM, rotOnly, vid) end
+      if points and #points >= 2 then
+        local tail = points[#points]
+        if not onTheCar(invM:mulP3F(vec3(tail[1], tail[2], tail[3]))) then
+          -- a broken-off part: nothing to paint
+        elseif (tonumber(tail[7]) or 0) >= 2 then
+          underside.stats.dropped = underside.stats.dropped + 1
+        else
+          enqueueSlide(points, invM, rotOnly, vid)
+        end
+      end
     end
   end
 end
 
 -- Wheel fling throw angles, degrees above horizontal, one per deposit in turn.
 local FLING_LIFT = { 70, 35, 52, 84, 24, 60 }
+-- Powder is lighter than mud: thrown steeper, and speed flattens it less.
+local SNOW_FLING_LIFT = { 78, 50, 66, 86, 42, 72 }
+local FLING_VARIANTS = { mud = 3, dirt = 2, snow = 3 }
+local SOIL_TEX = "/art/dynamicDecals/textures/soil_"
+
+-- Soil beyond the flank fling: the underside, and the sills in deep mud/snow.
+-- Each has its own budget per wash cycle, on top of the 96 flank deposits.
+local soilExtras = { underside = true, sills = true, snowFling = true }
+local SOIL_UNDER_CAP, SOIL_SILL_CAP = 24, 32
+local SOIL_UNDER_EVERY = 3   -- every Nth wheel sample also cakes the sill underside
+local SOIL_SILL_EVERY = 2    -- every Nth deep sample lays a sill band
+-- Metres above the spawn box's bottom (the ground under a resting car). The
+-- decal is a box centred on its anchor, so the underside slab spans
+-- underHeight +- underDepth/2. The painted floor pan is not in a car's skin UV
+-- layout (checked against sunburst2_skin_UVs.png: exterior panels only), so
+-- nothing projected at the floor can show. What does show from below is the
+-- sill: its underside and the bottom edge of its outer face. A thin slab there
+-- painted both in game (2026-11-20); a deeper one further inboard painted
+-- nothing.
+local soilGeom = { underHeight = 0.20, underDepth = 0.20, sillHeight = 0.24 }
+-- Sill-underside placement per deposit: metres from the wheel towards mid-car,
+-- and metres in from the spawn box's side (the box includes the mirrors).
+local UNDER_ALONG  = { 0.35, 0.95, 1.55, 0.65, 1.25, 0.10 }
+local UNDER_INSET  = { 0.10, 0.16, 0.12, 0.20, 0.08, 0.14 }
+local SILL_STEP = { 0, 0.5, 1, 0.25, 0.75 }
+
+-- floor: false/true, or how many of the film's six steps it may reach (0-6).
+M.setSoilExtras = function(underside, sills, snowFling, floor)
+  if type(floor) == "number" then
+    floorSoil.limit = math.max(0, math.min(floorSoil.steps, math.floor(floor)))
+    floorSoil.on = floorSoil.limit > 0
+  elseif floor ~= nil then floorSoil.on = floor and true or false end
+  if underside ~= nil then soilExtras.underside = underside and true or false end
+  if sills ~= nil then soilExtras.sills = sills and true or false end
+  if snowFling ~= nil then soilExtras.snowFling = snowFling and true or false end
+  return soilExtras.underside, soilExtras.sills, soilExtras.snowFling
+end
+M.getSoilExtras = function()
+  return { underside = soilExtras.underside, sills = soilExtras.sills, snowFling = soilExtras.snowFling,
+    underCap = SOIL_UNDER_CAP, sillCap = SOIL_SILL_CAP, underHeight = soilGeom.underHeight,
+    underDepth = soilGeom.underDepth, sillHeight = soilGeom.sillHeight }
+end
+-- Live tuning for cars whose floor or sills sit unusually high (trucks).
+M.setSoilGeometry = function(underHeight, underDepth, sillHeight)
+  local function clamp(v, lo, hi, old)
+    v = tonumber(v)
+    if not v or v ~= v then return old end
+    return math.max(lo, math.min(hi, v))
+  end
+  soilGeom.underHeight = clamp(underHeight, 0.05, 0.9, soilGeom.underHeight)
+  soilGeom.underDepth  = clamp(underDepth, 0.1, 0.35, soilGeom.underDepth)
+  soilGeom.sillHeight  = clamp(sillHeight, 0.05, 0.9, soilGeom.sillHeight)
+  soilGeom.manual = true
+  return soilGeom.underHeight, soilGeom.underDepth, soilGeom.sillHeight
+end
+
+-- One underside or sill deposit, against that type's own budget.
+local function depositSoilExtra(vid, where, kind, wheel, worldPos, p, normal, spot, spotCap, opts)
+  local counter = where == "under" and "underDeposits" or "sillDeposits"
+  local cap = where == "under" and SOIL_UNDER_CAP or SOIL_SILL_CAP
+  if (surfaceState[counter] or 0) >= cap or (surfaceSpots[spot] or 0) >= spotCap
+      or surfaceWaterAge <= 0.5 then return false end
+  local c,source,material,texture=soilColor.resolve(kind,worldPos)
+  local sample = {kind=kind,wheel=wheel,where=where,x=p.x,y=p.y,z=p.z,
+    normalX=normal.x,normalY=normal.y,normalZ=normal.z,
+    depth=opts.depth,scale=opts.scale,width=opts.width,brush=opts.colorTex,
+    color=c,colorSource=source,terrainMaterial=material,terrainTexture=texture}
+  surfaceState[where == "under" and "lastUnder" or "lastSill"] = sample
+  surfaceState.lastSample = sample
+  surfaceSpots[spot] = (surfaceSpots[spot] or 0)+1
+  surfaceState[counter] = (surfaceState[counter] or 0)+1
+  local inkR, inkG, inkB = floorSoil.ink(c)
+  opts.soil, opts.r, opts.g, opts.b, opts.a = true, inkR, inkG, inkB, 0.95
+  opts.skipMetal, opts.noJitter = true, true
+  enqueueStamp(p, normal, opts, vid)
+  return true
+end
+
+-- Underside and sill deposits for one accepted sample. cx/cy is the sample's
+-- own car-local position (the flank path moves its copy onto the body side).
+local function depositSoilExtras(vid, e, worldPos, cx, cy)
+  if not (soilExtras.underside or soilExtras.sills) then return end
+  local box = getSpawnAabb()
+  if not box then return end
+  local lo, hi = box.minExtents, box.maxExtents
+  local midX, midY = (lo.x+hi.x)*0.5, (lo.y+hi.y)*0.5
+  local halfW, length = (hi.x-lo.x)*0.5, hi.y-lo.y
+  if halfW < 0.3 or length < 1 then return end
+  local side = cx >= midX and 1 or -1
+  local kind = e[1]
+  if e[8] == 1 then
+    surfaceState.wheelSamples = (surfaceState.wheelSamples or 0)+1
+    -- Wheel samples reveal where the axles are.
+    surfaceState.axleMin = math.min(surfaceState.axleMin or cy, cy)
+    surfaceState.axleMax = math.max(surfaceState.axleMax or cy, cy)
+    if soilExtras.underside and surfaceState.wheelSamples % SOIL_UNDER_EVERY == 0 then
+      -- Thrown up under the sill on the wheel's side, walking from the arch
+      -- towards mid-car. The slab is thin, so it takes the sill's underside
+      -- and bottom edge and stops short of the door.
+      local phase = (surfaceState.underDeposits or 0) % 6
+      local toward = cy > midY and -1 or 1
+      local size = math.max(0.4, math.min(0.55, halfW*0.6))
+      local uy = math.max(lo.y+0.45, math.min(hi.y-0.45, cy + toward*UNDER_ALONG[phase+1]))
+      local up = vec3((side > 0 and hi.x or lo.x) - side*UNDER_INSET[phase+1], uy, lo.z + soilGeom.underHeight)
+      depositSoilExtra(vid, "under", kind, e[8], worldPos, up, vec3(0,0,-1),
+        "under:"..side..":"..math.floor(uy*2), 4,
+        {scale=size, depth=soilGeom.underDepth, rot=phase*math.pi/2,
+         colorTex=SOIL_TEX..kind.."_coverage.png"})
+    end
+  end
+  -- Deep: the detector flagged it (field 9), or a body node itself is in the
+  -- mud/snow (field 8 == 0). Old 8-field wheel samples are never deep.
+  local deep = (kind == "mud" or kind == "snow") and (e[9] == 1 or e[8] == 0)
+  if deep and soilExtras.sills then
+    surfaceState.deepSamples = (surfaceState.deepSamples or 0)+1
+    -- Counted per side: a global counter aliases with the detector's rotation
+    -- over the four wheels and feeds one flank for seconds at a time.
+    local sideCount = side > 0 and "deepR" or "deepL"
+    surfaceState[sideCount] = (surfaceState[sideCount] or 0)+1
+    if surfaceState[sideCount] % SOIL_SILL_EVERY == 1 then
+      local n = surfaceState.sillDeposits or 0
+      local a0, a1 = surfaceState.axleMin, surfaceState.axleMax
+      if not a0 or not a1 or a1 - a0 < 1.2 then
+        a0, a1 = lo.y + length*0.2, hi.y - length*0.2
+      end
+      -- Between the wheel arches, stepping along the sill deposit by deposit.
+      local y0, y1 = a0 + 0.5, a1 - 0.5
+      if y1 < y0 then y0 = (a0+a1)*0.5; y1 = y0 end
+      local step = n % 5
+      local sp = vec3(side > 0 and hi.x or lo.x, y0 + (y1-y0)*SILL_STEP[step+1],
+        lo.z + soilGeom.sillHeight + (n%3)*0.03)
+      -- Rotation 0 keeps the brush upright on either flank (decal up = car
+      -- up), so the heavy edge is at the bottom. The slab reaches in past the
+      -- mirror overhang to the sill, well short of the centreline.
+      depositSoilExtra(vid, "sill", kind, e[8], worldPos, sp, vec3(side,0,0),
+        "sill:"..side..":"..step, 5,
+        {scale=math.max(0.6, math.min(1.1, (y1-y0)*0.5+0.35)), width=0.34,
+         depth=math.min(0.9, halfW*0.9), rot=0, flipX=(n%2==0) and 1 or -1,
+         colorTex=SOIL_TEX..kind.."_band_"..(n%2+1)..".png"})
+    end
+  end
+end
 
 -- Contact positions are a conservative splash proxy, not a fluid simulation.
 -- Existing projection/hull aiming and all scheduler budgets remain in use.
-M.ingestSurface = function(vid, samples, wet, supported, fraction)
+-- Sample: {kind, x,y,z, nx,ny,nz, wheel(0/1), deep(0/1, optional)}.
+M.ingestSurface = function(vid, samples, wet, supported, fraction, sillRest)
   local veh = getPlayerVehicle(0)
   if not ready or not veh or veh:getId() ~= vid then return end
+  -- The detector measures where this car's sill sits at rest (a pickup's
+  -- rocker is twice as high as a saloon's). Manual tuning wins.
+  sillRest = tonumber(sillRest)
+  if sillRest and sillRest == sillRest and not soilGeom.manual then
+    soilGeom.sillHeight = math.max(0.05, math.min(0.9, sillRest + 0.06))
+    soilGeom.underHeight = math.max(0.05, math.min(0.9, sillRest + 0.02))
+  end
   surfaceState.waterSupported = supported == true
   if wet == true and supported == true then surfaceWaterAge = 0; waterFraction=math.max(0,math.min(1,tonumber(fraction) or 1)); return end
   local kinds = {mud=true,dirt=true,snow=true}
@@ -2441,12 +2920,26 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
     end
     if valid then
       surfaceState[e[1]] = math.min(1, surfaceState[e[1]] + 0.025)
+      wheelAdapter.expose(e[1], function() return (soilColor.resolve(e[1], vec3(e[2],e[3],e[4]))) end)
+      if floorSoil.on and e[8] == 1 then
+        surfaceState.floorLevel = math.min(1, (surfaceState.floorLevel or 0) + (floorSoil.gain[e[1]] or 0))
+        surfaceState.floorKind, surfaceState.floorPos = e[1], vec3(e[2],e[3],e[4])
+      end
       local worldPos=vec3(e[2],e[3],e[4])
       local p = inv:mulP3F(worldPos)
+      local contactX, contactY = p.x, p.y
       local normal = rot:mulP3F(vec3(e[5],e[6],e[7]))
       local flow, spraySpeed, trailLength, projectionDepth
+      local snow = e[1] == "snow"
+      local snowFling = snow and soilExtras.snowFling
+      -- Every third snow deposit packs into the arch instead of flying, so
+      -- snow still builds up where the tyre feeds it.
+      local pack = snowFling and e[8] == 1 and surfaceState.deposits % 3 == 2
+      -- Flung snow deposits counted without the packed ones, so the lift
+      -- table and all three snow fling brushes are actually cycled through.
+      local snowSeq = surfaceState.deposits - math.floor((surfaceState.deposits + 1) / 3)
       if e[8] == 1 then
-        if e[1] ~= "snow" then
+        if (not snow or snowFling) and not pack then
           local velocity = veh:getVelocity()
           local localVelocity = rot:mulP3F(velocity)
           -- Fling: the tread throws soil up and back. Successive deposits
@@ -2456,9 +2949,17 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
           spraySpeed = math.abs(localVelocity.y)
           if spraySpeed > 0.5 then
             local phase = surfaceState.deposits % 6
-            local lift = math.rad(math.max(16, FLING_LIFT[phase + 1] - spraySpeed * 1.1))
+            local lift
+            if snow then
+              -- Powder: a taller, shorter plume that speed barely flattens.
+              phase = snowSeq % 6
+              lift = math.rad(math.max(30, SNOW_FLING_LIFT[phase + 1] - spraySpeed * 0.6))
+              trailLength = math.min(1.3, 0.62 + spraySpeed * 0.04) * (0.88 + 0.04 * (phase % 4))
+            else
+              lift = math.rad(math.max(16, FLING_LIFT[phase + 1] - spraySpeed * 1.1))
+              trailLength = math.min(1.45, 0.6 + spraySpeed * 0.05) * (0.85 + 0.05 * (phase % 4))
+            end
             flow = vec3(0, (localVelocity.y > 0 and -1 or 1) * math.cos(lift), math.sin(lift))
-            trailLength = math.min(1.45, 0.6 + spraySpeed * 0.05) * (0.85 + 0.05 * (phase % 4))
           end
         end
         local box = getSpawnAabb()
@@ -2480,6 +2981,12 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
             local back = flow.y > 0 and 1 or -1
             p.y = p.y + back * 0.18 + flow.y * trailLength * 0.43
             p.z = lo.z + 0.18 + flow.z * trailLength * 0.43
+          elseif pack or snowFling then
+            -- Packed snow: on the arch lip around the tyre. Also where snow
+            -- lands when there is no throw to speak of (creeping, sliding
+            -- sideways), rather than a flat patch in the middle of the door.
+            p.y=math.max(lo.y+0.3,math.min(hi.y-0.3,p.y+(phase%4-1.5)*0.18))
+            p.z=lo.z+0.42+(phase%2)*0.14
           else
             local inward=p.y>(lo.y+hi.y)*0.5 and -0.65 or 0.65
             p.y=math.max(lo.y+0.3,math.min(hi.y-0.3,p.y+inward+(phase%4-1.5)*0.24))
@@ -2488,28 +2995,39 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
           normal = vec3(side,0,0)
         end
       end
-      surfaceState.lastSample = {kind=e[1],wheel=e[8],x=p.x,y=p.y,z=p.z,
+      local flank = {kind=e[1],wheel=e[8],where="flank",x=p.x,y=p.y,z=p.z,pack=pack or nil,
+        deep=e[9]==1 or nil,
         flowY=flow and flow.y,flowZ=flow and flow.z,trailLength=trailLength,depth=projectionDepth}
+      surfaceState.lastSample = flank
+      surfaceState.lastFlank = flank
       local key = e[1]..":"..math.floor(p.x*3)..":"..math.floor(p.y*3)..":"..math.floor(p.z*3)
       if surfaceState.deposits < 96 and (surfaceSpots[key] or 0) < 12
           and surfaceWaterAge > 0.5 then
         local c,source,material,texture=soilColor.resolve(e[1],worldPos)
-        surfaceState.lastSample.color=c
-        surfaceState.lastSample.colorSource=source
-        surfaceState.lastSample.terrainMaterial=material
-        surfaceState.lastSample.terrainTexture=texture
+        local inkR, inkG, inkB = floorSoil.ink(c)
+        flank.color=c
+        flank.colorSource=source
+        flank.terrainMaterial=material
+        flank.terrainTexture=texture
         surfaceSpots[key] = (surfaceSpots[key] or 0)+1
         surfaceState.deposits = surfaceState.deposits+1
         enqueueStamp(p, normal, {
-          soil=true,r=c[1],g=c[2],b=c[3],a=0.95,
-          scale=trailLength or 0.65,
-          width=flow and trailLength*0.5 or nil,flow=flow,skipMetal=true,noJitter=true,
+          soil=true,r=inkR,g=inkG,b=inkB,a=0.95,
+          scale=trailLength or ((pack or (snowFling and e[8] == 1)) and 0.5 or 0.65),
+          -- Mud fans are 2:1; a snow plume is puffier.
+          width=flow and trailLength*(snow and 0.7 or 0.5) or nil,flow=flow,skipMetal=true,noJitter=true,
           depth=projectionDepth,
           dist=flow and trailLength*2.2 or nil,
           flipY=flow and (surfaceState.deposits%2==0 and 1 or -1) or nil,
-          colorTex="/art/dynamicDecals/textures/soil_"..e[1]..
-            (flow and ("_fling_"..(surfaceState.deposits%(e[1]=="mud" and 3 or 2)+1)..".png") or "_coverage.png"),
+          colorTex=SOIL_TEX..e[1]..
+            (flow and ("_fling_"..((snow and snowSeq or surfaceState.deposits)%(FLING_VARIANTS[e[1]] or 2)+1)..".png") or "_coverage.png"),
           rot=flow and 0 or (surfaceState.deposits%4)*math.pi/2},vid)
+      end
+      -- Fail safe: the extras can never take the flank deposit down with them.
+      local ok, err = pcall(depositSoilExtras, vid, e, worldPos, contactX, contactY)
+      if not ok and not surfaceState.extrasError then
+        surfaceState.extrasError = tostring(err)
+        log('W', logTag, "soil extras failed: "..tostring(err))
       end
     end
   end
@@ -2517,6 +3035,35 @@ end
 
 -- Console / legacy entry points, routed through ingest so they share the
 -- player-vehicle check and the per-frame pipeline.
+-- Wheel-side scrapes from the detector: {x,y,z,nx,ny,nz,wheelId,slipSpeed}
+-- in world space (position and ground normal). Keep this small: each valid
+-- entry is handed to one consumer per line.
+M.ingestWheelScrape = function(vid, scrapes)
+  local veh = getPlayerVehicle(0)
+  if not ready or not veh or veh:getId() ~= vid then return end
+  for i=1,math.min(8, type(scrapes) == "table" and #scrapes or 0) do
+    local e = scrapes[i]
+    local valid = type(e) == "table"
+    for j=1,8 do
+      local n = valid and e[j]
+      if type(n) ~= "number" or n ~= n or math.abs(n) > 1e7 then valid=false end
+    end
+    if valid then
+      wheelAdapter.scrape(e[7], e[8])
+      if groundPaint then pcall(groundPaint.addWheelScrape, vec3(e[1],e[2],e[3]), vec3(e[4],e[5],e[6]), e[8], e[7]) end
+    end
+  end
+end
+-- Whole wheel/tyre overlay on or off (off also restores the clean wheels).
+M.setWheelDirt = function(enabled)
+  pcall(wheelAdapter.setEnabled, enabled and true or false)
+  local veh = getPlayerVehicle(0)
+  if enabled and ready and adapter and veh then pcall(wheelAdapter.attach, veh) end
+end
+-- The one-time vehicle rebuild that binds wheel clones on a car built earlier.
+M.setWheelAutoReload = function(enabled) wheelAutoReload = enabled and true or false end
+M.getWheelState = function() return wheelAdapter.snapshot() end
+
 M.stampBatch = function(events)
   local veh = getPlayerVehicle(0)
   if veh then M.ingest(veh:getId(), events, nil) end
@@ -2840,6 +3387,7 @@ M.resetPaintStats = function()
   stampStats.jobsFailed = 0
   stampStats.framesDeferred = 0
   stampStats.foreignDropped = 0
+  stampStats.strayDropped = 0
   stampStats.combinesRun = 0
   stampStats.rebinds = 0
   stampStats.spotsSkipped = 0
@@ -2848,6 +3396,7 @@ M.resetPaintStats = function()
   for k in pairs(perfStats) do perfStats[k] = 0 end
   syntheticAnchorCount = 0
   wear.painted = 0
+  underside.stats.contacts, underside.stats.parts, underside.stats.dropped, underside.stats.painted = 0, 0, 0, 0
   for k in pairs(wear.agg.counts) do wear.agg.counts[k] = 0 end
   table.clear(nativeEvents)
   for _,p in pairs(nativeProfiles) do table.clear(p.bins);p.count=0;p.maxMs=0 end
@@ -2905,6 +3454,10 @@ M.getStats = function()
                damageWidth = adapter and adapter:getDamageWidth() or 0, coverageCoalescing=coverage~=nil, panelGrouping=panelGrouping,
                fullRateCombine = fullRateCombine, syntheticAnchors = syntheticAnchors },
     anchors = { synthesized = syntheticAnchorCount },
+    ground = groundPaint and groundPaint.getStats() or { enabled = false, alive = 0, submitted = 0, dropped = 0 },
+    underside = { enabled = underside.on, contacts = underside.stats.contacts, parts = underside.stats.parts,
+                  dropped = underside.stats.dropped, painted = underside.stats.painted },
+    wheels = wheelAdapter.snapshot(),
     wear = { enabled = wear.on, painted = wear.painted, warmed = wear.warmedCount,
              warmPending = wear.warm and #wear.warm or -1, pending = wear.agg:pending(),
              patches = wear.agg:stats() },
@@ -2944,7 +3497,26 @@ M.setContactPatches = function(enabled, interval)
 end
 -- true (default): projection-free anchors from the detector's contact points.
 -- false: legacy native projection per job. Applies to work captured afterwards.
+-- Paint and rubber left on the road (groundPaint.lua). Off also forgets the
+-- marks already laid. clearGroundPaint wipes them without switching it off.
+M.setGroundPaint = function(enabled) if groundPaint then groundPaint.setEnabled(enabled) end end
+M.clearGroundPaint = function() if groundPaint then groundPaint.clear() end end
 M.setSyntheticAnchors = function(enabled) syntheticAnchors=enabled and true or false end
+-- true (default): underside contacts are painted on the bottom face with a
+-- shallow straight-up box, and low mechanical parts may scrape there. false:
+-- the previous behaviour (low-part contacts are dropped). Also tells the
+-- player car's detector, best effort.
+M.setUndersideScrapes = function(enabled)
+  underside.on = enabled and true or false
+  pcall(function()
+    local veh = getPlayerVehicle(0)
+    if veh and veh.queueLuaCommand then
+      veh:queueLuaCommand(string.format(
+        "if scratches_detect and scratches_detect.setUndersideScrapes then scratches_detect.setUndersideScrapes(%s) end",
+        tostring(underside.on)))
+    end
+  end)
+end
 M.setBakeBudget = function(n)
   BAKE_LAYERS_PER_FRAME=math.max(1,math.min(24,math.floor(tonumber(n) or 6)))
 end
@@ -3627,7 +4199,9 @@ local function onExtensionLoaded()
 end
 
 local function onExtensionUnloaded()
+  if groundPaint then pcall(groundPaint.clear) end
   if adapterModule then adapterModule.disableAll() end
+  pcall(wheelAdapter.disableAll)
   if adapter then adapter:detach(); adapter=nil end
   resetSurfaceState()
   ready = false
@@ -3650,9 +4224,17 @@ M.onExtensionUnloaded = onExtensionUnloaded
 M.onUpdate            = onUpdate
 M.onVehicleSwitched   = onVehicleSwitched
 M.onVehicleSpawned    = onVehicleSpawned
+-- Ground marks belong to the level: gone when it is. A vehicle reset keeps
+-- them (the car is repaired, the road is not).
+M.onClientEndMission   = function() if groundPaint then pcall(groundPaint.clear) end end
+M.onClientStartMission = function() if groundPaint then pcall(groundPaint.clear) end end
 M.onSpawnCCallback = function(vid)
   local veh=scenetree.findObjectById(vid)
   if not veh then return end
+  -- A vehicle is fresh for a short while after any spawn. This hook runs
+  -- before the first setup pass; onVehicleSpawned can come after it (a pickup
+  -- spawned over another car never bound its wheels with that hook alone).
+  wheelFresh[vid] = clockhp()
   if not adapterModule then adapterModule=dofile("/lua/ge/extensions/scratches/bodyAdapter.lua") end
   if not adapterModule.modelSupported(veh.JBeam) then return end
   if not adapterModule.editorActive() then
@@ -3663,10 +4245,17 @@ end
 M.onJbeamLoadingPhase2 = function(...)
   if not adapterModule then adapterModule = dofile("/lua/ge/extensions/scratches/bodyAdapter.lua") end
   adapterModule.prepare(...)
+  -- Same gate as the body: only models whose construction cache we invalidate.
+  local _, _, vdata = ...
+  if vdata and adapterModule.modelSupported(vdata.model) and not adapterModule.editorActive() then
+    pcall(wheelAdapter.prepare, ...)
+  end
 end
 M.onVehicleDestroyed  = function(vid)
   ownedSkins[vid] = nil
   adapterReloaded[vid] = nil
+  wheelReloaded[vid] = nil
+  wheelFresh[vid] = nil
   materialCleanupPending = true -- after destruction, never during mesh teardown
 end
 -- A reset can rebuild the car's materials; re-bind on the next composite.

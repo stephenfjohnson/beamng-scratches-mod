@@ -157,6 +157,12 @@ check(a.materials[2].material:getField('opacityFactor',3)=='0.5','washing fades 
 check(a.material:getField('opacityFactor',2)=='1','washing leaves damage opacity alone')
 check(a.source:getField('clearCoatFactor',0)==original,'wetness never writes shared source')
 a:appearance(0,1)
+-- Soil opacity is the soil canvas red channel, so soil is baked at full red
+-- and its brightness is carried by the soil stage's colour factor.
+check(a:soilTone(0.43)==0.45 and a.material:getField('baseColorFactor',3)=='0.45 0.45 0.45 1'
+  and a.materials[2].material:getField('baseColorFactor',3)=='0.45 0.45 0.45 1','soil tone is carried by the soil stage factor on every body material')
+check(a.material:getField('baseColorFactor',2)~='0.45 0.45 0.45 1','soil tone leaves the damage stage alone')
+check(a:soilTone(1)==1 and a.material:getField('baseColorFactor',3)=='1.00 1.00 1.00 1','soil tone returns to full for snow')
 check(a.material:getField('clearCoatFactor',0)==original,'drying restores exact original string')
 a:appearance(1,0.25);a:detach()
 check(a.material:getField('clearCoatFactor',0)==original,'detach restores wet clone')

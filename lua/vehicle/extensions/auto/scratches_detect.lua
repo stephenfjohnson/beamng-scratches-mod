@@ -81,6 +81,9 @@ local nodeLastContactTime = {} -- nid -> simTime onNodeCollision last fired for 
 -- Values: a body material name (paintable) or one of the REJ_* sentinels.
 local nodeClass = {}
 local REJ_NO_NODE, REJ_WHEEL, REJ_BODY_MAT, REJ_PART = 1, 2, 3, 4
+-- A low mechanical part (skidplate, exhaust, differential ...): rejected like
+-- REJ_PART unless the contact is an underside one (see undersideContact).
+local REJ_LOW_PART = 5
 
 -- Per-node slide stream. Each entry is a small table of contact-point samples
 -- collected while the node is in active slide contact. Flushed when the node
@@ -214,8 +217,30 @@ local EXCLUDE_PART_PATTERNS = {
   -- passes through and stamps land on whatever paintable surface is behind
   -- (typically the roof or hood). Excluding them removes both the false
   -- impact-branch hits and the misplaced stamps.
-  "windshield", "doorglass",
+  "windshield", "doorglass", "backlight",
+  -- Aerials. A whip stands a metre clear of the roof, and when the car goes
+  -- over it is the first thing dragged along the ground. A decal anchored at
+  -- its tip is projected from above the tip down through everything under it,
+  -- magnified: a fan of long straight lines from the aerial's base across the
+  -- roof, hood and bumper (rally Sunburst, 2026-11-20).
+  "antenna", "aerial",
 }
+
+-- The subset of the deny-list that is what actually touches the ground when a
+-- car bottoms out. A contact on one of these is still dropped, EXCEPT when it
+-- is an underside contact (ground facing the belly, node low on the car): the
+-- painter then anchors a shallow box straight up onto the floor above instead
+-- of using the node's own normal, so nothing can project through to the hood
+-- or the glass. Everything else on the deny-list (wheels, brakes, glass ...)
+-- is rejected outright.
+local LOW_PART_PATTERNS = {
+  "skidplate", "exhaust", "engine", "suspension", "axle", "driveshaft",
+  "halfshaft", "differential", "gearbox", "transmission", "fuel_tank",
+}
+local HARD_PART_PATTERNS = { "wheel", "brakerotor", "brake_rotor", "windshield", "doorglass" }
+local undersideOn = true        -- M.setUndersideScrapes(false) restores the plain deny-list
+local UNDER_NORMAL_DOT = 0.5    -- ground normal vs the car's up axis (60 degrees)
+local UNDER_ZONE_FRAC, UNDER_ZONE_MIN = 0.45, 0.30  -- rest height above the lowest body node
 
 local function buildSets()
   if materials then return true end
@@ -278,7 +303,7 @@ local function flushStream(id1)
     stats.streamFallbacks = stats.streamFallbacks + 1
     local p = s.points[1]
     pendingDetectEvents[#pendingDetectEvents + 1] = {
-      p.x, p.y, p.z, p.nx, p.ny, p.nz, "s", p.f or 0,
+      p.x, p.y, p.z, p.nx, p.ny, p.nz, "s", p.f or 0, 0, 0, 0, p.u or 0,
     }
     return
   end
@@ -287,8 +312,15 @@ local function flushStream(id1)
   -- Normals only steer the camera axis, so 3 decimals is plenty.
   local parts = {}
   for i, p in ipairs(s.points) do
-    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f}",
-      p.x, p.y, p.z, p.nx, p.ny, p.nz)
+    -- Optional 7th field: 1 = underside contact on a body node, 2 = on a low
+    -- mechanical part. Omitted (the old shape) for every other point.
+    if (p.u or 0) > 0 then
+      parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d}",
+        p.x, p.y, p.z, p.nx, p.ny, p.nz, p.u)
+    else
+      parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f}",
+        p.x, p.y, p.z, p.nx, p.ny, p.nz)
+    end
   end
 
   stats.streamsFlushed    = stats.streamsFlushed + 1
@@ -312,9 +344,68 @@ local function classifyNode(id1)
   -- `true` does plain (non-pattern) substring search.
   local partLower = (node.partOrigin or node.partPath or ""):lower()
   for _, pat in ipairs(EXCLUDE_PART_PATTERNS) do
-    if partLower:find(pat, 1, true) then return REJ_PART end
+    if partLower:find(pat, 1, true) then
+      for _, hard in ipairs(HARD_PART_PATTERNS) do
+        if partLower:find(hard, 1, true) then return REJ_PART end
+      end
+      for _, low in ipairs(LOW_PART_PATTERNS) do
+        if partLower:find(low, 1, true) then return REJ_LOW_PART end
+      end
+      return REJ_PART
+    end
   end
   return bodyName
+end
+
+-- ---- underside contacts ----
+-- The car's up axis, fetched at most once per physics step. nil when the
+-- engine call is missing or fails: nothing is then treated as underside.
+local upVec, upVecTime = nil, -1
+local function carUp()
+  if not (obj and obj.getDirectionVectorUp) then return nil end
+  local now = (obj.getSimTime and obj:getSimTime()) or 0
+  if now ~= upVecTime then
+    upVecTime = now
+    local ok, up = pcall(obj.getDirectionVectorUp, obj)
+    if ok and up and finite(up.x) and finite(up.y) and finite(up.z) then upVec = up else upVec = nil end
+  end
+  return upVec
+end
+
+-- Rest height (jbeam z) below which a node counts as low on the car. false =
+-- unknown (no node positions): the height test then passes.
+local lowZone = nil
+local function nodeIsLow(id1)
+  local nodes = v.data.nodes
+  if lowZone == nil then
+    local lo, hi = math.huge, -math.huge
+    for _, n in pairs(nodes or {}) do
+      local z = type(n) == "table" and not n.wheelID and n.pos and n.pos.z
+      if type(z) == "number" and finite(z) then
+        if z < lo then lo = z end
+        if z > hi then hi = z end
+      end
+    end
+    lowZone = hi >= lo and (lo + math.max(UNDER_ZONE_MIN, (hi - lo) * UNDER_ZONE_FRAC)) or false
+  end
+  if not lowZone then return true end
+  local node = nodes and nodes[id1]
+  local z = node and node.pos and node.pos.z
+  if type(z) ~= "number" then return true end
+  return z <= lowZone
+end
+
+-- True when the surface faces the car's belly (its normal points up into the
+-- car) and the node sits low on the car: bottoming out on a kerb, rock or
+-- crest, or sliding on the belly.
+local function undersideContact(id1, normal)
+  if not undersideOn then return false end
+  local up = carUp()
+  if not up then return false end
+  local d = normal.x * up.x + normal.y * up.y + normal.z * up.z
+  if not (d == d) or d < UNDER_NORMAL_DOT then return false end
+  local ok, low = pcall(nodeIsLow, id1)
+  return ok and low == true
 end
 
 -- Surface exposure is independent of scratch eligibility: tire contacts can
@@ -324,16 +415,67 @@ local surfaceKinds = {MUD="mud", DIRT="dirt", DIRT_DUSTY="dirt",
   SAND="dirt", SANDY_ROAD="dirt", GRAVEL="dirt", SNOW="snow"}
 local surfacePending, surfaceLast = {}, 0
 local waterNodes = nil
-local function resetSurface()
-  surfacePending, surfaceLast, waterNodes = {}, 0, nil
+-- Deep soil: bodywork itself is in the mud/snow, or a wheel has sunk past
+-- SURFACE_DEEP_WHEEL metres. Held for SURFACE_DEEP_HOLD seconds so the wheel
+-- samples that follow carry it; the painter cakes the sills on that signal.
+local SURFACE_DEEP_WHEEL, SURFACE_DEEP_HOLD = 0.12, 1.5
+local surfaceDeep, surfaceDeepUntil = {}, {}
+-- Rest height of the lowest outer body edge (the sill) above the tyre bottoms,
+-- from the jbeam rest pose. The painter places sill and underside soil from
+-- it, so a pickup's higher rocker is not missed. nil = not worked out yet,
+-- false = could not be.
+local sillRest = nil
+local function restSill()
+  if sillRest ~= nil then return sillRest end
+  sillRest = false
+  local nodes = v.data.nodes
+  if not nodes then return false end
+  local wheelLo, xMax = math.huge, 0
+  local body = {}
+  for id, node in pairs(nodes) do
+    local p = node.pos
+    if p and finite(p.x) and finite(p.z) then
+      if node.wheelID then
+        if p.z < wheelLo then wheelLo = p.z end
+      elseif type(classifyNode(id)) == "string"
+          and not (node.partOrigin or ""):lower():find("mirror", 1, true) then
+        body[#body + 1] = p
+        if math.abs(p.x) > xMax then xMax = math.abs(p.x) end
+      end
+    end
+  end
+  if wheelLo == math.huge or xMax <= 0 then return false end
+  local lo = math.huge
+  for i = 1, #body do
+    local p = body[i]
+    if math.abs(p.x) >= xMax - 0.2 and p.z < lo then lo = p.z end
+  end
+  local h = lo - wheelLo
+  if finite(h) and h > 0.03 and h < 0.9 then sillRest = h end
+  return sillRest
 end
-local function surfaceContact(id, pos, normal, speed, force, material)
+local function resetSurface()
+  surfaceLast, waterNodes = 0, nil
+  -- Cleared in place: this runs every frame in vehicles the player is not in.
+  if next(surfacePending) ~= nil then table.clear(surfacePending) end
+  if next(surfaceDeep) ~= nil then table.clear(surfaceDeep) end
+  if next(surfaceDeepUntil) ~= nil then table.clear(surfaceDeepUntil) end
+end
+local function surfaceContact(id, pos, normal, speed, force, material, depth)
   if not paintEnabled or not finite(speed) or not finite(force)
       or force < 10 then return end
   local kind = surfaceKinds[nameById[material]]
   if not kind then return end
   local node = v.data.nodes and v.data.nodes[id]
   if not node or (not node.wheelID and type(classifyNode(id)) ~= "string") then return end
+  -- Deep is per side of the car: one flank in a rut must not cake the other.
+  -- The jbeam x sign is only ever compared with itself here.
+  local restX = node.pos and node.pos.x
+  local sideKey = kind .. ((type(restX) == "number" and restX or 0) >= 0 and "+" or "-")
+  if kind ~= "dirt" and (node.wheelID == nil
+      or (type(depth) == "number" and finite(depth) and depth > SURFACE_DEEP_WHEEL)) then
+    surfaceDeep[sideKey] = true
+  end
   local pending = surfacePending[kind]
   -- Rotate preference over the four standard wheels; retain the first
   -- available wheel as fallback. Body contacts must not starve tire samples.
@@ -348,7 +490,9 @@ local function surfaceContact(id, pos, normal, speed, force, material)
   elseif speed < 0.5 then return end
   if not (finite(pos.x) and finite(pos.y) and finite(pos.z)
       and finite(normal.x) and finite(normal.y) and finite(normal.z)) then return end
-  surfacePending[kind] = {pos.x,pos.y,pos.z,normal.x,normal.y,normal.z,node.wheelID ~= nil and 1 or 0,id,node.wheelID}
+  local sample = {pos.x,pos.y,pos.z,normal.x,normal.y,normal.z,node.wheelID ~= nil and 1 or 0,id,node.wheelID}
+  sample.side = sideKey
+  surfacePending[kind] = sample
 end
 local function flushSurface(now)
   if not enabled or not paintEnabled then resetSurface(); return end
@@ -382,6 +526,7 @@ local function flushSurface(now)
     end
   end
   local parts = {}
+  for key in pairs(surfaceDeep) do surfaceDeepUntil[key] = now + SURFACE_DEEP_HOLD end
   for _, kind in ipairs({"mud", "dirt", "snow"}) do
     local e = surfacePending[kind]
     if e and not wet then
@@ -391,13 +536,68 @@ local function flushSurface(now)
         local p = obj:getNodePosition(e[8]) + obj:getPosition()
         e[1],e[2],e[3] = p.x,p.y,p.z
       end
-      parts[#parts+1] = string.format("{%q,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d}",kind,unpack(e,1,7))
+      -- Field 9 (deep) is optional on the painter's side: older painters ignore it.
+      parts[#parts+1] = string.format("{%q,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d,%d}",kind,
+        e[1],e[2],e[3],e[4],e[5],e[6],e[7],(surfaceDeepUntil[e.side or ""] or -1) > now and 1 or 0)
     end
   end
-  surfacePending = {}
+  surfacePending, surfaceDeep = {}, {}
   obj:queueGameEngineLua(string.format(
-    "if scratches_paint and scratches_paint.ingestSurface then scratches_paint.ingestSurface(%d,{%s},%s,%s,%.3f) end",
-    obj:getId(), table.concat(parts,","), tostring(wet), tostring(supported),submerged/math.max(1,#(waterNodes or {}))))
+    "if scratches_paint and scratches_paint.ingestSurface then scratches_paint.ingestSurface(%d,{%s},%s,%s,%.3f,%s) end",
+    obj:getId(), table.concat(parts,","), tostring(wet), tostring(supported),submerged/math.max(1,#(waterNodes or {})),
+    restSill() and string.format("%.3f", sillRest) or "nil"))
+end
+
+-- Wheel-side scrapes: a wheel node sliding on a hard surface while the ground
+-- normal is roughly parallel to that wheel's axle (the wheel's side faces the
+-- ground: car on its side, or a rim grinding a kerb face). At most four per
+-- second per wheel, shipped to GE as one batched call per frame.
+local WHEEL_SCRAPE_SURFACES = {ASPHALT=true, ASPHALT_WET=true, ROCK=true, COBBLESTONE=true,
+  METAL=true, RUMBLE_STRIP=true, GRAVEL=true, CONCRETE=true}
+local wheelScrapeLast, pendingWheelScrapes = {}, {}
+-- Unit axle per wheel, re-read at most 20 times a second: this runs for every
+-- wheel contact of a skid, and node positions allocate.
+local wheelAxle = {}
+local function wheelSideScrape(id1, pos, normal, slipVel, normalForce, mat1)
+  if not paintEnabled or #pendingWheelScrapes >= 8 then return end
+  if not (finite(slipVel) and finite(normalForce)) or slipVel < 1.5 or normalForce < 60 then return end
+  if not WHEEL_SCRAPE_SURFACES[nameById[mat1] or ""] then return end
+  local node = v.data.nodes and v.data.nodes[id1]
+  local wheelId = node and node.wheelID
+  local wheel = wheelId ~= nil and v.data.wheels and v.data.wheels[wheelId]
+  if not wheel or not wheel.node1 or not wheel.node2 then return end
+  local now = (obj and obj.getSimTime and obj:getSimTime()) or 0
+  local last = wheelScrapeLast[wheelId]
+  if last and now >= last and now - last < 0.25 then return end
+  if not (finite(pos.x) and finite(pos.y) and finite(pos.z)
+      and finite(normal.x) and finite(normal.y) and finite(normal.z)) then return end
+  local axle = wheelAxle[wheelId]
+  if not axle then axle = {0, 0, 0, -1}; wheelAxle[wheelId] = axle end
+  if now == 0 or now < axle[4] or now - axle[4] > 0.05 then
+    local a, b = obj:getNodePosition(wheel.node1), obj:getNodePosition(wheel.node2)
+    if not a or not b then return end
+    local ax, ay, az = a.x - b.x, a.y - b.y, a.z - b.z
+    local len = math.sqrt(ax*ax + ay*ay + az*az)
+    if not (len >= 1e-4) then return end
+    axle[1], axle[2], axle[3], axle[4] = ax/len, ay/len, az/len, now
+  end
+  local nlen = math.sqrt(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z)
+  if nlen < 1e-4 then return end
+  local along = math.abs(axle[1]*normal.x + axle[2]*normal.y + axle[3]*normal.z) / nlen
+  if along < 0.6 then return end
+  wheelScrapeLast[wheelId] = now
+  stats.wheelScrapes = (stats.wheelScrapes or 0) + 1
+  pendingWheelScrapes[#pendingWheelScrapes + 1] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d,%.2f}",
+    pos.x, pos.y, pos.z, normal.x/nlen, normal.y/nlen, normal.z/nlen, wheelId, slipVel)
+end
+local function flushWheelScrapes()
+  if #pendingWheelScrapes == 0 then return end
+  local body = table.concat(pendingWheelScrapes, ",")
+  pendingWheelScrapes = {}
+  if not (paintEnabled and obj and obj.queueGameEngineLua) then return end
+  obj:queueGameEngineLua(string.format(
+    "if scratches_paint and scratches_paint.ingestWheelScrape then " ..
+    "pcall(scratches_paint.ingestWheelScrape, %d, {%s}) end", obj:getId(), body))
 end
 
 -- ---- the filter ----
@@ -414,17 +614,31 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
 
   if not buildSets() then return end
 
-  surfaceContact(id1, pos, normal, slipVel, normalForce, mat1)
+  surfaceContact(id1, pos, normal, slipVel, normalForce, mat1, depth)
 
   local bodyName = nodeClass[id1]
   if bodyName == nil then
     bodyName = classifyNode(id1)
     nodeClass[id1] = bodyName
   end
-  if bodyName == REJ_WHEEL then stats.rejWheel = stats.rejWheel + 1; return end
+  if bodyName == REJ_WHEEL then
+    stats.rejWheel = stats.rejWheel + 1
+    wheelSideScrape(id1, pos, normal, slipVel, normalForce, mat1)
+    return
+  end
   if bodyName == REJ_BODY_MAT then stats.rejBodyMat = stats.rejBodyMat + 1; return end
   if bodyName == REJ_PART then stats.rejPartExcluded = stats.rejPartExcluded + 1; return end
   if bodyName == REJ_NO_NODE then stats.rejNoNode = stats.rejNoNode + 1; return end
+  -- Underside flag for the wire format: 0 none, 1 body node, 2 low mechanical
+  -- part (only ever accepted as an underside contact).
+  local under = 0
+  if bodyName == REJ_LOW_PART then
+    if not undersideContact(id1, normal) then
+      stats.rejPartExcluded = stats.rejPartExcluded + 1
+      return
+    end
+    under, bodyName = 2, "UNDERSIDE_PART"
+  end
   local node = v.data.nodes[id1]
 
   -- surface material: materialId1 is what the node hit (the ground-model
@@ -515,6 +729,8 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
     return
   end
   if paintEnabled and obj and obj.queueGameEngineLua then
+    if under == 0 and undersideContact(id1, normal) then under = 1 end
+    if under > 0 then stats.undersideContacts = (stats.undersideContacts or 0) + 1 end
     -- `now` is the simTime resolved in the magnitude section above.
     if impactHit then
       local lastImpact = nodeImpactLast[id1] or 0
@@ -531,7 +747,7 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
           sx, sy, sz = slipVec.x, slipVec.y, slipVec.z
         end
         pendingDetectEvents[#pendingDetectEvents + 1] = {
-          pos.x, pos.y, pos.z, normal.x, normal.y, normal.z, "i", normalForce, sx, sy, sz,
+          pos.x, pos.y, pos.z, normal.x, normal.y, normal.z, "i", normalForce, sx, sy, sz, under,
         }
       end
       -- Fall through — slide branch can also fire on this tick.
@@ -576,6 +792,7 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
       pts[#pts + 1] = {
         x = px, y = py, z = pz,
         nx = normal.x, ny = normal.y, nz = normal.z,
+        u  = under,        -- underside flag (0/1/2), see flushStream
         f  = normalForce,  -- (I) force per sample; drives the fallback's
                            --     synth-camera distance if the stream ends
                            --     up <STREAM_MIN_POINTS.
@@ -609,8 +826,9 @@ local function flushDetectEvents()
   local parts = {}
   for i = 1, n do
     local e = pendingDetectEvents[i]
-    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%q,%.0f,%.2f,%.2f,%.2f}",
-      e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8] or 0, e[9] or 0, e[10] or 0, e[11] or 0)
+    -- 12th field: underside flag (0 none, 1 body node, 2 low mechanical part).
+    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%q,%.0f,%.2f,%.2f,%.2f,%d}",
+      e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8] or 0, e[9] or 0, e[10] or 0, e[11] or 0, e[12] or 0)
   end
   local streams = table.concat(pendingStreams, ",")
   pendingDetectEvents = {}
@@ -690,6 +908,7 @@ local function detectFrame(dt)
     if next(nodeStreams) ~= nil then table.clear(nodeStreams) end
     if #pendingDetectEvents > 0 then pendingDetectEvents = {} end
     if #pendingStreams > 0 then pendingStreams = {} end
+    if #pendingWheelScrapes > 0 then pendingWheelScrapes = {} end
     return
   end
   local now = obj:getSimTime() or 0
@@ -704,6 +923,7 @@ local function detectFrame(dt)
   end
   flushSurface(now)
   flushDetectEvents()
+  flushWheelScrapes()
   -- (K) Throttled stats push to drive the GE-side IMGUI panel.
   if (now - lastStatsPush) >= STATS_PUSH_PERIOD then
     pushStatsToGE(now)
@@ -919,6 +1139,14 @@ M.setThresholds = function(slip, perp, normalForce)
     SLIP_THRESHOLD, PERP_THRESHOLD, MIN_NORMAL_FORCE))
 end
 
+-- Underside scrapes: flag belly contacts for the painter and let low
+-- mechanical parts through when they are what touches the ground. false =
+-- the plain part deny-list, no flags.
+M.setUndersideScrapes = function(b)
+  undersideOn = b and true or false
+  log('I', logTag, "undersideScrapes = " .. tostring(undersideOn))
+end
+
 M.setPaintEnabled = function(b)
   paintEnabled = b and true or false
   if not paintEnabled then resetSurface() end
@@ -994,6 +1222,7 @@ local function onReset()
   table.clear(nodeStreams)
   pendingDetectEvents = {}
   pendingStreams = {}
+  pendingWheelScrapes = {}
   bootstrapPainter()
   -- Wipe baked decals on the GE side so the reset cleans up cosmetics too.
   -- pcall-guarded on GE because scratches_paint may not be loaded yet on a

@@ -133,7 +133,13 @@ function decalProjection:getDecalData()
     colorTex=counters.tex.color,metalTex=counters.tex.metallic,roughTex=counters.tex.roughness }
 end
 function decalProjection:bakeLayers(list)
-  for _,layer in ipairs(list) do if layer.name=='soil' then counters.lastSoilLayer=layer end end
+  for _,layer in ipairs(list) do
+    if layer.name=='soil' then
+      counters.lastSoilLayer=layer
+      if layer.decalNorm and layer.decalNorm.z < -0.9 then counters.lastUnderLayer=layer end
+      if layer.colorTex and layer.colorTex:find('_band_',1,true) then counters.lastSillLayer=layer end
+    end
+  end
   counters.bakes = counters.bakes + 1
   counters.bakeLayers = counters.bakeLayers + #list
   counters.bakesThisFrame = (counters.bakesThisFrame or 0) + 1
@@ -207,6 +213,9 @@ dofile=function(path)
 end
 local paint = dofile(ROOT .. "/lua/ge/extensions/scratches/paint.lua")
 scratches_paint = paint
+-- This harness drags contacts metres along a car that never moves, so the
+-- "is this contact on the car" test is off except where it is checked itself.
+paint.setStrayMargin(-1)
 
 local function frame(dt)
   counters.projectsThisFrame = 0
@@ -402,6 +411,80 @@ local okF, errF = pcall(function() for _ = 1, 40 do frame() end end)
 check(okF, "a throwing job does not abort onUpdate: " .. tostring(errF))
 check(counters.bakes > b1, "the job after a failed one still bakes")
 decalProjection.getDecalData = realGetDecalData
+
+-- 2d) Underside contacts on the detector. A low mechanical part (skidplate)
+-- is dropped for any ordinary contact, but accepted and flagged 2 when the
+-- ground faces the belly; glass, wheels and soft ground stay rejected.
+obj.getDirectionVectorUp = function() return vec3(0, 0, 1) end
+v.data.nodes[40] = { nodeMaterial = METAL, partOrigin = "pickup_skidplate_F", pos = vec3(0, -1.5, 0.15) }
+v.data.nodes[41] = { nodeMaterial = METAL, partOrigin = "pickup_body", pos = vec3(0, 0, 1.6) }
+v.data.nodes[42] = { nodeMaterial = METAL, partOrigin = "pickup_windshield", pos = vec3(0, 0.5, 0.2) }
+v.data.nodes[43] = { nodeMaterial = METAL, partOrigin = "pickup_engine_i6", pos = vec3(0, -1.6, 1.2) }
+v.data.nodes[44] = { nodeMaterial = METAL, partOrigin = "pickup_exhaust", pos = vec3(0.3, 1.0, 0.2) }
+v.data.nodes[45] = { nodeMaterial = METAL, partOrigin = "pickup_body", pos = vec3(0.8, 0.2, 0.2) }
+local function contactN(id, z, nx, ny, nz, slipVel, normalForce, surface, x)
+  _G.onNodeCollision(id, vec3(x or 100, -1.5, z), vec3(nx, ny, nz), vec3(0, 0, 0), 0, vec3(0, 0, 0),
+                     slipVel, 0, normalForce, 0.01, surface or ASPHALT, METAL)
+end
+local function detectPayload()
+  detect.updateGFX(1 / 60)
+  local out = {}
+  for _, q in ipairs(queuedGE) do
+    if q:find("scratches_paint.ingest,", 1, true) then out[#out + 1] = q end
+  end
+  queuedGE = {}
+  return table.concat(out, " ")
+end
+detectPayload()
+obj.simTime = obj.simTime + 0.5
+contactN(40, 0.15, 1, 0, 0, 0, 5000)    -- kerb face against the skidplate: sideways
+contactN(42, 0.2, 0, 0, 1, 0, 5000)     -- glass, even from below
+contactN(43, 1.2, 0, 0, 1, 0, 5000)     -- an engine node high on the car
+contactN(40, 0.15, 0, 0, 1, 0, 5000, 18) -- skidplate ploughing mud
+contactN(30, 0, 0, 0, 1, 0, 5000)       -- wheel
+check(detectPayload() == "", "excluded-part contact with a sideways normal is still rejected (as are glass, high parts, wheels, mud)")
+-- An aerial stands clear of the roof: a decal anchored at its tip is projected
+-- down through everything under it. It never reports.
+v.data.nodes[46] = { nodeMaterial = METAL, partOrigin = "sunburst2_antenna", pos = vec3(0.3, 1.6, 1.9) }
+v.data.nodes[47] = { nodeMaterial = METAL, partOrigin = "pickup_backlight", pos = vec3(0, 1.2, 1.3) }
+obj.simTime = obj.simTime + 0.5
+contactN(46, 1.9, 0, 0, 1, 8, 5000)
+contactN(47, 1.3, 0, 0, 1, 8, 5000)
+check(detectPayload() == "", "an aerial dragged along the ground, or the rear window, reports nothing")
+obj.simTime = obj.simTime + 0.5
+contactN(40, 0.15, 0, 0, 1, 0, 5000)
+local underPayload = detectPayload()
+check(underPayload:find(',"i",5000,0.00,0.00,0.00,2}', 1, true) ~= nil,
+  "excluded-part underside contact is accepted and flagged as a low part")
+obj.simTime = obj.simTime + 0.5
+contactN(45, 0.2, 0, 0, 1, 0, 5000)
+contactN(41, 1.6, 0, 0, 1, 0, 5000)
+underPayload = detectPayload()
+check(underPayload:find(',"i",5000,0.00,0.00,0.00,1}', 1, true) ~= nil
+  and underPayload:find(',"i",5000,0.00,0.00,0.00,0}', 1, true) ~= nil,
+  "a low body node is flagged as an underside contact, a high one is not")
+-- An exhaust dragged along the road: every stream point carries the flag.
+for step = 1, 600 do
+  obj.simTime = obj.simTime + dtPhys
+  contactN(44, 0.2, 0, 0, 1, 8, 300, nil, 100 + step * 0.01)
+end
+obj.simTime = obj.simTime + 0.2
+underPayload = detectPayload()
+check(underPayload:find("0.000,0.000,1.000,2},{", 1, true) ~= nil,
+  "an underside slide stream ships its points with the low-part flag")
+detect.setUndersideScrapes(false)
+obj.simTime = obj.simTime + 0.5
+contactN(40, 0.15, 0, 0, 1, 0, 5000)
+contactN(45, 0.2, 0, 0, 1, 0, 5000)
+underPayload = detectPayload()
+check(not underPayload:find(",2}", 1, true) and underPayload:find(',"i",5000,0.00,0.00,0.00,0}', 1, true) ~= nil,
+  "detector setUndersideScrapes(false) restores the plain deny-list and sends no flags")
+detect.setUndersideScrapes(true)
+obj.getDirectionVectorUp = nil
+obj.simTime = obj.simTime + 0.5
+contactN(40, 0.15, 0, 0, 1, 0, 5000)
+check(detectPayload() == "", "without the engine's up-vector call low parts stay rejected")
+obj.simTime = obj.simTime + 0.5
 local failedLogged = false
 for i = #logLines, 1, -1 do
   if logLines[i]:find("projection job failed", 1, true) then failedLogged = true; table.remove(logLines, i) end
@@ -577,11 +660,95 @@ for _,side in ipairs({-1,1}) do
       'soil slab reaches recessed bodywork but stays short of the vehicle centerline')
   end
 end
+-- Snow is flung like mud, but steeper and puffier; every third deposit packs
+-- into the arch. Reversing flips the throw.
+obj.getVelocity=function() return vec3(0,5,0) end
+paint.clearStamps()
+paint.ingestSurface(playerVid,{{'mud',101,-1,0.3,0,0,1,1}},false,true)
+local mudLift=paint.getSurfaceState().lastSample.flowZ
+paint.clearStamps()
+paint.ingestSurface(playerVid,{{'snow',101,-1,0.3,0,0,1,1}},false,true)
+for _=1,5 do frame(0.26) end
+do
+  local sample,layer=paint.getSurfaceState().lastSample,counters.lastSoilLayer
+  check(sample.where=='flank' and sample.flowY<0 and sample.flowZ>mudLift,
+    'wheel snow is flung up and back, steeper than mud')
+  check(layer.colorTex:find('soil_snow_fling_',1,true)~=nil,'wheel snow uses a snow fling brush')
+  check(math.abs(layer.decalScale.z-layer.decalScale.x*0.7)<1e-6 and layer.decalScale.x<=1.3,
+    'snow plume is puffier than the 2:1 mud fan and bounded')
+end
+paint.ingestSurface(playerVid,{{'snow',101,-1,0.3,0,0,1,1}},false,true)
+paint.ingestSurface(playerVid,{{'snow',101,-1,0.3,0,0,1,1}},false,true)
+do
+  local state=paint.getSurfaceState()
+  check(state.lastFlank.pack==true and state.lastFlank.flowY==nil and state.lastFlank.z<0.6,
+    'every third snow deposit packs low into the wheel arch')
+  -- The third wheel sample also throws one deposit up under the sill.
+  local under=state.lastSample
+  check(under.where=='under' and state.underDeposits==1 and state.deposits==3,
+    'every third wheel sample adds an underside deposit on its own budget')
+  check(under.normalZ==-1 and under.normalX==0 and under.depth<=0.22
+    and under.z+under.depth*0.5<0.35 and math.abs(under.x)>0.6 and math.abs(under.x)<1.0,
+    'underside deposit projects straight up through a thin slab under the sill')
+  paint.setSyntheticAnchors(true) -- the anchor normal is only written under synthetic anchors
+  for _=1,6 do frame(0.26) end
+  paint.setSyntheticAnchors(false)
+  local layer=counters.lastUnderLayer
+  check(layer~=nil and layer.decalNorm.z==-1 and layer.decalScale.y<=0.35
+    and layer.colorTex:find('soil_snow_coverage',1,true)~=nil,
+    'underside layer keeps its downward normal and is not snapped to a side face')
+end
+obj.getVelocity=function() return vec3(0,-5,0) end
+paint.clearStamps()
+paint.ingestSurface(playerVid,{{'snow',101,-1,0.3,0,0,1,1}},false,true)
+check(paint.getSurfaceState().lastSample.flowY>0,'reversing flips the snow throw')
+obj.getVelocity=function() return vec3(0,5,0) end
+-- Deep mud cakes the sill on that side; old 8-field samples are never deep.
+paint.clearStamps()
+paint.ingestSurface(playerVid,{{'mud',101,-1,0.3,0,0,1,1}},false,true)
+check(paint.getSurfaceState().sillDeposits==0 and paint.getSurfaceState().lastSample.where=='flank',
+  'legacy 8-field wheel sample lays no sill band')
+do
+  local seen,count={},0
+  for i=1,10 do
+    paint.ingestSurface(playerVid,{{'mud',101,-1+i*0.01,0.3,0,0,1,1,1}},false,true)
+    local sill=paint.getSurfaceState().lastSill
+    if sill and not seen[sill.y] then seen[sill.y]=true; count=count+1 end
+  end
+  local sill=paint.getSurfaceState().lastSill
+  check(sill.where=='sill' and sill.x==1 and sill.normalX==1 and sill.z>=0.1 and sill.z<=0.35,
+    'deep mud lays a band low on the flank that is in the mud')
+  check(count==5 and math.abs(sill.y)<1.5,'sill bands step along the car between the axles')
+  check(sill.brush:find('soil_mud_band_',1,true)~=nil and sill.width<sill.scale,
+    'sill uses the horizontal band brush')
+  for _=1,8 do frame(0.26) end
+  check(counters.lastSillLayer~=nil and counters.lastSillLayer.decalRotation==0,
+    'sill band is laid upright')
+  for i=1,400 do
+    paint.ingestSurface(playerVid,{{'mud',101+(i%2)*-202,-2+(i%40)*0.1,0.3,0,0,1,1,1}},false,true)
+  end
+  local state=paint.getSurfaceState()
+  check(state.deposits==96 and state.sillDeposits<=32 and state.underDeposits<=24
+    and state.sillDeposits>10 and state.underDeposits>10,
+    'underside and sill deposits have their own budgets and never starve the flank fling')
+end
+-- Each extra switches off live.
+paint.clearStamps()
+paint.setSoilExtras(false,false,false)
+for _=1,6 do paint.ingestSurface(playerVid,{{'snow',101,-1,0.3,0,0,1,1,1}},false,true) end
+do
+  local state=paint.getSurfaceState()
+  check(state.underDeposits==0 and state.sillDeposits==0 and state.lastSample.where=='flank'
+    and state.lastSample.flowY==nil,'setSoilExtras(false,false,false) restores flank-only soil')
+end
+paint.setSoilExtras(true,true,true)
 obj.getVelocity=movingVelocity
 paint.clearStamps()
 soil(10,18); soil(30,18); surfaceTick(false)
 check(paint.getSurfaceState().lastSample.wheel == 1,
   "wheel sample takes priority over earlier body contact")
+check(paint.getSurfaceState().sillDeposits == 1 and paint.getSurfaceState().lastFlank.deep == true,
+  "bodywork touching mud marks the following wheel sample deep")
 paint.clearStamps()
 local scratchBeforeSoil = paint.getStats().stamp.streamsBaked
 local beforeSoft = detStats()
@@ -636,6 +803,103 @@ check(counters.maxProjectsInFrame <= projBudget(), "soil respects shared project
 paint.clearStamps()
 check(paint.getSurfaceState().deposits == 0 and paint.getSurfaceState().wetness == 0,
   "clear resets surface state")
+
+-- Wheels and tyres: soil strength, quantised steps, side scrapes, wash, reset.
+do
+  local function wheels() return paint.getStats().wheels end
+  check(wheels().enabled and wheels().tyre == 0 and wheels().scrape == 0, "clear resets wheel soil and abrasion")
+  for i=1,5 do paint.ingestSurface(playerVid,{{"mud",100+i,0,0,0,0,1}},false,true) end
+  check(math.abs(wheels().tyre-0.2) < 1e-6 and wheels().rim > 0 and wheels().rim < wheels().tyre,
+    "tyres soil faster than rims")
+  check(wheels().steps.tyre == 2 and wheels().steps.rim == 1, "wheel soil is quantised to steps")
+  check(wheels().lastKind == "mud" and wheels().tintResolves <= 2, "wheel tint resolves lazily")
+  v.data.wheels = {[1]={node1=40,node2=41}}
+  local savedPos = obj.getNodePosition
+  obj.getNodePosition = function(_, id) return id == 40 and vec3(0.25,0,0.3) or vec3(0,0,0.3) end
+  local function wheelHit(normal, material)
+    _G.onNodeCollision(30,vec3(100,0,0.3),normal,vec3(0,0,0),0,vec3(0,0,0),6,0,300,0.01,material,METAL)
+  end
+  obj.simTime = obj.simTime + 1
+  wheelHit(vec3(0,0,1), ASPHALT); detect.updateGFX(1/60); runGE()
+  check(wheels().scrapes == 0, "an upright sliding wheel is not a side scrape")
+  wheelHit(vec3(1,0,0), 18); detect.updateGFX(1/60); runGE()
+  check(wheels().scrapes == 0, "soft ground does not abrade a wheel")
+  for _=1,10 do wheelHit(vec3(1,0,0), ASPHALT) end
+  detect.updateGFX(1/60)
+  local scrapeCalls = 0
+  for _, s in ipairs(queuedGE) do if s:find("ingestWheelScrape",1,true) then scrapeCalls = scrapeCalls + 1 end end
+  runGE()
+  check(scrapeCalls == 1 and wheels().scrapes == 1 and wheels().perWheel[1] == 1,
+    "wheel side scrapes are throttled per wheel and batched into one call")
+  obj.getNodePosition = savedPos
+  local scraped = wheels().scrape
+  check(scraped > 0, "side scrape raises rim abrasion")
+  paint.ingestWheelScrape(-1,{{100,0,0,1,0,0,1,6}})
+  paint.ingestWheelScrape(playerVid,{{100,0/0,0,1,0,0,1,6},"bogus",{1,2,3}})
+  check(wheels().scrape == scraped, "foreign and invalid wheel scrapes ignored")
+  local dirty = wheels().tyre
+  for _=1,4 do surfaceTick(true) end
+  check(wheels().tyre < dirty and wheels().scrape == scraped, "washing fades wheel soil but not abrasion")
+  paint.setWheelDirt(false)
+  paint.ingestSurface(playerVid,{{"mud",100,0,0,0,0,1}},false,true)
+  paint.ingestWheelScrape(playerVid,{{100,0,0,1,0,0,1,6}})
+  check(not wheels().enabled and wheels().tyre == 0 and wheels().scrape == 0, "setWheelDirt(false) switches wheels off")
+  paint.setWheelDirt(true)
+  paint.ingestWheelScrape(playerVid,{{100,0,0,1,0,0,1,6}})
+  paint.clearStamps()
+  check(wheels().scrape == 0 and wheels().tyre == 0, "reset clears wheel abrasion like body damage")
+  -- Material writes only happen when a quantised step changes.
+  local wa = dofile(ROOT .. "/lua/ge/extensions/scratches/wheelAdapter.lua")
+  wa._attachEntries(1, {})
+  local applies, resolves = wa.snapshot().applies, 0
+  wa.expose("dirt", function() resolves = resolves + 1; return {0.5,0.4,0.3} end); wa.update(0.5, 0)
+  check(wa.snapshot().applies == applies, "sub-step wheel soil does not touch materials")
+  for _=1,2 do wa.expose("dirt", function() resolves = resolves + 1; return {0.5,0.4,0.3} end) end
+  wa.update(0.5, 0)
+  check(wa.snapshot().applies == applies + 1, "a new wheel soil step updates materials once")
+  wa.update(0.5, 0); wa.update(0.5, 0)
+  check(wa.snapshot().applies == applies + 1 and resolves == 1, "unchanged wheel steps cost nothing")
+  -- Only the clone whose own values moved is reloaded, one per update.
+  do
+    local reloads, realFind = {}, scenetree.findObject
+    scenetree.findObject = function(name)
+      if type(name) == "string" and name:match("^mock_whl_") then
+        return {setField=function() end, flush=function() end,
+          reload=function() reloads[name] = (reloads[name] or 0) + 1 end}
+      end
+      return realFind and realFind(name)
+    end
+    local w2 = dofile(ROOT .. "/lua/ge/extensions/scratches/wheelAdapter.lua")
+    w2._attachEntries(7, {
+      {name="mock_whl_tyre", role="tyre", count=1, dirtStage=1},
+      {name="mock_whl_rim", role="rim", count=1, dirtStage=1, scrapeStage=2},
+      {name="mock_whl_under", role="under", count=1, dirtStage=1, scrapeStage=2}})
+    check(reloads.mock_whl_tyre == 1 and reloads.mock_whl_rim == 1 and reloads.mock_whl_under == 1,
+      "attaching writes every wheel clone once")
+    for _ = 1, 4 do w2.scrapeUnder(0.03) end
+    for _ = 1, 6 do w2.update(0.6, 0) end
+    check(reloads.mock_whl_under == 2 and reloads.mock_whl_tyre == 1 and reloads.mock_whl_rim == 1,
+      "a belly scrape reloads the undercarriage clone only")
+    w2.scrape(0, 8); w2.scrape(0, 8)
+    for _ = 1, 6 do w2.update(0.6, 0) end
+    check(reloads.mock_whl_rim == 2 and reloads.mock_whl_tyre == 1 and reloads.mock_whl_under == 2,
+      "a wheel-side scrape reloads the rim clone only")
+    for _ = 1, 3 do w2.expose("mud", function() return {0.4,0.3,0.2} end) end
+    w2.update(0.6, 0)
+    local afterOne = (reloads.mock_whl_tyre - 1) + (reloads.mock_whl_rim - 2) + (reloads.mock_whl_under - 2)
+    for _ = 1, 6 do w2.update(0.1, 0) end
+    check(afterOne == 1 and reloads.mock_whl_tyre == 2 and reloads.mock_whl_under == 3,
+      "clones that changed together are written one per update, not in one frame")
+    check(w2.classify("pickup_runningboard","") == "under" and w2.classify("sunburst2_mechanicals","") == "under"
+      and w2.classify("etk800_main","") == nil, "undercarriage material classification")
+    scenetree.findObject = realFind
+  end
+  check(wa.classify("tire_01j","/vehicles/common/tires/main.materials.json") == "tyre"
+    and wa.classify("wheel_26b","/vehicles/common/wheels/main.materials.json") == "rim"
+    and wa.classify("pickup_steeringwheel","") == nil and wa.classify("character_primary","") == nil,
+    "wheel material classification")
+  obj.inWater = function() return false end
+end
 soil(30,18); detect.setPaintEnabled(false); surfaceTick(false)
 check(paint.getSurfaceState().deposits == 0, "disable discards pending surface samples")
 detect.setPaintEnabled(true)
@@ -794,6 +1058,99 @@ local streamStats=paint.getStats()
 check(streamStats.stamp.streamsMerged==1,"adjacent stream bands share a projection")
 check(streamStats.stamp.streamLayersExpected==4 and streamStats.stamp.streamSubstrokesTotal==4 and streamStats.perf.bakeLayersTotal==4,"merged bands retain exactly one haze and one segment each without alias duplication")
 paint.setPanelGrouping(false)
+-- Floor pan: body faces outside the skin layout read one corner texel of the
+-- soil canvas, so the floor gets a film from a UV-space fill, stepped up as the
+-- wheels roll through soil. That needs the body adapter's soil canvas; this
+-- harness runs the legacy path, where the level builds and nothing is baked.
+-- (The soil tone it relies on is checked in adapter_harness.lua.)
+do
+  paint.ingestSurface(playerVid,{{'mud',101,-1,0.3,0,0,1,1}},false,true)
+  check((paint.getSurfaceState().floorLevel or 0)==0,'the floor film is off unless asked for')
+  paint.setSoilExtras(nil,nil,nil,true)
+  for _=1,12 do paint.ingestSurface(playerVid,{{'mud',101,-1,0.3,0,0,1,1}},false,true) end
+  local state=paint.getSurfaceState()
+  check(state.floorLevel and state.floorLevel>0.3,'wheel samples build the floor film level')
+  local ok,why=paint.soilFill(1,0,0,1)
+  check(ok==false and why=='not ready','a soil fill without the body adapter is refused, not thrown')
+  paint.setSoilExtras(nil,nil,nil,false)
+  paint.ingestSurface(playerVid,{{'mud',101,-1,0.3,0,0,1,1}},false,true)
+  check(paint.getSurfaceState().floorLevel==state.floorLevel,'the floor film can be switched off')
+  for _=1,40 do frame(.02) end
+  paint.clearStamps()
+  for _=1,4 do frame(.02) end
+end
+-- Ground paint: a slide whose contact normal is vertical leaves marks on the
+-- road along its path; walls leave none; the ring is bounded; marks fade and
+-- expire; a vehicle reset keeps them and a level change does not.
+do
+  local ground = dofile("/lua/ge/extensions/scratches/groundPaint.lua") -- private instance
+  local drawn, drawnPool = 0, nil
+  ground._setBackend(function(pool, n) drawn = n; drawnPool = pool end)
+  local red = {0.8, 0.1, 0.1}
+  check(ground.addStream({{0,0,0,1,0,0},{2,0,0,1,0,0}}, red) == 0, "a slide along a wall leaves nothing on the ground")
+  check(ground.addStream({{0,0,0,0,0,1},{0.03,0,0,0,0,1}}, red) == 0, "a slide that went nowhere leaves nothing on the ground")
+  local laid = ground.addStream({{0,0,0,0,0,1},{2,0,0,0,0,1}}, red)
+  check(laid >= 5 and laid <= 9, "a 2 m ground scrape lays one mark per 0.25-0.4 m ("..laid..")")
+  local first = ground._marks()[1]
+  check(first.dx > 0.99 and first.len > 0.4 and first.len < 1.1 and first.width < 0.25, "a ground mark lies along the scrape")
+  check(first.r > first.g + 0.2 and first.g > 0.1 and first.a < 0.9, "paint transfer keeps the car's hue, chalkier and translucent")
+  ground.update(1/60)
+  check(drawn == laid and ground.getStats().submitted == laid, "every nearby mark is submitted each frame ("..drawn..")")
+  check(drawnPool[1].scale.y == first.len and drawnPool[1].color.a == first.a and drawnPool[1].texture == first.tex, "the decal carries the mark's size, tint and texture")
+  local poolEntry = drawnPool[1]
+  ground.update(1/60)
+  check(drawnPool[1] == poolEntry, "the decal pool is reused between frames")
+  core_camera = { getPosition = function() return vec3(1000, 0, 0) end }
+  drawn = 0; ground.update(1/60)
+  check(drawn == 0 and ground.getStats().submitted == 0 and ground.getStats().culled == laid, "marks far from the camera are not submitted")
+  core_camera = nil
+  check(ground.addImpact(5,5,0, 0,0,1, 500, red) == 0 and ground.addImpact(5,5,0, 1,0,0, 30000, red) == 0, "soft hits and wall hits chip nothing onto the ground")
+  check(ground.addImpact(5,5,0, 0,0,1, 12000, red) >= 2, "a hard hit on the ground leaves a smear and chips")
+  check(ground.addWheelScrape({0,9,0}, {0,0,1}, 6) == 0, "the first wheel-side report only starts a track")
+  check(ground.addWheelScrape(vec3(0.3,9,0), vec3(0,0,1), 6) == 1, "a dragged wheel lays a mark once it has moved")
+  local stats = ground.getStats()
+  local wheelMark = ground._marks()[stats.alive]
+  check(wheelMark.r < 0.6 and math.abs(wheelMark.r - wheelMark.g) < 0.05 and wheelMark.dx > 0.99, "the wheel mark is dark rubber or bare metal, along the drag")
+  check(ground.addWheelScrape({0.6,9,0}, {1,0,0}, 6) == 0, "a wheel rubbing a wall leaves nothing on the ground")
+  -- Six nodes dragged over the same 6 m: the line holds one live streak per
+  -- 0.2 m cell at most (two rows here: the line runs along a cell edge).
+  local onLine = 0
+  for _ = 1, 6 do onLine = onLine + ground.addStream({{0,20,0,0,0,1},{6,20,0,0,0,1}}, red) end
+  check(onLine > 15 and onLine <= 62 and ground.getStats().thinned > 40,
+    "ground already marked is not marked again by the next node over it ("..onLine..")")
+  for i = 1, 80 do ground.addStream({{0,20+i,0,0,0,1},{6,20+i,0,0,0,1}}, red) end
+  stats = ground.getStats()
+  check(stats.alive == ground._limits.max and stats.dropped > 0, "the ring is bounded and drops the oldest ("..stats.alive.." alive, "..stats.dropped.." dropped)")
+  local bare = 0
+  for _, m in ipairs(ground._marks()) do if math.abs(m.r - m.g) < 0.02 and m.r < 0.4 then bare = bare + 1 end end
+  check(bare > 50, "a long hard scrape wears through to bare metal ("..bare..")")
+  ground.update(ground._limits.life - ground._limits.fade / 2)
+  local a = drawnPool[1].color.a
+  check(a > 0 and a < 0.4, "marks fade over their last seconds ("..a..")")
+  ground.update(ground._limits.fade)
+  check(ground.getStats().alive == 0, "marks expire")
+  ground.addStream({{0,0,0,0,0,1},{2,0,0,0,0,1}}, red)
+  ground._setBackend(function() error("decal manager gone") end)
+  check(pcall(ground.update, 1/60) and ground.getStats().drawErrors == 1, "a throwing decal manager is contained")
+  ground.setEnabled(false)
+  check(ground.getStats().alive == 0 and ground.addStream({{0,0,0,0,0,1},{2,0,0,0,0,1}}, red) == 0, "switched off: marks forgotten, nothing new laid")
+end
+paint.clearGroundPaint()
+paint.ingest(playerVid,nil,{{{100,0,.6,0,0,1},{101,0,.6,0,0,1}}})
+local groundAlive=paint.getStats().ground.alive
+check(groundAlive>=2,"a ground slide reaching the painter marks the road ("..groundAlive..")")
+paint.ingest(playerVid,nil,{{{100,0,.6,1,0,0},{101,0,.6,1,0,0}}})
+check(paint.getStats().ground.alive==groundAlive,"a wall slide reaching the painter does not mark the road")
+paint.onVehicleResetted(playerVid)
+check(paint.getStats().ground.alive==groundAlive,"a vehicle reset keeps the road marked")
+paint.onClientEndMission()
+check(paint.getStats().ground.alive==0,"leaving the level clears the road marks")
+paint.setGroundPaint(false)
+paint.ingest(playerVid,nil,{{{100,0,.6,0,0,1},{101,0,.6,0,0,1}}})
+check(paint.getStats().ground.alive==0 and paint.getStats().ground.enabled==false,"setGroundPaint(false) switches road marks off")
+paint.setGroundPaint(true)
+for _=1,40 do frame(.02) end
+paint.clearStamps();paint.resetPaintStats()
 -- Synthetic anchors: no native projection pass, and every layer is anchored at
 -- its own contact point with an outward normal (sign resolved against the hull
 -- face even when the detector's collision normal points into the car).
@@ -872,6 +1229,108 @@ bakedLayers={}
 paint.ingest(playerVid,{{100.3,1.5,1.8,0,0,-1,"i",9000,0,6,0}},nil)
 for _=1,60 do frame(1/60) end
 check(#bakedLayers==1 and bakedLayers[1].colorTex:find("w2_score_",1,true),"a glancing impact uses a scored brush aligned to its slip")
+-- Underside scrapes: a low part dragged under the car (flag 2, ground normal
+-- up into the car) forms a slide patch on the BOTTOM face, painted straight
+-- up with a shallow box that stays in the lower shell (box 0..1.8 m here).
+bakedLayers={}
+local us0=paint.getStats().underside
+local slides0=paint.getStats().wear.patches.slidePatches
+check(us0.enabled==true,"underside scrapes are on by default")
+paint.ingest(playerVid,nil,{{{100,-1.0,0.2,0,0,1,2},{100,-0.6,0.2,0,0,1,2}}})
+for _=1,60 do frame(1/60) end
+local us=paint.getStats().underside
+check(us.contacts-us0.contacts==1 and us.parts-us0.parts==1 and paint.getStats().wear.patches.slidePatches==slides0+1,"an underside slide stream forms a bottom-face patch")
+local ul=bakedLayers[#bakedLayers]
+check(#bakedLayers>=1 and ul.decalNorm.z<-0.99 and math.abs(ul.decalNorm.x)<1e-6 and ul.surfaceNormal.z<-0.99,"underside patch decal has a -z normal")
+check(ul and ul.decalScale.y>=0.10 and ul.decalScale.y<=0.35+1e-6,"underside patch decal has a bounded depth ("..tostring(ul and ul.decalScale.y)..")")
+check(ul and ul.decalPos.z>0.2 and ul.decalPos.z-ul.decalScale.y*0.5>=0.2-0.05 and ul.decalPos.z+ul.decalScale.y*0.5<=0.756+1e-6,"low-part box starts at the contact and reaches up, never past the lower shell")
+check(ul and math.abs(ul.decalPos.x)<1e-6 and ul.decalPos.y>-1.1 and ul.decalPos.y<-0.5,"underside decal stays under the contact")
+-- A low part that is not an underside contact is never painted.
+local impacts0=paint.getStats().wear.patches.impactSamples
+bakedLayers={}
+paint.ingest(playerVid,{{101,0,0.3,-1,0,0,"i",6000,0,0,0,2},{100,0.5,1.5,0,0,1,"i",6000,0,0,0,2}},nil)
+for _=1,40 do frame(1/60) end
+check(paint.getStats().underside.dropped-us.dropped==2 and paint.getStats().wear.patches.impactSamples==impacts0 and #bakedLayers==0,"a low-part contact with a sideways normal, or high on the car, is dropped")
+-- An old-shape (unflagged) body contact low on the car with the ground normal
+-- up is an underside contact too: straddling box, not lifted.
+paint.ingest(playerVid,{{100.5,1.0,0.25,0,0,1,"i",6000,0,0,0}},nil)
+for _=1,40 do frame(1/60) end
+check(#bakedLayers==1 and bakedLayers[1].decalNorm.z<-0.99 and math.abs(bakedLayers[1].decalScale.y-0.25)<1e-6 and math.abs(bakedLayers[1].decalPos.z-0.25)<1e-6,"a sill/floor contact is painted on the bottom face with a shallow box")
+-- Tall contact near the top of the zone: the box is clamped under the cap.
+bakedLayers={}
+paint.ingest(playerVid,{{99.5,-2.0,0.50,0,0,1,"i",6000,0,0,0,2}},nil)
+for _=1,40 do frame(1/60) end
+check(#bakedLayers==1 and bakedLayers[1].decalPos.z+bakedLayers[1].decalScale.y*0.5<=0.54+1e-6,"underside box top is capped inside the lower shell")
+-- The underside zone has a hard ceiling (an aerial inflates the spawn box): a
+-- hood-height contact with the ground normal up is an ordinary top-face one,
+-- and a nose-down landing (normal 40 degrees off the car's up axis) is the
+-- front of the car, not its belly.
+bakedLayers={}
+local underBefore=paint.getStats().underside.contacts
+paint.ingest(playerVid,{{100.2,-1.2,0.80,0,0,1,"i",6000,0,0,0},{100.6,-1.7,0.30,0,-0.64,0.77,"i",6000,0,0,0}},nil)
+for _=1,40 do frame(1/60) end
+check(paint.getStats().underside.contacts==underBefore and #bakedLayers==2,"hood-height and nose-down contacts are not underside contacts")
+-- A part that broke off in a crash keeps reporting contacts from wherever it
+-- lies. Converted with the car's matrix they are metres from the car, and the
+-- decals anchored out there were projected back across the hood and roof as
+-- long straight lines. Contacts that are not on the car are dropped.
+do
+  paint.setStrayMargin(0.15)
+  bakedLayers={}
+  local strayBefore=paint.getStats().stamp.strayDropped
+  local patchesBefore=paint.getStats().wear.patches.impactSamples+paint.getStats().wear.patches.slideSamples
+  paint.ingest(playerVid,{{103.4,-2.5,30.5,0,-1,0,"i",6000,0,0,0},{100.4,1.0,-18.7,0,1,0,"i",6000,0,0,0}},
+    {{{101.9,-4.4,-10.5,0,1,0},{101.9,-4.0,-10.5,0,1,0}}})
+  for _=1,40 do frame(1/60) end
+  local stats=paint.getStats()
+  check(stats.stamp.strayDropped-strayBefore==3 and #bakedLayers==0
+    and stats.wear.patches.impactSamples+stats.wear.patches.slideSamples==patchesBefore,
+    "contacts from a part lying metres from the car are dropped, not painted")
+  paint.ingest(playerVid,{{101.1,0.5,0.9,1,0,0,"i",6000,0,0,0}},nil)
+  for _=1,40 do frame(1/60) end
+  check(paint.getStats().stamp.strayDropped-strayBefore==3 and #bakedLayers==1,
+    "a contact on a panel bulged a little past the box is still painted")
+  paint.setStrayMargin(-1)
+end
+-- One camera per facing. An underside patch (down) beside a top-side one (up)
+-- used to average to a sliver pointing along the car: the camera looked down
+-- the length of the car and smeared both edge-on, a fan of lines from bumper
+-- to roof. The camera now follows the cluster's hull-resolved facing.
+do
+  bakedLayers={}
+  local cams={}
+  local dataBefore=decalProjection.getDecalData
+  decalProjection.getDecalData=function(self,cam,proj) cams[#cams+1]=cam.c[1]; return dataBefore(self,cam,proj) end
+  paint.stampAtLocal(vec3(0.2,0.3,0.30),vec3(0,0.03,-1),{noJitter=true,scale=.2,depth=.2})
+  paint.stampAtLocal(vec3(0.3,0.3,0.34),vec3(0,0,1),{noJitter=true,scale=.2,depth=.2})
+  for _=1,40 do frame(1/60) end
+  decalProjection.getDecalData=dataBefore
+  local alongZ=#cams>0
+  for _,fwd in ipairs(cams) do if math.abs(fwd.z)<0.99 then alongZ=false end end
+  check(#bakedLayers==2 and alongZ,"opposed up and down stamps are shot along the vertical, never along the car ("..#cams.." cameras)")
+  -- Faces that really differ get a camera each.
+  local clustersBefore=paint.getStats().stamp.clustersTotal
+  paint.stampAtLocal(vec3(0.85,0.3,0.9),vec3(1,0,0),{noJitter=true,scale=.2,depth=.2})
+  paint.stampAtLocal(vec3(0.80,0.3,1.4),vec3(0,0,1),{noJitter=true,scale=.2,depth=.2})
+  for _=1,40 do frame(1/60) end
+  check(paint.getStats().stamp.clustersTotal-clustersBefore==2,"a door stamp and a roof stamp side by side are not clustered under one camera")
+end
+-- Switched off: low parts are dropped, body contacts take the previous path.
+paint.setUndersideScrapes(false)
+bakedLayers={}
+local usOff=paint.getStats().underside
+paint.ingest(playerVid,nil,{{{100.3,-1.9,0.2,0,0,1,2},{100.3,-1.5,0.2,0,0,1,2}}})
+paint.ingest(playerVid,{{99.4,1.9,0.25,0,0,1,"i",6000,0,0,0}},nil)
+for _=1,60 do frame(1/60) end
+check(usOff.enabled==false and paint.getStats().underside.dropped-usOff.dropped==1 and paint.getStats().underside.contacts==usOff.contacts,"setUndersideScrapes(false) drops low-part contacts and tags nothing")
+check(#bakedLayers==1 and math.abs(bakedLayers[1].decalPos.z-0.25)<1e-6 and bakedLayers[1].decalScale.y<=0.34,"with underside scrapes off a body contact is painted as before")
+paint.setUndersideScrapes(true)
+-- Legacy one-decal-per-contact pipeline never paints low parts.
+paint.setContactPatches(false)
+local usLegacy=paint.getStats().underside.dropped
+paint.ingest(playerVid,{{100,-1.0,0.2,0,0,1,"i",6000,0,0,0,2}},{{{100,-1.0,0.2,0,0,1,2},{100,-0.6,0.2,0,0,1,2}}})
+check(paint.getStats().underside.dropped-usLegacy==2 and paint.getStats().queue.stamps==0,"the legacy pipeline drops low-part contacts")
+paint.setContactPatches(true)
 paint.clearStamps()
 check(paint.getStats().wear.patches.slidesLive==0 and paint.getStats().wear.patches.impactsLive==0,"reset forgets every patch")
 decalProjection.bakeLayers=bakeBeforeCapture
