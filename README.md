@@ -105,22 +105,36 @@ ground under your wheels, so grey mud leaves grey grime.
 <!-- NEW-FEATURES-START -->
 ## New in this build
 
-**Snow flies now.** Snow gets thrown up from the wheels as powder, instead of
-landing in the flat patches you can see in the snow picture above.
-<!-- IMAGE: snow-fling -->
+### Snow flies now
 
-**The underside gets it too.** Bottom out and the belly of the car scrapes. It
-picks up mud down there as well, and in deep mud it cakes along the sills and
-running boards.
-<!-- IMAGE: underside -->
+<p align="center"><img src="docs/showcase/snow-fling.jpg" alt="A rally car with powder snow thrown up over the front arch and rear quarter, and snow packed on the tyres" width="100%"></p>
 
-**Dirty wheels.** Wheels and tyres get muddy, dusty and scraped along with the
-rest of the car.
-<!-- IMAGE: wheels -->
+Snow gets thrown up from the wheels as powder now, the way mud is, instead of
+landing in flat patches. It still packs into the arches, and the tyres go white.
 
-**You leave paint behind.** Scrape along the ground and your paint stays on the
-road. Wheels dragged along on their sides leave marks too.
-<!-- IMAGE: ground-transfer -->
+### Muddy wheels, muddy belly
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/showcase/wheels-mud.jpg" alt="Mud on the tyres, rims and lower panels of a rally car parked in a mud pit"></td>
+    <td width="50%"><img src="docs/showcase/underside-mud.jpg" alt="The underside of the same car: skid plate, mud flaps and tyres caked in mud"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Wheels and tyres get dirty.</b> Tyres cake up fast, rims take a lighter dusting, and both rinse off in water with the rest of the car. Drag a wheel along on its side and the rim gets scuffed.</td>
+    <td valign="top"><b>So does the underside.</b> Skid plates, suspension, exhaust, mud flaps and running boards pick up mud as you drive. In deep mud it also cakes along the sills. Bottom out and the belly scrapes.</td>
+  </tr>
+</table>
+
+### You leave paint behind
+
+<p align="center"><img src="docs/showcase/ground-paint.jpg" alt="Grey and paint-coloured streaks left on the concrete beside a car that just slid on its side" width="520"></p>
+
+Scrape along the road and the road keeps some of it: streaks of your paint, then
+primer and bare metal as the panel wears through. Wheels dragged on their sides
+leave marks too. The marks fade after a few minutes.
+
+These four are fresh. They have been driven on one car so far, so expect rough
+edges. The [known issues](docs/known-issues.md) page says what is still missing.
 <!-- NEW-FEATURES-END -->
 
 ## Install

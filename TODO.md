@@ -91,6 +91,35 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 
 ## Needs live verification
 
+Added 2026-11-20 with snow fling, the wheel and undercarriage overlay, underside
+scrapes and ground transfer. All four were seen working once on the Sunburst
+rally car on Vulkan; none has been measured.
+
+- [ ] **Belly scrapes in game.** Underside patches and low-part contacts pass the
+  harness but no car has been bottomed out with them. A sideslide reports zero
+  underside contacts, as expected.
+- [ ] **The painted floor pan takes no canvas marks.** Soil stamped straight up
+  at the Sunburst's floor never shows, on either side of the skid plate. The
+  underside deposits are still baked and spend soil budget. Find out whether the
+  floor is outside the Dynamic Textures UV layout on every car, and drop those
+  deposits if so. The undercarriage material overlay is what shows underneath.
+- [ ] **Undercarriage overlay is uniform.** One strength for every undercarriage
+  material, picked by name (`mechanical`, `skidplate`, `exhaust`, `suspension`,
+  `rallyparts`, `runningboard`, `mudflap` ...). At full strength the skid plate
+  is evenly caked. Engine-bay parts on the same material get dirty too.
+- [ ] **Snow fling on real snow.** Gridmap has no snow; the capture fed snow
+  samples at the wheel positions of a moving car. Drive it on a snow map.
+- [ ] **Sill bands in deep mud** were not seen: Gridmap's mud strip is shallow.
+- [ ] **Ground marks look stamped.** Short dashes with square ends at speed, and
+  mostly primer and metal grey on a liveried car, whose base paint is not the
+  livery colour. They are redrawn every frame (up to 400); cost not measured.
+- [ ] **Wheel overlay first spawn.** Wheel materials are only known after the
+  first build, so the car is rebuilt once to bind the clones. Measure it, and
+  check traffic and vehicle switching.
+- [ ] **D3D12** was not checked with any of this.
+- [ ] **Other vehicles.** Tyre, rim and undercarriage materials are found by
+  name; only the Sunburst's were looked at.
+
 - [ ] Terrain tint for **dirt and snow**, and on maps other than Gridmap v2.
   Only Gridmap mud has been checked.
 - [ ] Dirt fling artwork and **reverse-direction** flings in game (mock-checked only).
@@ -123,7 +152,7 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 
 ## Tech debt
 
-- [ ] **No CI.** The 358-check harness and preflight only run locally
+- [ ] **No CI.** The 485-check harness and preflight only run locally
   (`python tools/package.py`). A GitHub Action with Lua 5.1 would guard `master`.
 - [ ] **`paint.lua` is near Lua's local limit.** About 3,500 lines and 163
   top-level locals; Lua 5.1 caps a function at 200. Split the scheduler, soil

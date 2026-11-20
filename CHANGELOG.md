@@ -2,16 +2,30 @@
 
 ## Unreleased — underside, wheels, snow fling, ground transfer; README and docs split
 
-Not yet measured or captured in game; no images exist for the four features yet.
+Driven live on Vulkan, BeamNG 0.40.6.0, on the Sunburst rally car only: Gridmap
+mud strip, a simulated snow drive (Gridmap has no snow) and the bench sideslide.
+Not measured for frame time and not run on D3D12.
 
 <!-- NEW-FEATURES-START -->
-- **Snow fling.** Snow is thrown up from the wheels as powder, like mud and dirt,
-  instead of landing as flat coverage patches.
-- **Underside.** The underside scrapes when the car bottoms out and collects mud;
-  in deep mud it cakes along the sills and running boards.
-- **Wheels and tyres** get muddy, dusty and scraped.
-- **Ground transfer.** Scraping along the ground leaves the car's paint behind on
-  the road, and wheels dragged on their sides leave marks too.
+- **Snow fling.** Snow wheel deposits take the fling path with their own powder
+  brushes (`soil_snow_fling_1..3`), with a packed patch at the arch every third
+  deposit. `scratches_paint.setSoilExtras(underside, sills, snowFling)`.
+- **Wheels and undercarriage.** New `wheelAdapter.lua`: per-vehicle clones of the
+  tyre, rim and undercarriage materials (skid plates, suspension, exhaust, mud
+  flaps, running boards) get a tiling soil stage whose strength follows what the
+  wheels rolled through, tinted like the body soil; it washes off with the body.
+  Rims and undercarriage also get an abrasion stage, driven by wheel-side scrapes
+  and by belly contacts. `scratches_paint.setWheelDirt(false)` turns it off.
+- **Underside.** Belly contacts form bottom-face patches with a shallow box, and
+  low mechanical parts are accepted for underside contacts only
+  (`setUndersideScrapes`). Soil is also projected up from below and, in deep mud
+  or snow, laid in bands along the sills (`soil_*_band_*`). On the Sunburst the
+  painted floor pan does not take canvas marks, so what shows underneath is the
+  undercarriage overlay; belly scrapes have not been driven in game yet.
+- **Ground transfer.** New `groundPaint.lua`: slide streams and ground impacts
+  leave streaks on the road in the car's paint, then primer and metal as the
+  scrape wears through; wheel-side scrapes leave dark marks. Up to 400 marks,
+  fading after a few minutes. `scratches_paint.setGroundPaint(false)`.
 <!-- NEW-FEATURES-END -->
 - README rewritten as a short, image-led front page for players (hero, tour,
   three-step install, plain-language caveats). The technical content moved,

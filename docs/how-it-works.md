@@ -115,7 +115,7 @@ art/dynamicDecals/textures/                         # brush PNGs + .dynDecalText
 tools/package.py                                    # release zip builder + preflight
 tools/dev.py                                        # dev loop: deploy + hot-reload via BeamNG MCP
 tools/bench.py                                      # scripted crash scenarios + frame timing + screenshots
-tools/sim/*.lua                                     # headless mocked-engine harnesses (358 checks)
+tools/sim/*.lua                                     # headless mocked-engine harnesses (485 checks)
 tools/generate_*.py                                 # damage, brush, soil and soil-normal art generators
 tools/perf_*.py, tools/*_probe.py                   # performance cohorts, traces and live probes
 tools/make_showcase.py                              # rebuilds docs/showcase/ from docs/evidence/
