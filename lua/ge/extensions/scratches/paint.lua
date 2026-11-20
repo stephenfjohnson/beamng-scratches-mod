@@ -55,6 +55,9 @@ do
   local ok, mod = pcall(dofile, "/lua/ge/extensions/scratches/groundPaint.lua")
   if ok and type(mod) == "table" then groundPaint = mod end
 end
+-- Wheel/tyre soil and rim abrasion overlay (material-level; see the module).
+local wheelAdapter = dofile("/lua/ge/extensions/scratches/wheelAdapter.lua")
+local wheelReloaded, wheelAutoReload = {}, true
 -- Contact-patch wear (see patches.lua): contacts fold into patches and each
 -- patch is painted as one decal. `now` advances with real frame time so the
 -- mock harness can step it; `warm` lists brush sets not yet loaded this
@@ -575,6 +578,16 @@ local function trySetup()
     if adapterModule.editorActive() then
       editorPaused=true; pendingSetup=false; skippedVid=vid; return false
     end
+    -- Wheel clones bind at construction like the body's. A car built before
+    -- its wheel materials were known gets one rebuild (once per vehicle).
+    if not adapter and wheelAutoReload and not wheelReloaded[vid] and not adapterReloaded[vid]
+        and wheelAdapter.isEnabled() and wheelAdapter.needsRebuild(veh) then
+      wheelReloaded[vid]=true
+      pendingSetup=false
+      adapterModule.invalidateConstructionCache()
+      veh:reload()
+      return false
+    end
     if not adapter then
       local ok, result = pcall(adapterModule.create, veh, part)
       if not ok then
@@ -623,6 +636,10 @@ local function trySetup()
   ready = true
   rebindDirty = true
   pendingSetup = false
+  if adapter then
+    local okWheels, wheels = pcall(wheelAdapter.attach, veh)
+    log('I', logTag, "wheel overlay: " .. (okWheels and (tostring(wheels) .. " material(s)") or tostring(wheels)))
+  end
   log('I', logTag, "decals API initialized for " .. jbeam .. " (layers=" .. tostring(api.getLayerCount and api.getLayerCount() or "?") .. ")")
 
   -- Discover which materials on this vehicle have a .skin.dynamicTextures
@@ -789,6 +806,7 @@ local function resetSurfaceState()
   surfaceState = {mud=0, dirt=0, snow=0, wetness=0, deposits=0, waterSupported=false}
   surfaceSpots, surfaceWaterAge = {}, 1
   soilRemaining, waterFraction = 1, 0
+  pcall(wheelAdapter.reset)
 end
 M.getSurfaceState = function()
   local out = {}
@@ -821,6 +839,8 @@ local function updateSurface(dt)
     surfaceState.wetness = math.max(0, surfaceState.wetness - dt / 20)
   end
   if adapter then adapter:appearance(surfaceState.wetness,soilRemaining) end
+  -- Wheels wash at the body's rate; rim abrasion is untouched by water.
+  pcall(wheelAdapter.update, dt, surfaceWaterAge <= 0.5 and waterFraction or 0)
 end
 
 local materialCleanupPending = true
@@ -828,6 +848,7 @@ local function onUpdate(dtReal, dtSim, dtRaw)
   if groundPaint then pcall(groundPaint.update, dtSim) end
   if materialCleanupPending and adapterModule then
     materialCleanupPending = not adapterModule.collectUnusedMaterials()
+    if not materialCleanupPending then pcall(wheelAdapter.collectUnused) end
   end
   if editorPaused and adapterModule and not adapterModule.editorActive() then
     editorPaused=false; skippedVid=nil; pendingSetup=true; setupAttemptTimer=SETUP_RETRY
@@ -917,6 +938,7 @@ end
 
 -- ---- vehicle lifecycle ----
 local function onVehicleSwitched(oldId, newId, player)
+  pcall(wheelAdapter.detach)
   if adapter then
     adapter:detach()
     adapter=nil; api=nil
@@ -2554,6 +2576,7 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
     end
     if valid then
       surfaceState[e[1]] = math.min(1, surfaceState[e[1]] + 0.025)
+      wheelAdapter.expose(e[1], function() return (soilColor.resolve(e[1], vec3(e[2],e[3],e[4]))) end)
       local worldPos=vec3(e[2],e[3],e[4])
       local p = inv:mulP3F(worldPos)
       local normal = rot:mulP3F(vec3(e[5],e[6],e[7]))
@@ -2630,6 +2653,35 @@ end
 
 -- Console / legacy entry points, routed through ingest so they share the
 -- player-vehicle check and the per-frame pipeline.
+-- Wheel-side scrapes from the detector: {x,y,z,nx,ny,nz,wheelId,slipSpeed}
+-- in world space (position and ground normal). Keep this small: each valid
+-- entry is handed to one consumer per line.
+M.ingestWheelScrape = function(vid, scrapes)
+  local veh = getPlayerVehicle(0)
+  if not ready or not veh or veh:getId() ~= vid then return end
+  for i=1,math.min(8, type(scrapes) == "table" and #scrapes or 0) do
+    local e = scrapes[i]
+    local valid = type(e) == "table"
+    for j=1,8 do
+      local n = valid and e[j]
+      if type(n) ~= "number" or n ~= n or math.abs(n) > 1e7 then valid=false end
+    end
+    if valid then
+      wheelAdapter.scrape(e[7], e[8])
+      if groundPaint then pcall(groundPaint.addWheelScrape, vec3(e[1],e[2],e[3]), vec3(e[4],e[5],e[6]), e[8]) end
+    end
+  end
+end
+-- Whole wheel/tyre overlay on or off (off also restores the clean wheels).
+M.setWheelDirt = function(enabled)
+  pcall(wheelAdapter.setEnabled, enabled and true or false)
+  local veh = getPlayerVehicle(0)
+  if enabled and ready and adapter and veh then pcall(wheelAdapter.attach, veh) end
+end
+-- The one-time vehicle rebuild that binds wheel clones on a car built earlier.
+M.setWheelAutoReload = function(enabled) wheelAutoReload = enabled and true or false end
+M.getWheelState = function() return wheelAdapter.snapshot() end
+
 M.stampBatch = function(events)
   local veh = getPlayerVehicle(0)
   if veh then M.ingest(veh:getId(), events, nil) end
@@ -3022,6 +3074,7 @@ M.getStats = function()
     ground = groundPaint and groundPaint.getStats() or { enabled = false, alive = 0, submitted = 0, dropped = 0 },
     underside = { enabled = underside.on, contacts = underside.stats.contacts, parts = underside.stats.parts,
                   dropped = underside.stats.dropped, painted = underside.stats.painted },
+    wheels = wheelAdapter.snapshot(),
     wear = { enabled = wear.on, painted = wear.painted, warmed = wear.warmedCount,
              warmPending = wear.warm and #wear.warm or -1, pending = wear.agg:pending(),
              patches = wear.agg:stats() },
@@ -3765,6 +3818,7 @@ end
 local function onExtensionUnloaded()
   if groundPaint then pcall(groundPaint.clear) end
   if adapterModule then adapterModule.disableAll() end
+  pcall(wheelAdapter.disableAll)
   if adapter then adapter:detach(); adapter=nil end
   resetSurfaceState()
   ready = false
@@ -3804,10 +3858,16 @@ end
 M.onJbeamLoadingPhase2 = function(...)
   if not adapterModule then adapterModule = dofile("/lua/ge/extensions/scratches/bodyAdapter.lua") end
   adapterModule.prepare(...)
+  -- Same gate as the body: only models whose construction cache we invalidate.
+  local _, _, vdata = ...
+  if vdata and adapterModule.modelSupported(vdata.model) and not adapterModule.editorActive() then
+    pcall(wheelAdapter.prepare, ...)
+  end
 end
 M.onVehicleDestroyed  = function(vid)
   ownedSkins[vid] = nil
   adapterReloaded[vid] = nil
+  wheelReloaded[vid] = nil
   materialCleanupPending = true -- after destruction, never during mesh teardown
 end
 -- A reset can rebuild the car's materials; re-bind on the next composite.

@@ -485,6 +485,49 @@ local function flushSurface(now)
     obj:getId(), table.concat(parts,","), tostring(wet), tostring(supported),submerged/math.max(1,#(waterNodes or {}))))
 end
 
+-- Wheel-side scrapes: a wheel node sliding on a hard surface while the ground
+-- normal is roughly parallel to that wheel's axle (the wheel's side faces the
+-- ground: car on its side, or a rim grinding a kerb face). At most four per
+-- second per wheel, shipped to GE as one batched call per frame.
+local WHEEL_SCRAPE_SURFACES = {ASPHALT=true, ASPHALT_WET=true, ROCK=true, COBBLESTONE=true,
+  METAL=true, RUMBLE_STRIP=true, GRAVEL=true, CONCRETE=true}
+local wheelScrapeLast, pendingWheelScrapes = {}, {}
+local function wheelSideScrape(id1, pos, normal, slipVel, normalForce, mat1)
+  if not paintEnabled or #pendingWheelScrapes >= 8 then return end
+  if not (finite(slipVel) and finite(normalForce)) or slipVel < 1.5 or normalForce < 60 then return end
+  if not WHEEL_SCRAPE_SURFACES[nameById[mat1] or ""] then return end
+  local node = v.data.nodes and v.data.nodes[id1]
+  local wheelId = node and node.wheelID
+  local wheel = wheelId ~= nil and v.data.wheels and v.data.wheels[wheelId]
+  if not wheel or not wheel.node1 or not wheel.node2 then return end
+  local now = (obj and obj.getSimTime and obj:getSimTime()) or 0
+  local last = wheelScrapeLast[wheelId]
+  if last and now >= last and now - last < 0.25 then return end
+  if not (finite(pos.x) and finite(pos.y) and finite(pos.z)
+      and finite(normal.x) and finite(normal.y) and finite(normal.z)) then return end
+  local a, b = obj:getNodePosition(wheel.node1), obj:getNodePosition(wheel.node2)
+  if not a or not b then return end
+  local ax, ay, az = a.x - b.x, a.y - b.y, a.z - b.z
+  local len = math.sqrt(ax*ax + ay*ay + az*az)
+  local nlen = math.sqrt(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z)
+  if len < 1e-4 or nlen < 1e-4 then return end
+  local along = math.abs(ax*normal.x + ay*normal.y + az*normal.z) / (len * nlen)
+  if along < 0.6 then return end
+  wheelScrapeLast[wheelId] = now
+  stats.wheelScrapes = (stats.wheelScrapes or 0) + 1
+  pendingWheelScrapes[#pendingWheelScrapes + 1] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d,%.2f}",
+    pos.x, pos.y, pos.z, normal.x/nlen, normal.y/nlen, normal.z/nlen, wheelId, slipVel)
+end
+local function flushWheelScrapes()
+  if #pendingWheelScrapes == 0 then return end
+  local body = table.concat(pendingWheelScrapes, ",")
+  pendingWheelScrapes = {}
+  if not (paintEnabled and obj and obj.queueGameEngineLua) then return end
+  obj:queueGameEngineLua(string.format(
+    "if scratches_paint and scratches_paint.ingestWheelScrape then " ..
+    "pcall(scratches_paint.ingestWheelScrape, %d, {%s}) end", obj:getId(), body))
+end
+
 -- ---- the filter ----
 local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slipVel,
                                 slipForce, normalForce, depth, mat1, mat2)
@@ -506,7 +549,11 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
     bodyName = classifyNode(id1)
     nodeClass[id1] = bodyName
   end
-  if bodyName == REJ_WHEEL then stats.rejWheel = stats.rejWheel + 1; return end
+  if bodyName == REJ_WHEEL then
+    stats.rejWheel = stats.rejWheel + 1
+    wheelSideScrape(id1, pos, normal, slipVel, normalForce, mat1)
+    return
+  end
   if bodyName == REJ_BODY_MAT then stats.rejBodyMat = stats.rejBodyMat + 1; return end
   if bodyName == REJ_PART then stats.rejPartExcluded = stats.rejPartExcluded + 1; return end
   if bodyName == REJ_NO_NODE then stats.rejNoNode = stats.rejNoNode + 1; return end
@@ -789,6 +836,7 @@ local function detectFrame(dt)
     if next(nodeStreams) ~= nil then table.clear(nodeStreams) end
     if #pendingDetectEvents > 0 then pendingDetectEvents = {} end
     if #pendingStreams > 0 then pendingStreams = {} end
+    if #pendingWheelScrapes > 0 then pendingWheelScrapes = {} end
     return
   end
   local now = obj:getSimTime() or 0
@@ -803,6 +851,7 @@ local function detectFrame(dt)
   end
   flushSurface(now)
   flushDetectEvents()
+  flushWheelScrapes()
   -- (K) Throttled stats push to drive the GE-side IMGUI panel.
   if (now - lastStatsPush) >= STATS_PUSH_PERIOD then
     pushStatsToGE(now)
