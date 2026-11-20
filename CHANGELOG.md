@@ -4,8 +4,8 @@
 
 Measured on BeamNG 0.40.6.0, Vulkan and D3D12
 ([numbers](docs/evidence/contact-patches/summary.json),
-[investigation 13](investigations/13-contact-patches.md)). Washing and snow have
-not been driven since these changes.
+[investigation 13](investigations/13-contact-patches.md)). The wash cycle was
+re-run on D3D12; snow and dirt have not been driven since these changes.
 
 - New `patches.lua`: contacts fold into slide and impact patches, and each patch
   is baked as one decal sized to its extent. One sideslide bakes 47 layers
@@ -25,6 +25,9 @@ not been driven since these changes.
   six scored-chip brushes instead of two.
 - Checked on ten vehicles on Vulkan and six on D3D12: every clone preserves its
   original stages. `showcase_fleet.py --out` and timing columns.
+- README showcase re-shot with the new look (hero, scrapes, impacts, livery,
+  fleet grids, mud over scrapes, wash cycle); `tools/make_showcase.py` builds it
+  from `docs/evidence/contact-patches/`.
 - Not fixed: about one painted crash in ten has a single 0.3–0.6 s frame with no
   painter time in it (both renderers); D3D12 still has its occasional ~310 ms bake.
 - New `w2_*` brushes from `tools/generate_wear.py`: three slide tiers and three

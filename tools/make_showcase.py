@@ -97,7 +97,7 @@ def wash_gif() -> None:
         ("dry.png", "6  Dried back to factory gloss"),
         ("redirty.png", "7  Fresh mud collects again"),
     ]
-    frames = [chip(fit(load(f"milestone4/accepted-water/{f}", WIDE), 800), label, 22)
+    frames = [chip(fit(load(f"contact-patches/wash/{f.replace('.png', '.jpg')}", WIDE), 800), label, 22)
               for f, label in steps]
     path = OUT / "washing-cycle.gif"
     pal = [f.quantize(colors=192, method=Image.MEDIANCUT, dither=Image.FLOYDSTEINBERG) for f in frames]
@@ -109,27 +109,38 @@ def wash_gif() -> None:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     print("building showcase from docs/evidence:")
+    cp = "contact-patches/"  # 2026-11-20 captures; HUD-free ones are 2560x1440
 
     hero = grid([
-        chip(load("milestone4/accepted-plain-dark/damaged.png", (440, 300, 1500, 830)), "Scrapes"),
-        chip(load("soil-continuity/police/close.png", (330, 300, 1580, 925)), "Mud splashes"),
+        chip(fit(load(cp + "slide-dark/close/damaged.jpg", (560, 150, 2560, 1150)), HERO_W), "Scrapes"),
+        chip(load(cp + "mud-fling/after-left.jpg", (500, 250, 1600, 800)), "Mud fling"),
         chip(load("milestone3/snow-final/dirty.png", (360, 260, 1490, 825)), "Snow"),
-        chip(load("milestone4/accepted-water/deep-progress.png", (360, 250, 1490, 815)), "Washing"),
+        chip(load(cp + "wash/deep-progress.jpg", (360, 250, 1490, 815)), "Washing"),
     ], cols=2, cell_w=HERO_W, cell_h=HERO_H)
     save(hero, "hero.jpg")
 
-    save(stack([
-        chip(load("milestone4/accepted-plain-dark/original-stages.png", SIDE), "Before"),
-        chip(load("milestone4/accepted-plain-dark/damaged.png", SIDE), "After one sideslide"),
-    ], 1000), "scrapes-before-after.jpg")
+    # tools/showcase_capture.py aim_auto frames: the car fills this band.
+    band = (253, 413, 2307, 1187)        # 2560x1440
+    band_small = (190, 310, 1730, 890)   # the same band in 1920x1080 fleet captures
 
     save(stack([
-        chip(load("milestone4/accepted-police-light/original-stages.png", SIDE), "Stock Police livery"),
-        chip(load("milestone4/accepted-police-light/damaged.png", SIDE), "Scuffed, livery intact"),
-    ], 1000), "livery-before-after.jpg")
+        chip(load(cp + "slide-dark/left/original-stages.jpg", band), "Before", 50),
+        chip(load(cp + "slide-dark/left/damaged.jpg", band), "After one sideslide", 50),
+    ], 1200), "scrapes-before-after.jpg")
 
-    save(chip(load("soil-relief/after.png", (500, 330, 1560, 930)), "Scrape streaks + mud relief"),
-         "closeup-relief.jpg")
+    save(chip(fit(load(cp + "slide-dark/close/damaged.jpg", (500, 200, 2560, 1250)), 1300),
+              "Bare metal, primer and surviving paint", 30), "scrapes-closeup.jpg")
+
+    save(stack([
+        chip(load(cp + "police/left/original-stages.jpg", band), "Stock Polizei livery", 50),
+        chip(load(cp + "police/left/damaged.jpg", band), "After one sideslide", 50),
+    ], 1200), "livery-before-after.jpg")
+
+    save(chip(fit(load(cp + "police-mud/close/damaged.jpg", (300, 380, 2300, 1300)), 1200),
+              "Mud flung over fresh scrapes", 30), "closeup-relief.jpg")
+
+    save(chip(load(cp + "mud-fling/after-left.jpg", (530, 300, 1560, 700)), "Mud flung up and back from the wheels"),
+         "mud-fling.jpg")
 
     save(chip(load("soil-continuity/police/close.png", (300, 340, 1588, 850)), "Tapered wheel splashes"),
          "mud-splashes.jpg")
@@ -149,37 +160,40 @@ def main() -> None:
     save(chip(load("milestone3/snow-final/dirty.png", (380, 300, 1570, 900)), "Snow buildup"),
          "snow.jpg")
 
-    # HUD-free 3840x2160 captures from tools/showcase_capture.py (after a rollover).
-    impact_box = (900, 760, 2740, 1580)
+    # Roof drop on a black ETK 800, looking down at the bonnet and roof.
+    impact_box = (860, 690, 2100, 1440)
     save(stack([
-        chip(load("showcase/rollover-side/original-stages.jpg", impact_box), "Before", 34),
-        chip(load("showcase/rollover-side/damaged.jpg", impact_box), "After a rollover: impact chips and dings", 34),
+        chip(fit(load(cp + "roofdrop/close2/original-stages.jpg", impact_box), 1200), "Before", 34),
+        chip(fit(load(cp + "roofdrop/close2/damaged.jpg", impact_box), 1200),
+             "After a roof drop: chipped paint where it landed", 34),
     ], 1200), "impacts-before-after.jpg")
 
     save(fit(Image.open(EV / "showcase/debug-panel/panel.jpg").convert("RGB"), 1400), "debug-panel.jpg")
 
-    # Fleet: tools/showcase_fleet.py, one bench sideslide each, left flank, 2560x1440.
-    band = (253, 413, 2307, 1187)
-
+    # Fleet: tools/showcase_fleet.py --out docs/evidence/contact-patches/fleet-vulkan,
+    # one bench sideslide each, left flank.
     def fleet(name: str, label: str, size: tuple[int, int] = (780, 294)) -> Image.Image:
-        return chip(load(f"showcase/fleet/{name}/left/damaged.jpg", band).resize(size, Image.LANCZOS), label, 20)
+        return chip(load(cp + f"fleet-vulkan/{name}/left/damaged.jpg", band_small).resize(size, Image.LANCZOS),
+                    label, 20)
 
     save(grid([
         fleet("pickup-red", "Pickup · red"), fleet("vivace-blue", "Vivace · blue"),
         fleet("etki-white", "ETK I · white"), fleet("covet-yellow", "Covet · yellow"),
-        fleet("sunburst2-gunmetal", "Sunburst · gunmetal"), fleet("moonhawk-green", "Moonhawk · green"),
+        fleet("etk800-black", "ETK 800 · black"), fleet("moonhawk-green", "Moonhawk · green"),
     ], cols=2, cell_w=780, cell_h=294), "fleet-paints.jpg")
 
     save(grid([
         fleet("bluebuck-livery", "Bluebuck · two-tone livery"),
-        fleet("scintilla-livery", "Scintilla · black-roof livery"),
         fleet("citybus-livery", "City bus · Transit livery"),
-        fleet("etk800-livery", "ETK 800 · brushed-trim livery"),
+        chip(load(cp + "police/left/damaged.jpg", band).resize((780, 294), Image.LANCZOS),
+             "ETK 800 · Polizei livery", 20),
+        chip(load(cp + "after-sideslide-left.jpg", (430, 440, 1490, 840)).resize((780, 294), Image.LANCZOS),
+             "Sunburst · NGRC rally livery", 20),
     ], cols=2, cell_w=780, cell_h=294), "fleet-liveries.jpg")
 
     save(stack([
-        chip(load("showcase/fleet/sunburst2-gunmetal/left/original-stages.jpg", band), "Before", 50),
-        chip(load("showcase/fleet/sunburst2-gunmetal/left/damaged.jpg", band), "After one sideslide", 50),
+        chip(load(cp + "fleet-vulkan/moonhawk-green/left/original-stages.jpg", band_small), "Before", 40),
+        chip(load(cp + "fleet-vulkan/moonhawk-green/left/damaged.jpg", band_small), "After one sideslide", 40),
     ], 1200), "fleet-before-after.jpg")
 
     wash_gif()

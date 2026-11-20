@@ -210,7 +210,9 @@ Reversing and dirt are covered by the mock checks only.
 - What causes the rare long frames, and whether fewer or smaller layers
   change their rate. Six controls are too few.
 - The 30.8 ms Vulkan bake.
-- Washing, snow and dirt were not driven after these changes. The mock harness
+- Snow and dirt were not driven after these changes (the wash cycle was: 37
+  deposits washed to 0 and 26 collected again, on D3D12,
+  [record](../docs/evidence/contact-patches/wash/water.json)). The mock harness
   (398 checks) covers the adapter fields, patch logic and fling geometry, not
   rendering.
 - Soft brush edges get a faint metallic fringe, because the metallic canvas

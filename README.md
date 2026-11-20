@@ -7,10 +7,10 @@ snow and it builds up behind the wheels. Drive into deep water and it washes
 off, while the scratches stay. Every mark comes from a physics contact that
 actually happened and is baked into the car's paint without touching its livery.
 
-![Scrapes, mud splashes, snow and washing, all captured in game](docs/showcase/hero.jpg)
+![Scrapes, mud fling, snow and washing, all captured in game](docs/showcase/hero.jpg)
 
 > **Status: development preview.** Everything on this page runs in game today on
-> BeamNG.drive 0.40.5.0, on **all 38 stock cars, trucks and buses that ship
+> BeamNG.drive 0.40.6.0, on **all 38 stock cars, trucks and buses that ship
 > Dynamic Textures**, with any paint colour or factory livery.
 > **[Download v0.2.0-preview](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/tag/v0.2.0-preview)** (MIT licensed), or
 > [build the ZIP yourself](#packaging-for-release).
@@ -44,7 +44,7 @@ rebuilds them.
 
 ### Scrapes that follow the slide
 
-![The same sideslide before and after contact patches](docs/showcase/contact-patches-before-after.jpg)
+![Black ETK 800 before and after one sideslide](docs/showcase/scrapes-before-after.jpg)
 
 Sustained sliding contact is tracked per body node, then folded into **contact
 patches**: an oriented box on one panel that grows over every node scraping
@@ -54,34 +54,27 @@ scatter of small marks. A patch is worn in three tiers by how far it has been
 dragged: clear-coat hairlines, primer ground through along the streaks, then
 bands of bare metal inside a primer margin.
 
-![Close-up of a scraped door](docs/evidence/contact-patches/after-sideslide-detail.jpg)
+![The scraped flank up close](docs/showcase/scrapes-closeup.jpg)
 
 Bare metal is really metallic and primer is matte: tier 2 and 3 brushes carry
 their own metallic and roughness maps, and a fine tiling detail layer adds
 abrasion relief and specks of surviving paint that the 1.5 mm canvas can't hold.
 On plain light paint the exposed tone is darker so damage contrasts the right way.
-(The older dark-ETK image is [here](docs/showcase/scrapes-before-after.jpg).)
 
-![Eight vehicles after the same sideslide](docs/showcase/contact-patches-fleet.jpg)
-
-Ten vehicles were crash-tested with contact patches on Vulkan and six on D3D12,
-across dark, light and liveried paint
-([Vulkan](docs/evidence/contact-patches/fleet-vulkan/fleet.json),
-[D3D12](docs/evidence/contact-patches/fleet-d3d12/fleet.json)).
+![Door detail on a liveried rally car: brushed metal, primer margins, paint specks](docs/evidence/contact-patches/after-sideslide-detail.jpg)
 
 ### Impact chips and gouges
 
-![Front fender before and after a rollover](docs/showcase/impacts-before-after.jpg)
+![Black ETK 800 before and after being dropped on its roof](docs/showcase/impacts-before-after.jpg)
 
 Hard hits past a normal-force threshold gather into impact patches: every hit
 within about 17 cm becomes one cluster of flaked paint, sized by how hard and how
 often the spot was struck, with bare-metal cores on heavier hits. A glancing hit
-uses a scored brush dragged along the slip direction the detector reports. (The
-image above predates contact patches.)
+uses a scored brush dragged along the slip direction the detector reports.
 
 ### Your paint and livery stay underneath
 
-![Stock ETK Police livery before and after a slide](docs/showcase/livery-before-after.jpg)
+![Stock ETK Polizei livery before and after a slide](docs/showcase/livery-before-after.jpg)
 
 The body adapter clones the car's own body materials per vehicle and appends a
 damage stage and a soil stage. The original paint, palette, normal and detail
@@ -99,23 +92,25 @@ override, your own Dynamic Textures editor design) is skipped, never overwritten
 ![Six stock vehicles in six paint colours, each after one sideslide](docs/showcase/fleet-paints.jpg)
 
 The same crash on six different bodies and paints. Each car keeps its own factory
-finish; the scrapes take their colour from the paint layers underneath.
+finish. Exposed primer and metal read light on dark paint and darker on plain
+light paint.
 
 ![Four factory liveries after one sideslide](docs/showcase/fleet-liveries.jpg)
 
-Factory liveries survive too: two-tones, race stripes and the city bus's Transit
-artwork stay intact under the damage. Damage on busy liveries is subtler than on
-plain paint.
+Factory liveries survive too: two-tones, police and rally artwork and the city
+bus's Transit graphics are untouched wherever the car wasn't scraped. Damage on
+white livery panels is subtler than on plain paint.
 
-![Gunmetal Sunburst before and after one sideslide](docs/showcase/fleet-before-after.jpg)
+![Green Moonhawk before and after one sideslide](docs/showcase/fleet-before-after.jpg)
 
 In a sweep of every stock vehicle, **38 of 38** that ship Dynamic Textures attach
-to the adapter ([survey](docs/evidence/adapter-survey/survey.json)). The ten above
-were crashed and checked: every clone matched its source material in every
-original stage, with 0–2.4% of marks missed
-([fleet evidence](docs/evidence/showcase/fleet/README.md)). Mud, snow, washing and
-wet gloss use the same appended stages on every vehicle, but so far they've only
-been driven live on the ETK 800 and through Gridmap mud on a Covet.
+to the adapter ([survey](docs/evidence/adapter-survey/survey.json)). With contact
+patches, ten were crashed on Vulkan and six on D3D12: every clone matched its
+source material in every original stage and no mark was missed
+([Vulkan](docs/evidence/contact-patches/fleet-vulkan/fleet.json),
+[D3D12](docs/evidence/contact-patches/fleet-d3d12/fleet.json)). Mud, snow, washing
+and wet gloss use the same appended stages on every vehicle, but so far they've
+only been driven live on the ETK 800 and through Gridmap mud on a Covet.
 
 ### Mud, dirt and snow build up as you drive
 
@@ -156,12 +151,12 @@ splash captures above predate this change, so they still show the orange tint.
 
 ### Soil that catches the light
 
-![Close-up: scrape streaks under lumpy mud on the Police livery](docs/showcase/closeup-relief.jpg)
+![Mud flung over fresh scrapes on the Polizei livery](docs/showcase/closeup-relief.jpg)
 
 The soil layer carries a masked detail normal, so lumps and grain pick up
 highlights while the factory body normal stays intact. The relief fades with the
-soil when it washes off. This close-up also shows the white scrape streaks from
-an earlier slide sitting under the mud, with the Police artwork untouched.
+soil when it washes off. This car slid first and drove through mud afterwards:
+the scrapes stay on their own layer under the fling.
 
 ### Water washes soil off; scratches stay
 
@@ -697,8 +692,8 @@ affect you:
   frame (0.3–0.6 s) with no painter time in it, on either renderer. Painting-off
   controls had none, in far fewer runs. Not explained yet.
 - **Contact patches are new.** Checked on ten vehicles on Vulkan and six on
-  D3D12 with the sideslide only. Washing and snow have not been driven since
-  the damage stage and soil resolution changed.
+  D3D12 with the sideslide only. The wash cycle was re-run on D3D12; snow and
+  dirt have not been driven since the damage stage and soil resolution changed.
 - **No dark marks on dark paint.** Damage opacity follows the canvas red channel,
   so exposed material is always a grey lighter than black paint.
 - **First mud contact hitch.** The first terrain-texture read for soil tint takes

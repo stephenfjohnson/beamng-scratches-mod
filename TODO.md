@@ -29,8 +29,9 @@ not started. See [the release plan](docs/plans/release-sequence.md).
   (the mod's ingest measures at most 0.3 ms). Not attributed. Next: a long
   alternating on/off session, and the same at 2048×1024 damage resolution
   ([investigation 13](investigations/13-contact-patches.md#rare-long-frames)).
-- [ ] **Wash and snow after the stage change.** Mud fling was driven on both
-  renderers; washing, snow and dirt were not, and soil is now 2048×1024.
+- [ ] **Snow and dirt after the stage change.** Mud fling was driven on both
+  renderers and the wash cycle on D3D12 (37 deposits washed to 0, 26 collected
+  again); snow and dirt were not, and soil is now 2048×1024.
 - [ ] **One 31 ms bake** in the Vulkan Scintilla run (others peak at 5–9 ms). Not
   reproduced or explained.
 - [ ] **Long-session qualification.** No multi-hour D3D12 run yet. The Vulkan
