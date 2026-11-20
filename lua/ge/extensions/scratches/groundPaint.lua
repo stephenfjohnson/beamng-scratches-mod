@@ -81,6 +81,7 @@ local function addMark(x, y, z, dx, dy, dz, len, width, r, g, b, a, tex)
   m.born = now
   stats.added = stats.added + 1
   stats.alive = alive
+  stats.lastX, stats.lastY, stats.lastZ = x, y, z
   return true
 end
 
@@ -110,13 +111,13 @@ local function layStreak(ax, ay, az, bx, by, bz, colour, widthScale)
   local len = math.sqrt(dx * dx + dy * dy + dz * dz)
   if len < 1e-4 then return false end
   local tier = wearTier()
-  local tone, alpha = transferTone(colour), 0.42 + rnd() * 0.2
-  if tier == 1 then tone, alpha = PRIMER, 0.38 + rnd() * 0.15
-  elseif tier == 2 then tone, alpha = METAL, 0.45 + rnd() * 0.2 end
+  local tone, alpha = transferTone(colour), 0.62 + rnd() * 0.25
+  if tier == 1 then tone, alpha = PRIMER, 0.5 + rnd() * 0.2
+  elseif tier == 2 then tone, alpha = METAL, 0.55 + rnd() * 0.2 end
   -- Sideways jitter (perpendicular in the ground plane) and a varied width.
   local j = (rnd() - 0.5) * 0.03
   local px, py = -dy / len * j, dx / len * j
-  local width = (0.06 + rnd() * 0.07) * (widthScale or 1)
+  local width = (0.09 + rnd() * 0.12) * (widthScale or 1)
   return addMark((ax + bx) * 0.5 + px, (ay + by) * 0.5 + py, (az + bz) * 0.5,
     dx, dy, dz, len * (1.2 + rnd() * 0.25), width,
     tone[1], tone[2], tone[3], alpha, STREAKS[1 + math.floor(rnd() * #STREAKS) % #STREAKS])
@@ -389,7 +390,8 @@ M.isEnabled = function() return enabled end
 M.getStats = function()
   return { enabled = enabled, alive = alive, submitted = stats.submitted, dropped = stats.dropped,
            added = stats.added, culled = stats.culled, drawErrors = stats.drawErrors,
-           capacity = MAX_MARKS, wearRun = wearRun, drawable = not backendFailed }
+           capacity = MAX_MARKS, wearRun = wearRun, drawable = not backendFailed,
+           lastX = stats.lastX, lastY = stats.lastY, lastZ = stats.lastZ }
 end
 
 -- Test seam: draw through `fn(pool, n)` instead of the engine (nil restores
