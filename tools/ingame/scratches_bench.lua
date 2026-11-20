@@ -202,7 +202,8 @@ end
 
 local function painterIdle()
   local s = scratches_paint and scratches_paint.getStats and scratches_paint.getStats()
-  return not s or (s.queue.stamps == 0 and s.queue.jobs == 0 and (s.queue.bake or 0) == 0)
+  return not s or (s.queue.stamps == 0 and s.queue.jobs == 0 and (s.queue.bake or 0) == 0
+    and (s.queue.patches or 0) == 0)
 end
 
 -- ---- the state machine ----

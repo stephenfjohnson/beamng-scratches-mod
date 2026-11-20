@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — contact patches: realistic scrapes, no crash hitching (Vulkan)
+
+Measured and captured on BeamNG 0.40.6.0, Vulkan, Sunburst rally (NGRC livery)
+only ([numbers](docs/evidence/contact-patches/summary.json),
+[investigation 13](investigations/13-contact-patches.md)). Not yet re-checked on
+plain paints, other vehicles or D3D12.
+
+- New `patches.lua`: contacts fold into slide and impact patches, and each patch
+  is baked as one decal sized to its extent. One sideslide bakes 47 layers
+  instead of 301; the worst painter frame drops from 81.7 ms to 16.0 ms and the
+  631 ms stall did not recur in eight runs.
+- Brush textures are warmed with invisible stamps right after spawn. This does
+  not hold: the engine reloads a brush unused for a few seconds (10–16 ms), so a
+  sideslide still has three or four ~26 ms frames. Open in TODO.md.
+- New `w2_*` brushes from `tools/generate_wear.py`: three slide tiers and three
+  chip tiers plus scored chips, with metallic and roughness maps from tier 2.
+- Damage stage reads per-pixel metallic and roughness from the decals, uses
+  opacity factor 1 (1.6 overshot the layer blend), and adds static abrasion
+  relief and paint-speck break-up detail maps. Soil stage is unchanged.
+- Detector sends the slip velocity with each impact so glancing hits are scored
+  along it.
+- `setContactPatches(false)` keeps the previous pipeline; 394 mock checks.
+
 ## v0.2.0-preview — 2026-11-15: material-preserving adapter for every vehicle
 
 ZIP-only install, crash, mud and uninstall tested in game

@@ -24,7 +24,19 @@ not started. See [the release plan](docs/plans/release-sequence.md).
   bake path. Evidence: [investigation 12](investigations/12-synthetic-anchors.md#what-remains-per-layer-allocation-churn-inside-the-native-bake).
 - [ ] **Intermittent ~410 ms Vulkan render-phase pauses.** 2 of 18 short
   fixtures, never inside a mod call, always within 0.4 s of mod GPU work, never
-  in painting-disabled controls. Probably the same allocation churn.
+  in painting-disabled controls. Probably the same allocation churn. Contact
+  patches (2026-11-20) cut layers per crash about sixfold and no such pause
+  occurred in eight runs ([investigation 13](investigations/13-contact-patches.md));
+  eight runs can't rule out a rare event, so a longer Vulkan session is still owed.
+- [ ] **Contact patches beyond one car.** Tuned and measured only on the
+  Sunburst rally livery, Vulkan, Gridmap. Check plain dark and light paint (the
+  0.30 light-paint tone is untested in game), the ETK, D3D12, and mud/snow/wash
+  with the changed damage stage (soil stage fields were verified live, not driven).
+- [ ] **Brush textures are reloaded mid-crash.** A brush not used for a few
+  seconds costs 10–16 ms on its next bake, three or four times per sideslide
+  (~26 ms frames). The spawn-time warm-up (388 ms) does not prevent it and its
+  benefit is unproven: keep the textures resident some other way, or remove it
+  ([investigation 13](investigations/13-contact-patches.md#the-warm-up-does-not-hold)).
 - [ ] **Long-session qualification.** No multi-hour D3D12 run yet. The Vulkan
   functional suite (lifecycle, traffic, maps, editor, washing) hasn't been
   rerun on the synthetic-anchor build; only D3D12 was
@@ -56,17 +68,21 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 
 - [ ] **Contrast on mixed liveries.** Scuffs across the white Police doors are
   still subtle ([visibility report](docs/evidence/visibility/report.md)).
-- [ ] **Metal glint.** Damage is color-only: the damage stage has fixed roughness
-  and no metallic response. Milestone 4 rejected the roughness- and
-  metallic-mask attempts
-  ([investigation 9](investigations/09-scratch-impact-polish.md)), so this needs
-  a new approach.
-- [ ] **Weak dark marks.** ETK damage opacity follows the canvas red channel,
-  so near-black marks barely show.
+- [x] **Metal glint.** The damage stage now takes metallic and roughness from
+  the decals' own maps (the canvases as material properties, not as opacity
+  masks, which is what milestone 4 rejected). Soft brush edges get a faint
+  metallic fringe because the metallic canvas clears to 1.
+- [ ] **Weak dark marks.** Damage opacity follows the canvas red channel, so
+  near-black marks can't be drawn; contact-patch brushes are full red and vary
+  only in tint, metal and roughness.
+- [ ] **Slide patches fill between contact nodes.** A patch box covers recessed
+  areas between the nodes that touched, and its decal is a straight band on a
+  curved panel.
 - [ ] **Crushed panels stay too clean.** Anchors use physics nodes, not the
   deformed visual mesh. On strongly curved or deformed panels, synthetic-anchor
   normals can be off by a few degrees.
-- [ ] **Repeated silhouettes.** Brush repeats are reduced, not eliminated.
+- [ ] **Repeated silhouettes.** Brush repeats are reduced, not eliminated:
+  eight slide and eight chip brushes, each mirrored at random.
 - [ ] **No waterline.** Washing is a uniform fade, and a partial wash weakens new
   deposits until that soil cycle is fully removed
   ([investigation 8](investigations/08-water-washing.md)).

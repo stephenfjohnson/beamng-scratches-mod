@@ -15,6 +15,9 @@ local skipFields = {name=true,mapTo=true,persistentId=true,parentGroup=true,
   internalName=true,class=true,className=true,superClass=true,hidden=true,
   locked=true,canSave=true,canSaveDynamicFields=true}
 local OWNER = "bodyAdapter-v2"
+-- Exposed primer/metal brightness: mid grey reads on dark paint and liveries;
+-- plain light paint needs it darker to show at all.
+local DAMAGE_TONE_DARK, DAMAGE_TONE_LIGHT = "0.62 0.62 0.63 1", "0.30 0.30 0.31 1"
 local LEGACY_OWNER = "etkAdapter-v1"
 local DT_SUFFIX = ".skin.dynamicTextures"
 local prepared = {}
@@ -120,19 +123,35 @@ local function cloneMaterial(vid,key,source,part)
   local function set(f,v) mat:setField(f,count,tostring(v)) end
   set("baseColorMap","@DynamicTextureBaseColor")
   set("diffuseMapUseUV",1)
-  -- Keep the authored brush detail visible at normal driving distance.
-  set("baseColorFactor","1 1 1 1")
+  -- Wear brushes paint red = 1, so the canvas red channel is exactly the
+  -- coverage and the stage blends at that weight (a factor above 1 made the
+  -- layer lerp overshoot). Green/blue carry the tint; this factor is the
+  -- exposed-material brightness (see damageTone).
+  set("baseColorFactor",DAMAGE_TONE_DARK)
   set("instanceDiffuse",false)
   set("colorPaletteMap","")
   set("opacityMap","@DynamicTextureBaseColor")
   set("opacityMapUseUV",1)
-  set("opacityFactor",1.6)
-  set("metallicMap","")
-  set("roughnessMap","")
-  set("metallicFactor",0)
-  set("roughnessFactor",0.65)
+  set("opacityFactor",1)
+  -- Per-pixel metal and roughness from the decals. Both canvases clear to 1,
+  -- which only shows where a decal gave the stage some opacity.
+  set("metallicMap","@DynamicTextureMetallic")
+  set("metallicMapUseUV",1)
+  set("roughnessMap","@DynamicTextureRoughness")
+  set("roughnessMapUseUV",1)
+  set("metallicFactor",1)
+  set("roughnessFactor",1)
   set("clearCoatFactor",0)
   set("normalMap",source:getField("normalMap",0))
+  -- Static tiling detail far finer than the canvas: abrasion relief, and
+  -- specks of surviving paint that break up every mark's interior and edge.
+  set("detailNormalMap","/art/dynamicDecals/textures/w2_grit.normal.png")
+  set("normalDetailMapUseUV",1)
+  set("detailNormalMapStrength",0.4)
+  set("opacityDetailMap","/art/dynamicDecals/textures/w2_grit_o.data.png")
+  set("opacityDetailMapUseUV",1)
+  set("detailOpacityMapStrength",1)
+  set("detailScale","26 26")
   mat:setField("activeLayers",0,tostring(count))
   if not registered then mat:registerObject(name) end
   mat:flush(); mat:reload()
@@ -350,6 +369,13 @@ function M.create(veh,part)
     mat:setField("baseColorMap",soilStage,"@ScratchesSoilBaseColor")
     mat:setField("baseColorFactor",soilStage,"1 1 1 1")
     mat:setField("opacityMap",soilStage,"@ScratchesSoilBaseColor")
+    -- The soil stage starts as a copy of the damage stage: drop its metal,
+    -- roughness and break-up maps so soil keeps its own flat response.
+    mat:setField("metallicMap",soilStage,"")
+    mat:setField("roughnessMap",soilStage,"")
+    mat:setField("metallicFactor",soilStage,"0")
+    mat:setField("roughnessFactor",soilStage,"0.65")
+    mat:setField("opacityDetailMap",soilStage,"")
     -- Static micro-relief is blended by this stage's dynamic soil opacity.
     -- Retain the factory normalMap; no unsupported dynamic-normal binding.
     mat:setField("detailNormalMap",soilStage,"/art/dynamicDecals/textures/soil_relief_detail.normal.png")
@@ -414,8 +440,7 @@ function M.create(veh,part)
   function result:damageTone(luminance)
     -- Plain light paint needs darker exposed coating. Liveries contain both
     -- light and dark texels, so keep their neutral compromise. Setup/reset only.
-    local factor = self.part == "" and luminance and luminance >= 0.5 and 0.15 or 1
-    local value = string.format("%.2f %.2f %.2f 1",factor,factor,factor)
+    local value = self.part == "" and luminance and luminance >= 0.5 and DAMAGE_TONE_LIGHT or DAMAGE_TONE_DARK
     for _,entry in ipairs(entries) do
       local mat=entry.material
       if mat:getField("baseColorFactor",count) ~= value then

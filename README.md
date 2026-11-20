@@ -44,23 +44,33 @@ rebuilds them.
 
 ### Scrapes that follow the slide
 
-![Dark ETK 800 before and after one sideslide](docs/showcase/scrapes-before-after.jpg)
+![The same sideslide before and after contact patches](docs/showcase/contact-patches-before-after.jpg)
 
-Sustained sliding contact is tracked as a stream. Each contact point becomes a
-scrape band aligned with the direction of travel, 30–70 cm long, so neighbouring
-contacts join into one continuous rash instead of a row of stickers. Each band is
-layered like real paint: scuffed clearcoat haze, primer grey, then bare metal on
-harder or longer drags. Four variants per brush family avoid visible repeats,
-and on light paint the palette shifts darker so damage contrasts the right way.
+Sustained sliding contact is tracked per body node, then folded into **contact
+patches**: an oriented box on one panel that grows over every node scraping
+there. A patch is painted as one decal sized to that extent and aligned with the
+slide, so a sideslide leaves long continuous bands with combed ends instead of a
+scatter of small marks. A patch is worn in three tiers by how far it has been
+dragged: clear-coat hairlines, primer ground through along the streaks, then
+bands of bare metal inside a primer margin.
+
+![Close-up of a scraped door](docs/evidence/contact-patches/after-sideslide-detail.jpg)
+
+Bare metal is really metallic and primer is matte: tier 2 and 3 brushes carry
+their own metallic and roughness maps, and a fine tiling detail layer adds
+abrasion relief and specks of surviving paint that the 1.5 mm canvas can't hold.
+On plain light paint the exposed tone is darker so damage contrasts the right way.
+(The older dark-ETK image is [here](docs/showcase/scrapes-before-after.jpg).)
 
 ### Impact chips and gouges
 
 ![Front fender before and after a rollover](docs/showcase/impacts-before-after.jpg)
 
-Single hard hits past a normal-force threshold stamp chipped paint, plus a gouge
-on harder hits, sized by the impact force. Hits in the same frame are clustered
-into one job, so a rollover leaves a scatter of chips and dings exactly where
-the body struck the ground.
+Hard hits past a normal-force threshold gather into impact patches: every hit
+within about 17 cm becomes one cluster of flaked paint, sized by how hard and how
+often the spot was struck, with bare-metal cores on heavier hits. A glancing hit
+uses a scored brush dragged along the slip direction the detector reports. (The
+image above predates contact patches.)
 
 ### Your paint and livery stay underneath
 
@@ -176,11 +186,29 @@ abrasive. The contact's ground material decides which applies.
   | Vulkan, contact to finished mark | 1,012 ms | **318 ms** |
   | D3D12, native call | 443.8 ms | 446–447 ms ([open](TODO.md#release-blockers)) |
 
+- **One rich decal per contact patch.** Every baked layer costs a full-canvas
+  pass in the engine, so the painter no longer bakes a decal per contact report.
+  Contacts fold into patches and at most one decal is baked every 70 ms.
+  Measured on BeamNG 0.40.6.0, Vulkan, RTX 3090, 4K, one 14 m/s sideslide in a
+  fresh process:
+
+  | One sideslide | Before | Contact patches |
+  | --- | ---: | ---: |
+  | Layers baked | 301 | **47** |
+  | Worst painter frame | 81.7 ms | **16.0 ms** |
+  | Frames over 25 ms / 50 ms | 23 / 5 | **6 / 0** |
+  | Frame time p95 / p99 / worst | 22.5 / 35.8 / 631 ms | **15.6 / 22.2 / 31 ms** |
+
+  A sideslide still has three or four ~26 ms frames: the engine reloads a
+  brush texture that hasn't been used for a few seconds (10–16 ms each), and the
+  spawn-time warm-up does not prevent that.
+  [All runs](docs/evidence/contact-patches/summary.json) and
+  [investigation 13](investigations/13-contact-patches.md).
 - **Composite only when needed.** The canvas is re-composited only on frames
   that baked or cleared, and the expensive texture-set re-bind (24–55 ms) happens
   only when the binding can actually be stale.
-- **Bounded everything.** 160 inputs, 64 queued jobs, 6 baked layers per frame,
-  96 soil deposits and per-cell repaint limits.
+- **Bounded everything.** 220 patches per kind, at most five decals per slide
+  patch and three per impact patch, one bake in flight, 96 soil deposits.
 
 Details: [investigation 12](investigations/12-synthetic-anchors.md) and the
 [measured cohorts](docs/evidence/milestone5/resumed-summary.md).
@@ -377,18 +405,19 @@ instance of the installed decal API keeps scratch clearing separate from editor
 artwork. Vehicles the adapter rejects fall back to the older `dynamicTextures`
 skin and colour-seed path when their paint slot is empty.
 
-Incoming batches become **capture jobs**: the decal layers for one cluster of
-impacts or one slide stream, captured under a synthetic camera aimed at the
-contact:
+Incoming batches feed the contact-patch aggregator (`patches.lua`, pure logic).
+When the painter is idle it takes the patch that has waited longest and bakes
+one decal for it:
 
-- **Impacts** → chipped paint (sharp flakes), plus a gouge on harder hits,
-  scaled by force. The frame's stamps are spatially clustered; each cluster is
-  one job.
-- **Slides** → a scrape band at the latest contact point, aligned with the
-  slide (the first→last movement of the contact, flattened onto the panel),
-  30–70 cm long so neighbouring contacts join into one rash. It's drawn as a
-  translucent clear-coat haze under parallel scrape lines, one brush and tone
-  per slide, in overlapping segments. Each stream is one job.
+- **Impacts** → hits within ~17 cm on one panel share a patch. Its decal is a
+  chip cluster sized to the hits, in three severity tiers, or a scored brush
+  along the reported slip when the hit was glancing.
+- **Slides** → reports join a patch when they are on the same panel, slide the
+  same way and lie within 34 cm along / 15 cm across its box (up to 95 × 30 cm).
+  Its decal spans the box, aligned with the slide. A patch is repainted only when
+  it has been dragged a tier deeper or has grown past what was painted.
+- `scratches_paint.setContactPatches(false)` restores the previous
+  one-decal-per-contact pipeline for comparison.
 - **Soil** → mud/dirt droplet-and-tail splashes or snow patches from rolling
   wheel contacts on soft ground, tinted from the terrain under the wheel and
   baked into a separate 1024×512 soil target that water can fade.
@@ -650,9 +679,11 @@ affect you:
 - **Slightly slower spawns.** Each supported vehicle gets private materials, so
   the mod clears the JBeam cache before it spawns: about +180 ms per spawn,
   traffic included.
-- **Scratches have no metal glint.** Damage reads as colour; the damage stage
-  uses fixed roughness and no metallic response, and its opacity follows the red
-  channel so very dark marks can look weak.
+- **Contact patches are new.** They were tuned and measured on one liveried car
+  (Sunburst rally) on Vulkan; plain paints, other vehicles and D3D12 have not
+  been re-checked in game with them yet.
+- **No dark marks on dark paint.** Damage opacity follows the canvas red channel,
+  so exposed material is always a grey lighter than black paint.
 - **First mud contact hitch.** The first terrain-texture read for soil tint takes
   about 99 ms; later lookups are cached (~0.03 ms).
 - **Marks don't persist.** Reset, vehicle switch, reload and editor use clear all

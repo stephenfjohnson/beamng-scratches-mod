@@ -1,0 +1,142 @@
+{
+ "game": "BeamNG.drive 0.40.6.0, Vulkan, RTX 3090, 3840x2160, Gridmap v2, sunburst2 rally_pro_gravel (NGRC livery)",
+ "tool": "tools/bench.py run <scenario>; frame times are wall time between frames",
+ "before_66db5f8_cold_process": {
+  "sideslide": {
+   "frames": 727,
+   "frameMsP50": 12.6,
+   "frameMsP95": 22.5,
+   "frameMsP99": 35.8,
+   "frameMsMax": 631.3,
+   "framesOver25ms": 23,
+   "framesOver50ms": 5,
+   "painterMsMax": 81.7,
+   "layersBaked": 301,
+   "bakeMsTotal": 623.4,
+   "bakeMsMax": 81.6
+  },
+  "rollover": {
+   "frames": 392,
+   "frameMsP50": 12.2,
+   "frameMsP95": 20.8,
+   "frameMsP99": 26.3,
+   "frameMsMax": 41.9,
+   "framesOver25ms": 5,
+   "framesOver50ms": 0,
+   "painterMsMax": 30.2,
+   "layersBaked": 136,
+   "bakeMsTotal": 244.1,
+   "bakeMsMax": 30.1
+  }
+ },
+ "after_cold_process": {
+  "sideslide": {
+   "frames": 831,
+   "frameMsP50": 11.9,
+   "frameMsP95": 15.6,
+   "frameMsP99": 22.2,
+   "frameMsMax": 31.1,
+   "framesOver25ms": 6,
+   "framesOver50ms": 0,
+   "painterMsMax": 16.0,
+   "layersBaked": 47,
+   "bakeMsTotal": 190.4,
+   "bakeMsMax": 15.9
+  },
+  "rollover": {
+   "frames": 683,
+   "frameMsP50": 12.1,
+   "frameMsP95": 17.1,
+   "frameMsP99": 20.4,
+   "frameMsMax": 37.7,
+   "framesOver25ms": 3,
+   "framesOver50ms": 0,
+   "painterMsMax": 12.1,
+   "layersBaked": 86,
+   "bakeMsTotal": 178.2,
+   "bakeMsMax": 12.0
+  },
+  "roofdrop": {
+   "frames": 345,
+   "frameMsP50": 12.4,
+   "frameMsP95": 16.8,
+   "frameMsP99": 21.2,
+   "frameMsMax": 35.5,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 10.6,
+   "layersBaked": 20,
+   "bakeMsTotal": 76.3,
+   "bakeMsMax": 10.5
+  },
+  "nosedive": {
+   "frames": 254,
+   "frameMsP50": 11.7,
+   "frameMsP95": 16.1,
+   "frameMsP99": 18.8,
+   "frameMsMax": 21.0,
+   "framesOver25ms": 0,
+   "framesOver50ms": 0,
+   "painterMsMax": 11.0,
+   "layersBaked": 10,
+   "bakeMsTotal": 51.5,
+   "bakeMsMax": 10.9
+  }
+ },
+ "after_warm": {
+  "sideslide": {
+   "frames": 816,
+   "frameMsP50": 11.9,
+   "frameMsP95": 15.7,
+   "frameMsP99": 23.6,
+   "frameMsMax": 81.9,
+   "framesOver25ms": 6,
+   "framesOver50ms": 1,
+   "painterMsMax": 16.0,
+   "layersBaked": 50,
+   "bakeMsTotal": 200.9,
+   "bakeMsMax": 15.9
+  },
+  "rollover": {
+   "frames": 467,
+   "frameMsP50": 12.0,
+   "frameMsP95": 17.1,
+   "frameMsP99": 21.2,
+   "frameMsMax": 25.7,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 15.5,
+   "layersBaked": 70,
+   "bakeMsTotal": 153.9,
+   "bakeMsMax": 15.4
+  }
+ },
+ "after_second_cold_process": {
+  "roofdrop": {
+   "frames": 367,
+   "frameMsP50": 12.7,
+   "frameMsP95": 18.1,
+   "frameMsP99": 24.6,
+   "frameMsMax": 27.5,
+   "framesOver25ms": 3,
+   "framesOver50ms": 0,
+   "painterMsMax": 2.1,
+   "layersBaked": 23,
+   "bakeMsTotal": 32.1,
+   "bakeMsMax": 2.0
+  },
+  "sideslide": {
+   "frames": 834,
+   "frameMsP50": 11.8,
+   "frameMsP95": 14.9,
+   "frameMsP99": 19.3,
+   "frameMsMax": 30.2,
+   "framesOver25ms": 4,
+   "framesOver50ms": 0,
+   "painterMsMax": 15.6,
+   "layersBaked": 53,
+   "bakeMsTotal": 182.1,
+   "bakeMsMax": 15.5
+  }
+ }
+}
