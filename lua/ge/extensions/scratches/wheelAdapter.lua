@@ -23,7 +23,7 @@ local MAX_OPACITY = {tyre=0.95, rim=0.7, under=1.0}
 
 local enabled = true
 local state
-local keysByVid, keysByModel = {}, {}
+local keysByVid, keysByModel, modelByVid = {}, {}, {}
 local prepared, skipped, clones = {}, {}, {}
 local attached = nil
 local applied = nil
@@ -171,13 +171,14 @@ end
 local function discover(veh)
   local vid = veh:getId()
   local prefix = "scratches_" .. vid .. "_whl_"
-  local keys, cloned, uncloned, seen = {}, {}, 0, {}
+  local model = veh.JBeam or veh.jbeam
+  local keys, onMesh, seen = {}, {}, {}
   for _, name in pairs(veh:getMaterialNames()) do
     if not seen[name] then
       seen[name] = true
       if name:sub(1, #prefix) == prefix then
         local key = name:sub(#prefix + 1)
-        cloned[key] = true
+        onMesh[key] = true
       elseif not name:match("^scratches_") then
         local mat = scenetree.findObject(name)
         if mat and mat.getField then
@@ -186,26 +187,30 @@ local function discover(veh)
           local role = M.classify(key, mat.getFilename and mat:getFilename() or "")
           if role and eligible(mat, role) then
             keys[key] = role
-            uncloned = uncloned + 1
           end
         end
       end
     end
   end
-  -- The live game keeps listing the source name beside its bound clone, so a
-  -- key only counts as uncloned (worth a rebuild) when no clone of it is on
-  -- the meshes.
-  uncloned = 0
-  for key in pairs(keys) do if not cloned[key] then uncloned = uncloned + 1 end end
-  local known = keysByVid[vid] or {}
-  for key, role in pairs(keys) do known[key] = role end
-  for key in pairs(cloned) do
-    if not known[key] then known[key] = M.classify(key, "") or "rim" end
+  -- The live game keeps listing the source name beside its bound clone, so
+  -- the sources say which keys THIS build renders. That matters because a
+  -- vehicle replaced in place keeps its id and its flexbody overrides still
+  -- name the previous model's clones (seen 2026-11-20: a pickup spawned over
+  -- a Sunburst kept the Sunburst's four keys and never bound its own). A
+  -- clone with no source listed only counts if this model is known to use it.
+  local remembered = model and keysByModel[model] or nil
+  for key in pairs(onMesh) do
+    if not keys[key] and remembered and remembered[key] then keys[key] = remembered[key] end
   end
-  keysByVid[vid] = known
-  local model = veh.JBeam or veh.jbeam
-  if model and next(known) then keysByModel[model] = known end
-  return known, cloned, uncloned
+  local cloned, uncloned, missing = {}, 0, {}
+  for key in pairs(keys) do
+    if onMesh[key] then cloned[key] = true else uncloned = uncloned + 1; missing[#missing+1] = key end
+  end
+  table.sort(missing)
+  keysByVid[vid] = keys
+  modelByVid[vid] = model
+  if model and next(keys) then keysByModel[model] = keys end
+  return keys, cloned, uncloned, table.concat(missing, ",")
 end
 
 local function cloneWheel(vid, key, role, source)
@@ -256,7 +261,7 @@ function M.prepare(_, vid, vdata)
   -- A rebuild re-clones this vehicle's materials clean; forget what was written.
   if attached and attached.vid == vid then applied = nil end
   if not enabled or not vdata then return end
-  local keys = keysByVid[vid] or keysByModel[vdata.model]
+  local keys = (modelByVid[vid] == vdata.model and keysByVid[vid]) or keysByModel[vdata.model]
   if not keys or not next(keys) then
     skipped[vid] = "wheel materials not known before the first build"
     return
@@ -296,8 +301,10 @@ end
 -- our clones yet (one rebuild binds them).
 function M.needsRebuild(veh)
   if not enabled or not veh then return false end
-  local ok, _, _, uncloned = pcall(discover, veh)
-  return ok and (uncloned or 0) > 0
+  local ok, _, _, uncloned, missing = pcall(discover, veh)
+  -- The second value names what is unbound, so the caller can rebuild once
+  -- per distinct set (a new model or new wheels on the same vehicle id).
+  return ok and (uncloned or 0) > 0, ok and missing or ""
 end
 
 local function applyEntry(entry, steps, tint)
@@ -447,7 +454,7 @@ function M.collectUnused()
       clones[name] = nil
     end
   end
-  for _, t in ipairs({prepared, skipped, keysByVid}) do
+  for _, t in ipairs({prepared, skipped, keysByVid, modelByVid}) do
     for vid in pairs(t) do if not liveIds[vid] then t[vid] = nil end end
   end
   return true

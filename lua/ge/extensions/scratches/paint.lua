@@ -579,14 +579,18 @@ local function trySetup()
       editorPaused=true; pendingSetup=false; skippedVid=vid; return false
     end
     -- Wheel clones bind at construction like the body's. A car built before
-    -- its wheel materials were known gets one rebuild (once per vehicle).
-    if not adapter and wheelAutoReload and not wheelReloaded[vid] and not adapterReloaded[vid]
-        and wheelAdapter.isEnabled() and wheelAdapter.needsRebuild(veh) then
-      wheelReloaded[vid]=true
-      pendingSetup=false
-      adapterModule.invalidateConstructionCache()
-      veh:reload()
-      return false
+    -- its wheel materials were known gets one rebuild per distinct set of
+    -- unbound materials: once normally, and once more if the vehicle is
+    -- replaced in place by another model or fitted with different wheels.
+    if not adapter and wheelAutoReload and not adapterReloaded[vid] and wheelAdapter.isEnabled() then
+      local need, missing = wheelAdapter.needsRebuild(veh)
+      if need and wheelReloaded[vid] ~= (jbeam .. ":" .. tostring(missing)) then
+        wheelReloaded[vid] = jbeam .. ":" .. tostring(missing)
+        pendingSetup=false
+        adapterModule.invalidateConstructionCache()
+        veh:reload()
+        return false
+      end
     end
     if not adapter then
       local ok, result = pcall(adapterModule.create, veh, part)
