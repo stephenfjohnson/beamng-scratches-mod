@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased — underside, wheels, snow fling, ground transfer; README and docs split
+
+Not yet measured or captured in game; no images exist for the four features yet.
+
+<!-- NEW-FEATURES-START -->
+- **Snow fling.** Snow is thrown up from the wheels as powder, like mud and dirt,
+  instead of landing as flat coverage patches.
+- **Underside.** The underside scrapes when the car bottoms out and collects mud;
+  in deep mud it cakes along the sills and running boards.
+- **Wheels and tyres** get muddy, dusty and scraped.
+- **Ground transfer.** Scraping along the ground leaves the car's paint behind on
+  the road, and wheels dragged on their sides leave marks too.
+<!-- NEW-FEATURES-END -->
+- README rewritten as a short, image-led front page for players (hero, tour,
+  three-step install, plain-language caveats). The technical content moved,
+  unchanged apart from links, into [`docs/`](docs/README.md):
+  [features](docs/features.md), [install](docs/install.md),
+  [how it works](docs/how-it-works.md), [performance](docs/performance.md),
+  [development](docs/development.md), [debug panel](docs/debug-panel.md) and
+  [known issues](docs/known-issues.md).
+
 ## Unreleased — contact patches: realistic scrapes, no crash hitching (Vulkan)
 
 Measured on BeamNG 0.40.6.0, Vulkan and D3D12

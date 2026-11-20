@@ -1,7 +1,7 @@
 # TODO
 
 Open work for scratches_mod, swept on 2026-11-15. Everything that shipped is on
-`master` and shown in the [README](README.md). This list holds what remains:
+`master` and shown in the [README](README.md) and the [feature write-ups](docs/features.md). This list holds what remains:
 release blockers first, then quality, verification, compatibility, tech debt,
 and the ideas still parked on archived branches.
 

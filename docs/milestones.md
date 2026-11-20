@@ -2,7 +2,8 @@
 
 How the mod got here, newest first. Each milestone links its investigation,
 real in-game captures and the exact build/renderer/vehicle it was verified on.
-The [README](../README.md) shows the current feature set; [TODO.md](../TODO.md)
+The [README](../README.md) and the [feature write-ups](features.md) show the
+current feature set; [TODO.md](../TODO.md)
 tracks what is still open; the [changelog](../CHANGELOG.md) has the short version.
 
 ## Milestone 5: performance investigation (release blocked)

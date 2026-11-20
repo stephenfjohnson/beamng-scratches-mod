@@ -17,7 +17,7 @@ longer carry color metadata. Terrain's lighting and puddles are not copied.
 
 ## First drive
 
-1. Install one copy of the mod using the README instructions.
+1. Install one copy of the mod using the [install instructions](install.md).
 2. Spawn an ETK 800 on Gridmap v2. Choose an empty Paint Design or the stock
    Police design. The adapter preserves that selection and its main-body
    material. Initial activation may reload/repair the car once. Other liveries
@@ -110,7 +110,7 @@ D3D12 mud/dirt/snow driving evidence for the same narrow ETK adapter.
 | Symptom | What to check |
 | --- | --- |
 | No marks, painter NOT READY | Unsupported design, editor active, or missing Dynamic Textures part; try ETK 800 empty/Police Paint Design |
-| Painter ready, contacts counted, nothing visible | Check renderer/shader errors and the vanilla Dynamic Decals editor; see README known issues |
+| Painter ready, contacts counted, nothing visible | Check renderer/shader errors and the vanilla Dynamic Decals editor; see [known issues](known-issues.md) |
 | Changes do not load | Remove duplicate ZIP/unpacked installations, restart; check active user folder |
 | Terrain does not dirty the car | Collision material, slip threshold, deposit cap and approximate wheel projection |
 | Water does not clean the car | Check supported ETK design, body immersion and pause; allow eight simulated seconds at full immersion |
