@@ -1396,6 +1396,60 @@ local function anchorNormal(localPos, localNormal)
   return outward
 end
 
+-- ---- underside contacts ----
+-- Bottoming out on a kerb, rock or crest, or sliding on the belly. Such a
+-- contact is painted on the BOTTOM face: normal exactly (0,0,-1) and a shallow
+-- depth box that never climbs past the lower shell, so it cannot reach the
+-- hood, cabin or roof from below (thin panels share texels front and back).
+-- The detector flags these on the wire (0/nil none, 1 body node, 2 low
+-- mechanical part such as a skidplate or exhaust); a flag-2 contact is only
+-- ever painted as an underside one, and dropped when it cannot be.
+-- (One table: the chunk is close to Lua's 200-local limit.)
+local underside = {
+  on = true,
+  stats = { contacts = 0, parts = 0, dropped = 0, painted = 0 },
+  NORMAL_MIN_Z = 0.5,                 -- local normal points up into the car
+  ZONE_FRAC = 0.42, ZONE_MIN = 0.40,  -- height of the underside zone above the box floor
+  DEPTH_BODY = 0.25, DEPTH_PART = 0.35, -- m, full depth of the box
+  PART_SINK = 0.04,                   -- m of the part box left below the contact
+}
+
+-- Top of the underside zone (car-local z), or nil without a vehicle box.
+underside.zoneTop = function()
+  local box = getSpawnAabb()
+  if not box then return nil end
+  local minZ, maxZ = box.minExtents.z, box.maxExtents.z
+  if not (minZ and maxZ and maxZ > minZ) then return nil end
+  return math.min((minZ + maxZ) * 0.5, minZ + math.max(underside.ZONE_MIN, (maxZ - minZ) * underside.ZONE_FRAC))
+end
+
+-- "under" for an underside contact, "drop" for a low-part contact that is not
+-- one (or with the feature off), nil for everything else (the usual path).
+underside.classify = function(lp, ln, flag)
+  local lowPart = (tonumber(flag) or 0) >= 2
+  if not underside.on then return lowPart and "drop" or nil end
+  local top = underside.zoneTop()
+  local len = ln and vecLen(ln) or 0
+  if top and len > 1e-3 and lp.z <= top and ln.z / len >= underside.NORMAL_MIN_Z then
+    return "under"
+  end
+  return lowPart and "drop" or nil
+end
+
+-- Box for an underside patch: returns its centre and full depth. A body-node
+-- contact is on the skin, so the box straddles it. A low part hangs below the
+-- floor, so its box starts just under the contact and reaches straight up.
+-- Either way the box top is capped at the underside zone.
+underside.box = function(centre, lowPart)
+  local depth = lowPart and underside.DEPTH_PART or underside.DEPTH_BODY
+  local bottom = lowPart and (centre.z - underside.PART_SINK) or (centre.z - depth * 0.5)
+  local top = bottom + depth
+  local cap = underside.zoneTop()
+  if cap and top > cap then top = math.max(bottom + 0.10, cap) end
+  if cap and top > cap then bottom = cap - 0.10; top = cap end
+  return vec3(centre.x, centre.y, (bottom + top) * 0.5), top - bottom
+end
+
 -- Replace the projection readback with the known contact point/normal. The
 -- bake tolerates the node-to-mesh offset: anchors moved +-15 cm along the
 -- normal painted identical marks in game (investigation 12).
@@ -2282,8 +2336,18 @@ local function enqueueWear(e, vid)
     opts.depth = math.max(0.16, math.min(0.34, e.size * 0.6))
     if e.dir then opts.flow = e.dir else opts.rot = math.random() * 2 * math.pi end
   end
+  local centre = e.centre
+  if e.under then
+    -- Bottom face only: straight-up box, shallow, capped below the cabin.
+    local ok, c, depth = pcall(underside.box, e.centre, e.underPart)
+    if ok and c and depth then
+      centre, opts.depth = c, depth
+      normal = vec3(0, 0.03, -1):normalized()
+      underside.stats.painted = underside.stats.painted + 1
+    end
+  end
   wear.painted = wear.painted + 1
-  enqueueStamp(e.centre, normal, opts, vid)
+  enqueueStamp(centre, normal, opts, vid)
 end
 
 -- Load one brush set with an invisible stamp inside the cabin, so a crash
@@ -2329,20 +2393,38 @@ wear.pump = function()
   end
 end
 
+-- Tag a patch as an underside one (and as a low-part one when flagged 2).
+underside.mark = function(patch, flag)
+  underside.stats.contacts = underside.stats.contacts + 1
+  local lowPart = (tonumber(flag) or 0) >= 2
+  if lowPart then underside.stats.parts = underside.stats.parts + 1 end
+  if not patch then return end
+  patch.under = true
+  if lowPart then patch.underPart = true end
+end
+
 -- Detector batch -> patches. Impacts carry an optional world slip velocity.
 local function ingestWear(events, streams, invM, rotOnly)
   local agg, now = wear.agg, wear.now
   for i = 1, events and #events or 0 do
     local e = events[i]
     local lp = invM:mulP3F(vec3(e[1], e[2], e[3]))
-    local n = anchorNormal(lp, rotOnly:mulP3F(vec3(e[4], e[5], e[6])))
-    if e[7] == "i" then
-      local slip = e[9] and rotOnly:mulP3F(vec3(e[9], e[10], e[11])) or nil
-      if slip then slip = slip - n * slip:dot(n) end
-      agg:addImpact(lp, n, severityOf(e[8]), slip, now)
-    elseif (e[8] or 0) >= 400 then
-      -- Pressed, barely dragged: a faint chip, no direction.
-      agg:addImpact(lp, n, severityOf(e[8]) * 0.5, nil, now)
+    local ln = rotOnly:mulP3F(vec3(e[4], e[5], e[6]))
+    local under = underside.classify(lp, ln, e[12])
+    if under == "drop" then
+      underside.stats.dropped = underside.stats.dropped + 1
+    else
+      local n = under and vec3(0, 0, -1) or anchorNormal(lp, ln)
+      local patch
+      if e[7] == "i" then
+        local slip = e[9] and rotOnly:mulP3F(vec3(e[9], e[10], e[11])) or nil
+        if slip then slip = slip - n * slip:dot(n) end
+        patch = agg:addImpact(lp, n, severityOf(e[8]), slip, now)
+      elseif (e[8] or 0) >= 400 then
+        -- Pressed, barely dragged: a faint chip, no direction.
+        patch = agg:addImpact(lp, n, severityOf(e[8]) * 0.5, nil, now)
+      end
+      if under then underside.mark(patch, e[12]) end
     end
   end
   for si = 1, streams and #streams or 0 do
@@ -2355,16 +2437,25 @@ local function ingestWear(events, streams, invM, rotOnly)
         local p = points[k]
         if p[4] and p[5] and p[6] then nx, ny, nz = nx + p[4], ny + p[5], nz + p[6] end
       end
-      local n = anchorNormal(anchor, rotOnly:mulP3F(vec3(nx, ny, nz)))
-      local move = vec3(last[1] - first[1], last[2] - first[2], last[3] - first[3])
-      local dist = move:length()
-      local dir = rotOnly:mulP3F(move)
-      dir = dir - n * dir:dot(n)
-      local dlen = dir:length()
-      if dlen > 1e-4 then
-        agg:addSlide(anchor, n, dir * (1 / dlen), math.min(dist, 4), now)
+      local ln = rotOnly:mulP3F(vec3(nx, ny, nz))
+      -- A stream is flagged by its points' optional 7th field (the anchor's).
+      local under = underside.classify(anchor, ln, last[7])
+      if under == "drop" then
+        underside.stats.dropped = underside.stats.dropped + 1
       else
-        agg:addImpact(anchor, n, 0, nil, now)
+        local n = under and vec3(0, 0, -1) or anchorNormal(anchor, ln)
+        local move = vec3(last[1] - first[1], last[2] - first[2], last[3] - first[3])
+        local dist = move:length()
+        local dir = rotOnly:mulP3F(move)
+        dir = dir - n * dir:dot(n)
+        local dlen = dir:length()
+        local patch
+        if dlen > 1e-4 then
+          patch = agg:addSlide(anchor, n, dir * (1 / dlen), math.min(dist, 4), now)
+        else
+          patch = agg:addImpact(anchor, n, 0, nil, now)
+        end
+        if under then underside.mark(patch, last[7]) end
       end
     end
   end
@@ -2377,7 +2468,9 @@ end
 --   events  : list of {x,y,z,nx,ny,nz,kind,sev}
 --             kind "i" = collision impact, "s" = 1-point slide fallback;
 --             sev = normalForce in N.
---   streams : list of point lists, each {{x,y,z,nx,ny,nz}, ...} (>= 2 points)
+--             optional fields 9-11 = world slip velocity, 12 = underside
+--             flag (0/nil none, 1 body node, 2 low mechanical part).
+--   streams : list of point lists, each {{x,y,z,nx,ny,nz[,under]}, ...} (>= 2 points)
 -- A batch from any vehicle other than the current player car is dropped —
 -- it would be converted with the wrong car's matrix.
 M.ingest = function(vid, events, streams)
@@ -2403,7 +2496,10 @@ M.ingest = function(vid, events, streams)
       local e = events[i]
       local lp = invM:mulP3F(vec3(e[1], e[2], e[3]))
       local ln = rotOnly:mulP3F(vec3(e[4], e[5], e[6]))
-      if e[7] == "i" then
+      if (tonumber(e[12]) or 0) >= 2 then
+        -- Low mechanical parts are only painted by the contact-patch pipeline.
+        underside.stats.dropped = underside.stats.dropped + 1
+      elseif e[7] == "i" then
         enqueueImpact(lp, ln, e[8], vid)
       else
         enqueueStamp(lp, ln, styleForEvent(nil, e[8]), vid)
@@ -2414,7 +2510,13 @@ M.ingest = function(vid, events, streams)
   if streams then
     for si = 1, #streams do
       local points = streams[si]
-      if points and #points >= 2 then enqueueSlide(points, invM, rotOnly, vid) end
+      if points and #points >= 2 then
+        if (tonumber(points[#points][7]) or 0) >= 2 then
+          underside.stats.dropped = underside.stats.dropped + 1
+        else
+          enqueueSlide(points, invM, rotOnly, vid)
+        end
+      end
     end
   end
 end
@@ -2848,6 +2950,7 @@ M.resetPaintStats = function()
   for k in pairs(perfStats) do perfStats[k] = 0 end
   syntheticAnchorCount = 0
   wear.painted = 0
+  underside.stats.contacts, underside.stats.parts, underside.stats.dropped, underside.stats.painted = 0, 0, 0, 0
   for k in pairs(wear.agg.counts) do wear.agg.counts[k] = 0 end
   table.clear(nativeEvents)
   for _,p in pairs(nativeProfiles) do table.clear(p.bins);p.count=0;p.maxMs=0 end
@@ -2905,6 +3008,8 @@ M.getStats = function()
                damageWidth = adapter and adapter:getDamageWidth() or 0, coverageCoalescing=coverage~=nil, panelGrouping=panelGrouping,
                fullRateCombine = fullRateCombine, syntheticAnchors = syntheticAnchors },
     anchors = { synthesized = syntheticAnchorCount },
+    underside = { enabled = underside.on, contacts = underside.stats.contacts, parts = underside.stats.parts,
+                  dropped = underside.stats.dropped, painted = underside.stats.painted },
     wear = { enabled = wear.on, painted = wear.painted, warmed = wear.warmedCount,
              warmPending = wear.warm and #wear.warm or -1, pending = wear.agg:pending(),
              patches = wear.agg:stats() },
@@ -2945,6 +3050,21 @@ end
 -- true (default): projection-free anchors from the detector's contact points.
 -- false: legacy native projection per job. Applies to work captured afterwards.
 M.setSyntheticAnchors = function(enabled) syntheticAnchors=enabled and true or false end
+-- true (default): underside contacts are painted on the bottom face with a
+-- shallow straight-up box, and low mechanical parts may scrape there. false:
+-- the previous behaviour (low-part contacts are dropped). Also tells the
+-- player car's detector, best effort.
+M.setUndersideScrapes = function(enabled)
+  underside.on = enabled and true or false
+  pcall(function()
+    local veh = getPlayerVehicle(0)
+    if veh and veh.queueLuaCommand then
+      veh:queueLuaCommand(string.format(
+        "if scratches_detect and scratches_detect.setUndersideScrapes then scratches_detect.setUndersideScrapes(%s) end",
+        tostring(underside.on)))
+    end
+  end)
+end
 M.setBakeBudget = function(n)
   BAKE_LAYERS_PER_FRAME=math.max(1,math.min(24,math.floor(tonumber(n) or 6)))
 end
