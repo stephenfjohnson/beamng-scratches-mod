@@ -1,0 +1,393 @@
+{
+ "game": "BeamNG.drive 0.40.6.0, Vulkan, RTX 3090, 3840x2160, Gridmap v2, sunburst2 rally_pro_gravel (NGRC livery)",
+ "tool": "tools/bench.py run <scenario>; frame times are wall time between frames",
+ "before_66db5f8_cold_process": {
+  "sideslide": {
+   "frames": 727,
+   "frameMsP50": 12.6,
+   "frameMsP95": 22.5,
+   "frameMsP99": 35.8,
+   "frameMsMax": 631.3,
+   "framesOver25ms": 23,
+   "framesOver50ms": 5,
+   "painterMsMax": 81.7,
+   "layersBaked": 301,
+   "bakeMsTotal": 623.4,
+   "bakeMsMax": 81.6
+  },
+  "rollover": {
+   "frames": 392,
+   "frameMsP50": 12.2,
+   "frameMsP95": 20.8,
+   "frameMsP99": 26.3,
+   "frameMsMax": 41.9,
+   "framesOver25ms": 5,
+   "framesOver50ms": 0,
+   "painterMsMax": 30.2,
+   "layersBaked": 136,
+   "bakeMsTotal": 244.1,
+   "bakeMsMax": 30.1
+  }
+ },
+ "after_cold_process": {
+  "sideslide": {
+   "frames": 831,
+   "frameMsP50": 11.9,
+   "frameMsP95": 15.6,
+   "frameMsP99": 22.2,
+   "frameMsMax": 31.1,
+   "framesOver25ms": 6,
+   "framesOver50ms": 0,
+   "painterMsMax": 16.0,
+   "layersBaked": 47,
+   "bakeMsTotal": 190.4,
+   "bakeMsMax": 15.9
+  },
+  "rollover": {
+   "frames": 683,
+   "frameMsP50": 12.1,
+   "frameMsP95": 17.1,
+   "frameMsP99": 20.4,
+   "frameMsMax": 37.7,
+   "framesOver25ms": 3,
+   "framesOver50ms": 0,
+   "painterMsMax": 12.1,
+   "layersBaked": 86,
+   "bakeMsTotal": 178.2,
+   "bakeMsMax": 12.0
+  },
+  "roofdrop": {
+   "frames": 345,
+   "frameMsP50": 12.4,
+   "frameMsP95": 16.8,
+   "frameMsP99": 21.2,
+   "frameMsMax": 35.5,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 10.6,
+   "layersBaked": 20,
+   "bakeMsTotal": 76.3,
+   "bakeMsMax": 10.5
+  },
+  "nosedive": {
+   "frames": 254,
+   "frameMsP50": 11.7,
+   "frameMsP95": 16.1,
+   "frameMsP99": 18.8,
+   "frameMsMax": 21.0,
+   "framesOver25ms": 0,
+   "framesOver50ms": 0,
+   "painterMsMax": 11.0,
+   "layersBaked": 10,
+   "bakeMsTotal": 51.5,
+   "bakeMsMax": 10.9
+  }
+ },
+ "after_warm": {
+  "sideslide": {
+   "frames": 816,
+   "frameMsP50": 11.9,
+   "frameMsP95": 15.7,
+   "frameMsP99": 23.6,
+   "frameMsMax": 81.9,
+   "framesOver25ms": 6,
+   "framesOver50ms": 1,
+   "painterMsMax": 16.0,
+   "layersBaked": 50,
+   "bakeMsTotal": 200.9,
+   "bakeMsMax": 15.9
+  },
+  "rollover": {
+   "frames": 467,
+   "frameMsP50": 12.0,
+   "frameMsP95": 17.1,
+   "frameMsP99": 21.2,
+   "frameMsMax": 25.7,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 15.5,
+   "layersBaked": 70,
+   "bakeMsTotal": 153.9,
+   "bakeMsMax": 15.4
+  }
+ },
+ "after_second_cold_process": {
+  "roofdrop": {
+   "frames": 367,
+   "frameMsP50": 12.7,
+   "frameMsP95": 18.1,
+   "frameMsP99": 24.6,
+   "frameMsMax": 27.5,
+   "framesOver25ms": 3,
+   "framesOver50ms": 0,
+   "painterMsMax": 2.1,
+   "layersBaked": 23,
+   "bakeMsTotal": 32.1,
+   "bakeMsMax": 2.0
+  },
+  "sideslide": {
+   "frames": 834,
+   "frameMsP50": 11.8,
+   "frameMsP95": 14.9,
+   "frameMsP99": 19.3,
+   "frameMsMax": 30.2,
+   "framesOver25ms": 4,
+   "framesOver50ms": 0,
+   "painterMsMax": 15.6,
+   "layersBaked": 53,
+   "bakeMsTotal": 182.1,
+   "bakeMsMax": 15.5
+  }
+ },
+ "pass2_note": "Second pass, same day: 512x256 / 256x256 brushes, loaded-brush reuse, wheel fling. cold-* runs restart the game before one sideslide; off = detector painting disabled.",
+ "pass2_vulkan_cold_first_crash": {
+  "sideslide_cold-on-0": {
+   "frames": 882,
+   "frameMsP95": 16.0,
+   "frameMsP99": 19.0,
+   "frameMsMax": 34.5,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 8.0,
+   "layersBaked": 48,
+   "bakeMsTotal": 95.8,
+   "bakeMsMax": 7.9
+  },
+  "sideslide_cold-off-1": {
+   "frames": 891,
+   "frameMsP95": 15.0,
+   "frameMsP99": 18.4,
+   "frameMsMax": 23.8,
+   "framesOver25ms": 0,
+   "framesOver50ms": 0,
+   "painterMsMax": 0.1,
+   "layersBaked": 0,
+   "bakeMsTotal": 0,
+   "bakeMsMax": 0
+  },
+  "sideslide_cold-on-2": {
+   "frames": 914,
+   "frameMsP95": 13.3,
+   "frameMsP99": 15.4,
+   "frameMsMax": 25.2,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 5.9,
+   "layersBaked": 47,
+   "bakeMsTotal": 78.2,
+   "bakeMsMax": 5.8
+  },
+  "sideslide_cold-off-3": {
+   "frames": 901,
+   "frameMsP95": 13.9,
+   "frameMsP99": 15.7,
+   "frameMsMax": 41.1,
+   "framesOver25ms": 4,
+   "framesOver50ms": 0,
+   "painterMsMax": 0.1,
+   "layersBaked": 0,
+   "bakeMsTotal": 0,
+   "bakeMsMax": 0
+  },
+  "sideslide_cold-on-4": {
+   "frames": 900,
+   "frameMsP95": 14.0,
+   "frameMsP99": 16.4,
+   "frameMsMax": 25.9,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 5.9,
+   "layersBaked": 50,
+   "bakeMsTotal": 100.5,
+   "bakeMsMax": 5.8
+  },
+  "sideslide_cold-off-5": {
+   "frames": 903,
+   "frameMsP95": 13.6,
+   "frameMsP99": 16.2,
+   "frameMsMax": 20.4,
+   "framesOver25ms": 0,
+   "framesOver50ms": 0,
+   "painterMsMax": 0.1,
+   "layersBaked": 0,
+   "bakeMsTotal": 0,
+   "bakeMsMax": 0
+  },
+  "sideslide_cold-on-6": {
+   "frames": 896,
+   "frameMsP95": 14.0,
+   "frameMsP99": 16.5,
+   "frameMsMax": 27.2,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 6.9,
+   "layersBaked": 46,
+   "bakeMsTotal": 82.3,
+   "bakeMsMax": 6.8
+  },
+  "sideslide_cold-on-7": {
+   "frames": 902,
+   "frameMsP95": 13.4,
+   "frameMsP99": 15.3,
+   "frameMsMax": 26.4,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 5.0,
+   "layersBaked": 49,
+   "bakeMsTotal": 83.4,
+   "bakeMsMax": 4.9
+  },
+  "sideslide_cold-on-8": {
+   "frames": 877,
+   "frameMsP95": 14.9,
+   "frameMsP99": 17.6,
+   "frameMsMax": 31.0,
+   "framesOver25ms": 3,
+   "framesOver50ms": 0,
+   "painterMsMax": 6.2,
+   "layersBaked": 47,
+   "bakeMsTotal": 94.6,
+   "bakeMsMax": 6.1
+  }
+ },
+ "pass2_vulkan_cold_small": {
+  "sideslide_small": {
+   "frames": 840,
+   "frameMsP95": 14.3,
+   "frameMsP99": 16.3,
+   "frameMsMax": 32.8,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 5.6,
+   "layersBaked": 49,
+   "bakeMsTotal": 82.1,
+   "bakeMsMax": 5.6
+  },
+  "rollover_small": {
+   "frames": 427,
+   "frameMsP95": 15.0,
+   "frameMsP99": 19.1,
+   "frameMsMax": 27.6,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 4.1,
+   "layersBaked": 58,
+   "bakeMsTotal": 81.1,
+   "bakeMsMax": 4.1
+  }
+ },
+ "pass2_vulkan_control_painting_off": {
+  "sideslide_ctl-off1": {
+   "frames": 890,
+   "frameMsP95": 14.0,
+   "frameMsP99": 16.1,
+   "frameMsMax": 21.2,
+   "framesOver25ms": 0,
+   "framesOver50ms": 0,
+   "painterMsMax": 0.2,
+   "layersBaked": 0,
+   "bakeMsTotal": 0,
+   "bakeMsMax": 0
+  },
+  "sideslide_ctl-off2": {
+   "frames": 869,
+   "frameMsP95": 13.5,
+   "frameMsP99": 16.6,
+   "frameMsMax": 28.6,
+   "framesOver25ms": 2,
+   "framesOver50ms": 0,
+   "painterMsMax": 0.1,
+   "layersBaked": 0,
+   "bakeMsTotal": 0,
+   "bakeMsMax": 0
+  },
+  "sideslide_ctl-off3": {
+   "frames": 842,
+   "frameMsP95": 13.3,
+   "frameMsP99": 15.6,
+   "frameMsMax": 25.6,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 0.1,
+   "layersBaked": 0,
+   "bakeMsTotal": 0,
+   "bakeMsMax": 0
+  }
+ },
+ "pass2_d3d12_cold_first_crash": {
+  "sideslide_d3d-cold-on-0": {
+   "frames": 619,
+   "frameMsP95": 18.2,
+   "frameMsP99": 24.9,
+   "frameMsMax": 318.6,
+   "framesOver25ms": 6,
+   "framesOver50ms": 3,
+   "painterMsMax": 15.1,
+   "layersBaked": 58,
+   "bakeMsTotal": 426.3,
+   "bakeMsMax": 14.9
+  },
+  "sideslide_d3d-cold-on-1": {
+   "frames": 978,
+   "frameMsP95": 15.3,
+   "frameMsP99": 19.2,
+   "frameMsMax": 25.6,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 10.0,
+   "layersBaked": 46,
+   "bakeMsTotal": 318.3,
+   "bakeMsMax": 10.0
+  },
+  "sideslide_d3d-cold-on-2": {
+   "frames": 978,
+   "frameMsP95": 14.4,
+   "frameMsP99": 18.6,
+   "frameMsMax": 35.4,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 10.3,
+   "layersBaked": 47,
+   "bakeMsTotal": 314.3,
+   "bakeMsMax": 10.2
+  }
+ },
+ "pass2_d3d12_warm": {
+  "rollover_d3d-warm": {
+   "frames": 482,
+   "frameMsP95": 16.6,
+   "frameMsP99": 19.3,
+   "frameMsMax": 23.1,
+   "framesOver25ms": 0,
+   "framesOver50ms": 0,
+   "painterMsMax": 9.2,
+   "layersBaked": 60,
+   "bakeMsTotal": 376.6,
+   "bakeMsMax": 9.1
+  },
+  "roofdrop_d3d-warm": {
+   "frames": 431,
+   "frameMsP95": 14.9,
+   "frameMsP99": 19.5,
+   "frameMsMax": 26.0,
+   "framesOver25ms": 1,
+   "framesOver50ms": 0,
+   "painterMsMax": 8.9,
+   "layersBaked": 18,
+   "bakeMsTotal": 116.5,
+   "bakeMsMax": 8.8
+  },
+  "sideslide_d3d-warm": {
+   "frames": 928,
+   "frameMsP95": 15.6,
+   "frameMsP99": 19.6,
+   "frameMsMax": 22.7,
+   "framesOver25ms": 0,
+   "framesOver50ms": 0,
+   "painterMsMax": 11.5,
+   "layersBaked": 46,
+   "bakeMsTotal": 322.6,
+   "bakeMsMax": 11.4
+  }
+ }
+}

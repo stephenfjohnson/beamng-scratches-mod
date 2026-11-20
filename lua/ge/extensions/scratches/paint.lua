@@ -48,6 +48,13 @@ end
 local adapter = nil
 local adapterModule = nil
 local soilColor = dofile("/lua/ge/extensions/scratches/soilColor.lua")
+-- Contact-patch wear (see patches.lua): contacts fold into patches and each
+-- patch is painted as one decal. `now` advances with real frame time so the
+-- mock harness can step it; `warm` lists brush sets not yet loaded this
+-- session (a texture's first use costs ~15 ms inside the native bake).
+local patchModule = dofile("/lua/ge/extensions/scratches/patches.lua")
+local wear = { on = true, agg = patchModule.new(), now = 0, kick = false, frame = 0,
+               warm = nil, warmed = {}, painted = 0, warmedCount = 0, last = {}, hotKey = nil }
 local adapterReloaded = {}
 local editorPaused = false
 local api               = nil    -- editor_api_dynamicDecals module
@@ -159,6 +166,8 @@ local perfStats = {
   layerMsTotal = 0, layerCalls = 0,
   bakeMsTotal = 0, bakeMsMax = 0, bakeCalls = 0, bakeLayersTotal = 0,
   inputToBakeMaxMs = 0, inputToProjectMaxMs = 0,
+  -- Detector batches arrive outside onUpdate, so they are timed separately.
+  ingestMsTotal = 0, ingestMsMax = 0, ingestCalls = 0,
 }
 
 -- Add the time since t0 (os.clockhp seconds) to perfStats[totalKey], track
@@ -841,12 +850,15 @@ local function onUpdate(dtReal, dtSim, dtRaw)
     -- synced the vehicle's shape/transforms since before last frame (idle
     -- skip), sync first so the projections don't use a stale pose.
     sinceFlush = sinceFlush + (dtReal or 0)
+    wear.now = wear.now + math.max(0, math.min(0.5, dtReal or 0))
+    if wear.on and wear.pump then wear.pump() end
     local projected = false
     -- Drain captured layers before another batch. A slow native projection
     -- can exceed the interval; without backpressure it can starve baking.
-    if hasPendingWorkRef and hasPendingWorkRef() and sinceFlush >= FLUSH_INTERVAL
+    if hasPendingWorkRef and hasPendingWorkRef() and (sinceFlush >= FLUSH_INTERVAL or wear.kick)
       and not (hasPendingBakeRef and hasPendingBakeRef()) then
       sinceFlush = 0
+      wear.kick = false
       projected = true
       -- Project against the car's current (possibly deforming) shape.
       local veh = getPlayerVehicle(0)
@@ -1125,6 +1137,24 @@ local HAZE_BRUSHES   = { TEX .. "scr_haze_01.png", TEX .. "scr_haze_02.png" }
 local CHIP_BRUSHES   = { TEX .. "m4_chip_a.png", TEX .. "m4_chip_b.png", TEX .. "m4_chip_c.png", TEX .. "m4_chip_d.png" }
 local GOUGE_BRUSHES  = { TEX .. "m4_gouge_a.png", TEX .. "m4_gouge_b.png" }
 
+-- Contact-patch wear brushes (tools/generate_wear.py), by severity tier. Each
+-- entry is a colour brush plus, from tier 2, its metallic and roughness maps.
+local WEAR = { slide = {}, chip = {}, score = {} }
+do
+  local function set(name, letters, pbr)
+    local out = {}
+    for letter in letters:gmatch(".") do
+      local base = TEX .. "w2_" .. name .. "_" .. letter
+      out[#out + 1] = { c = base .. ".png", m = pbr and (base .. "_m.png") or nil,
+                        r = pbr and (base .. "_r.png") or nil }
+    end
+    return out
+  end
+  WEAR.slide = { set("scuff", "ab"), set("scrape", "abc", true), set("gouge", "abc", true) }
+  WEAR.chip  = { set("chip", "ab"), set("chip", "cd", true), set("chip", "ef", true) }
+  WEAR.score = { set("score", "ab"), set("score", "cd", true), set("score", "ef", true) }
+end
+
 -- Long straight slides used to become one large projected rectangle. On roof
 -- slides that rectangle could span past the roof edge and mark the rear/side,
 -- while visually reading as sparse because it was still a single layer. Chunk
@@ -1194,7 +1224,7 @@ end
 -- Roughness jitter (only affects the canvas's M/R channels, which the car
 -- currently renders from its factory maps).
 local function pickRoughness()
-  return 0.10 + math.random() * 0.25
+  return 0.55 + math.random() * 0.20
 end
 
 -- ---- synthetic-camera stamping (Phase 3 step 1) ----
@@ -1462,6 +1492,7 @@ M._dropQueuedJobs = function()
   cosmeticGeneration=cosmeticGeneration+1
   table.clear(jobQueue)
   table.clear(bakeQueue)
+  wear.agg:clear()
   if coverage then coverage=coverageModule.new(clockhp) end
   jobQueueVid = nil
 end
@@ -1529,6 +1560,9 @@ local function enqueueStamp(localPos, localNormal, opts, vid)
     roughness   = roughness,
     skipMetal   = opts.skipMetal and true or false,
     dist        = opts.dist,
+    wear        = opts.wear, warm = opts.warm,
+    metalTex    = opts.metalTex, roughTex = opts.roughTex,
+    flipX       = opts.flipX, flipY = opts.flipY,
   }
   if coverage and not input.soil then
     local rec,needed=coverage:admit(input)
@@ -1801,7 +1835,7 @@ local function runStreamJob(job, projM, bakeList)
   local function addLayer(tex, r, g, b, a, center, halfLen, halfWidth, angle, name)
     api.setDecalTexturePath("color", tex)
     api.setDecalTexturePath("alpha", "/art/dynamicDecals/textures/_one.png")
-    api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_one.png")
+    api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_zero.png")
     api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
     api.setMetallicIntensity(1.0)
     api.setRoughnessIntensity(pickRoughness())
@@ -1920,12 +1954,20 @@ local function runClusterJob(cluster, projM, bakeList)
       api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
       api.setMetallicIntensity(0)
       api.setRoughnessIntensity(0.5)
+    elseif s.wear then
+      -- Per-pixel metal and roughness from the brush's own maps.
+      api.setDecalTexturePath("metallic",  s.metalTex or "/art/dynamicDecals/textures/_zero.png")
+      api.setDecalTexturePath("roughness", s.roughTex or "/art/dynamicDecals/textures/_one.png")
+      api.setMetallicIntensity(1.0)
+      api.setRoughnessIntensity(s.roughTex and 1.0 or 0.5)
     else
-      api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_one.png")
+      api.setDecalTexturePath("metallic",  "/art/dynamicDecals/textures/_zero.png")
       api.setDecalTexturePath("roughness", "/art/dynamicDecals/textures/_one.png")
       api.setMetallicIntensity(1.0)
       api.setRoughnessIntensity(s.roughness)
     end
+    -- Mirror the brush for variety; set for every stamp so it never leaks.
+    if api.setDecalUv and Point2F then api.setDecalUv(Point2F(s.flipX or 1, s.flipY or 1)) end
     api.setDecalColor(Point4F(s.r, s.g, s.b, s.a or 1))
     api.setDecalScale(vec3(s.scale, s.depth or 1, s.width or s.scale))
     local angle = s.rot
@@ -1970,7 +2012,7 @@ local function runClusterJob(cluster, projM, bakeList)
       else
         decalData._scratchesCoverage = s.coverageRecord
         decalData.uid       = nextLayerUid()
-        decalData.name      = s.soil and "soil" or "scratch"
+        decalData.name      = s.soil and "soil" or (s.warm and "warm" or "scratch")
         decalData.enabled   = true
         decalData.locked    = false
         decalData.parentUid = nil
@@ -2213,6 +2255,121 @@ local function enqueueSlide(points, invM, rotOnly, vid)
                      math.min(1, dist / 3 + (pass - 1) * 0.35))   -- a repeat pass digs deeper
 end
 
+-- ---- contact-patch wear ----
+-- Paint one patch decal handed out by the aggregator.
+local function enqueueWear(e, vid)
+  local sets = e.kind == "slide" and WEAR.slide or (e.dir and WEAR.score or WEAR.chip)
+  -- The engine keeps only the last couple of brush textures loaded, so reuse
+  -- the family's last brush most of the time (mirroring still varies it).
+  local set = sets[e.tier]
+  local brush = wear.last[set]
+  if not brush or wear.hotKey ~= e.key or math.random() < 0.2 then brush = pickFromSet(set) end
+  wear.last[set], wear.hotKey = brush, e.key
+  local normal = e.normal
+  -- The bake builds its basis from cross(normal, +Z); keep it well defined on
+  -- the roof and floor, and identical to the rotation computed for `flow`.
+  if math.abs(normal.z) > 0.999 then normal = (normal + vec3(0, 0.03, 0)):normalized() end
+  local tint = 1 - math.random() * 0.03
+  local opts = { wear = true, colorTex = brush.c, metalTex = brush.m, roughTex = brush.r,
+    r = 1, g = tint, b = tint - math.random() * 0.03, a = 1, noJitter = true,
+    severity = (e.tier - 1) * 0.5, flipX = math.random() < 0.5 and -1 or 1,
+    flipY = math.random() < 0.5 and -1 or 1 }
+  if e.kind == "slide" then
+    opts.scale, opts.width, opts.flow = e.length, e.width, e.dir
+    opts.depth = math.max(0.16, math.min(0.34, e.width * 0.6 + 0.10))
+  else
+    opts.scale, opts.width = e.size, e.size
+    opts.depth = math.max(0.16, math.min(0.34, e.size * 0.6))
+    if e.dir then opts.flow = e.dir else opts.rot = math.random() * 2 * math.pi end
+  end
+  wear.painted = wear.painted + 1
+  enqueueStamp(e.centre, normal, opts, vid)
+end
+
+-- Load one brush set with an invisible stamp inside the cabin, so a crash
+-- never pays the first-use texture load. One set per call.
+local function warmOne(vid)
+  if not wear.warm then
+    wear.warm = {}
+    for _, family in pairs(WEAR) do
+      for _, tier in ipairs(family) do
+        for _, brush in ipairs(tier) do
+          if not wear.warmed[brush.c] then
+            wear.warmed[brush.c] = true
+            wear.warm[#wear.warm + 1] = brush
+          end
+        end
+      end
+    end
+  end
+  local brush = table.remove(wear.warm)
+  if not brush then return false end
+  local box = getSpawnAabb()
+  local centre = box and (box.minExtents + box.maxExtents) * 0.5 or vec3(0, 0, 0.5)
+  wear.warmedCount = wear.warmedCount + 1
+  enqueueStamp(vec3(centre.x, centre.y, centre.z), vec3(1, 0, 0), { wear = true, warm = true,
+    colorTex = brush.c, metalTex = brush.m, roughTex = brush.r, r = 1, g = 1, b = 1, a = 0.004,
+    scale = 0.02, width = 0.02, depth = 0.02, rot = 0, noJitter = true }, vid)
+  return true
+end
+
+-- Once per frame: when the painter is idle, paint the next due patch, or
+-- failing that warm one brush set (every few frames, after setup settles).
+wear.pump = function()
+  wear.frame = wear.frame + 1
+  if hasPendingWork() or #bakeQueue > 0 then return end
+  local veh = getPlayerVehicle(0)
+  if not veh then return end
+  local e = wear.agg:next(wear.now, wear.hotKey)
+  if e then
+    enqueueWear(e, veh:getId())
+    wear.kick = true
+  elseif seedDone and wear.frame % 3 == 0 and (not wear.warm or #wear.warm > 0) then
+    wear.kick = warmOne(veh:getId())
+  end
+end
+
+-- Detector batch -> patches. Impacts carry an optional world slip velocity.
+local function ingestWear(events, streams, invM, rotOnly)
+  local agg, now = wear.agg, wear.now
+  for i = 1, events and #events or 0 do
+    local e = events[i]
+    local lp = invM:mulP3F(vec3(e[1], e[2], e[3]))
+    local n = anchorNormal(lp, rotOnly:mulP3F(vec3(e[4], e[5], e[6])))
+    if e[7] == "i" then
+      local slip = e[9] and rotOnly:mulP3F(vec3(e[9], e[10], e[11])) or nil
+      if slip then slip = slip - n * slip:dot(n) end
+      agg:addImpact(lp, n, severityOf(e[8]), slip, now)
+    elseif (e[8] or 0) >= 400 then
+      -- Pressed, barely dragged: a faint chip, no direction.
+      agg:addImpact(lp, n, severityOf(e[8]) * 0.5, nil, now)
+    end
+  end
+  for si = 1, streams and #streams or 0 do
+    local points = streams[si]
+    if points and #points >= 2 then
+      local first, last = points[1], points[#points]
+      local anchor = invM:mulP3F(vec3(last[1], last[2], last[3]))
+      local nx, ny, nz = 0, 0, 0
+      for k = 1, #points do
+        local p = points[k]
+        if p[4] and p[5] and p[6] then nx, ny, nz = nx + p[4], ny + p[5], nz + p[6] end
+      end
+      local n = anchorNormal(anchor, rotOnly:mulP3F(vec3(nx, ny, nz)))
+      local move = vec3(last[1] - first[1], last[2] - first[2], last[3] - first[3])
+      local dist = move:length()
+      local dir = rotOnly:mulP3F(move)
+      dir = dir - n * dir:dot(n)
+      local dlen = dir:length()
+      if dlen > 1e-4 then
+        agg:addSlide(anchor, n, dir * (1 / dlen), math.min(dist, 4), now)
+      else
+        agg:addImpact(anchor, n, 0, nil, now)
+      end
+    end
+  end
+end
+
 -- (G) Single per-frame entry point from scratches_detect. The vehicle sends
 -- its id, the frame's discrete events and every slide stream that ended this
 -- frame in ONE call. World -> vehicle-local conversion happens here, once per
@@ -2234,6 +2391,12 @@ M.ingest = function(vid, events, streams)
 
   local invM    = veh:getRefNodeMatrix():fullInverse()
   local rotOnly = invM:copy(); rotOnly:setColumn(3, vec3(0, 0, 0))
+  if wear.on then
+    local ti = clockhp()
+    ingestWear(events, streams, invM, rotOnly)
+    perfAdd(ti, "ingestMsTotal", "ingestMsMax", "ingestCalls")
+    return
+  end
 
   if events then
     for i = 1, #events do
@@ -2255,6 +2418,9 @@ M.ingest = function(vid, events, streams)
     end
   end
 end
+
+-- Wheel fling throw angles, degrees above horizontal, one per deposit in turn.
+local FLING_LIFT = { 70, 35, 52, 84, 24, 60 }
 
 -- Contact positions are a conservative splash proxy, not a fluid simulation.
 -- Existing projection/hull aiming and all scheduler budgets remain in use.
@@ -2283,13 +2449,16 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
         if e[1] ~= "snow" then
           local velocity = veh:getVelocity()
           local localVelocity = rot:mulP3F(velocity)
-          -- Relative airflow opposes travel. Side-panel spray rises from the
-          -- tire; faster travel flattens the trail. Not fluid simulation.
+          -- Fling: the tread throws soil up and back. Successive deposits
+          -- step through a fan of throw angles, so a wheel builds a rooster
+          -- tail rather than one stripe; faster travel flattens and lengthens
+          -- it. A placement rule, not a fluid simulation.
           spraySpeed = math.abs(localVelocity.y)
           if spraySpeed > 0.5 then
-            flow = vec3(0, localVelocity.y > 0 and -1 or 1,
-                        math.max(0.08, 0.28-spraySpeed*0.008)):normalized()
-            trailLength=1.8+math.min(spraySpeed,20)*0.05
+            local phase = surfaceState.deposits % 6
+            local lift = math.rad(math.max(16, FLING_LIFT[phase + 1] - spraySpeed * 1.1))
+            flow = vec3(0, (localVelocity.y > 0 and -1 or 1) * math.cos(lift), math.sin(lift))
+            trailLength = math.min(1.45, 0.6 + spraySpeed * 0.05) * (0.85 + 0.05 * (phase % 4))
           end
         end
         local box = getSpawnAabb()
@@ -2305,13 +2474,12 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
           local phase = surfaceState.deposits % 8
           p.x = side > 0 and hi.x or lo.x
           if flow then
-            -- One elongated projection spans adjacent panels. The authored
-            -- heads sit left of texture center; move that center downstream
-            -- so the spray starts near the wheel, not ahead of it. Do not
-            -- restart the brush at a door seam or clamp its tail to a panel.
-            p.y=p.y+flow.y*trailLength*0.28+(phase%4-1.5)*0.08
-            p.z=lo.z+(hi.z-lo.z)*(0.32+math.floor(phase/4)*0.06)
-              +flow.z*trailLength*0.28
+            -- The fan's source is 7 % in from the brush's left edge
+            -- (tools/generate_fling.py). Put it at the back of the tyre, just
+            -- above the ground, and let the throw cross panel seams freely.
+            local back = flow.y > 0 and 1 or -1
+            p.y = p.y + back * 0.18 + flow.y * trailLength * 0.43
+            p.z = lo.z + 0.18 + flow.z * trailLength * 0.43
           else
             local inward=p.y>(lo.y+hi.y)*0.5 and -0.65 or 0.65
             p.y=math.max(lo.y+0.3,math.min(hi.y-0.3,p.y+inward+(phase%4-1.5)*0.24))
@@ -2335,11 +2503,12 @@ M.ingestSurface = function(vid, samples, wet, supported, fraction)
         enqueueStamp(p, normal, {
           soil=true,r=c[1],g=c[2],b=c[3],a=0.95,
           scale=trailLength or 0.65,
-          width=flow and 0.48 or nil,flow=flow,skipMetal=true,noJitter=true,
+          width=flow and trailLength*0.5 or nil,flow=flow,skipMetal=true,noJitter=true,
           depth=projectionDepth,
           dist=flow and trailLength*2.2 or nil,
+          flipY=flow and (surfaceState.deposits%2==0 and 1 or -1) or nil,
           colorTex="/art/dynamicDecals/textures/soil_"..e[1]..
-            (flow and ("_splash_"..(surfaceState.deposits%2+1)..".png") or "_coverage.png"),
+            (flow and ("_fling_"..(surfaceState.deposits%(e[1]=="mud" and 3 or 2)+1)..".png") or "_coverage.png"),
           rot=flow and 0 or (surfaceState.deposits%4)*math.pi/2},vid)
       end
     end
@@ -2678,6 +2847,8 @@ M.resetPaintStats = function()
   stampStats.framesTicked = 0
   for k in pairs(perfStats) do perfStats[k] = 0 end
   syntheticAnchorCount = 0
+  wear.painted = 0
+  for k in pairs(wear.agg.counts) do wear.agg.counts[k] = 0 end
   table.clear(nativeEvents)
   for _,p in pairs(nativeProfiles) do table.clear(p.bins);p.count=0;p.maxMs=0 end
   log('I', logTag, "paint stats reset")
@@ -2726,13 +2897,17 @@ M.getStats = function()
     stamp  = stamp,
     perf   = perf,
     detect = lastDetectStats,
-    queue  = { stamps = #pendingStampInputs, jobs = #jobQueue, bake = #bakeQueue },
-    config = { aggregateCap = AGGREGATE_PER_FRAME_CAP, clusterRadius = CLUSTER_RADIUS,
+    queue  = { stamps = #pendingStampInputs, jobs = #jobQueue, bake = #bakeQueue,
+               patches = wear.agg:pending() and 1 or 0 },
+    config = { contactPatches = wear.on, patchInterval = wear.agg.interval, aggregateCap = AGGREGATE_PER_FRAME_CAP, clusterRadius = CLUSTER_RADIUS,
                projBudget = MAX_PROJECTS_PER_FRAME, flushInterval = FLUSH_INTERVAL,
                layerBudget = MAX_LAYERS_PER_FLUSH, bakeBudget = BAKE_LAYERS_PER_FRAME,
                damageWidth = adapter and adapter:getDamageWidth() or 0, coverageCoalescing=coverage~=nil, panelGrouping=panelGrouping,
                fullRateCombine = fullRateCombine, syntheticAnchors = syntheticAnchors },
     anchors = { synthesized = syntheticAnchorCount },
+    wear = { enabled = wear.on, painted = wear.painted, warmed = wear.warmedCount,
+             warmPending = wear.warm and #wear.warm or -1, pending = wear.agg:pending(),
+             patches = wear.agg:stats() },
   }
 end
 
@@ -2760,6 +2935,13 @@ M.setCoverageCoalescing = function(enabled)
   else coverage=nil end
 end
 M.setPanelGrouping = function(enabled) panelGrouping=enabled and true or false end
+-- true (default): contacts fold into patches, one rich decal per patch, at
+-- most one bake per `interval` seconds. false: the legacy one-decal-per-contact
+-- pipeline (kept for comparison and for the scheduler checks).
+M.setContactPatches = function(enabled, interval)
+  wear.on = enabled and true or false
+  wear.agg = patchModule.new({ interval = tonumber(interval) })
+end
 -- true (default): projection-free anchors from the detector's contact points.
 -- false: legacy native projection per job. Applies to work captured afterwards.
 M.setSyntheticAnchors = function(enabled) syntheticAnchors=enabled and true or false end

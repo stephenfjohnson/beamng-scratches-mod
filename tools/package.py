@@ -40,7 +40,8 @@ INCLUDE_FILES = ["LICENSE"]
 
 # Brush textures need a sidecar to load; these are ordinary material maps and
 # do not (see restoreFactoryMR in paint.lua).
-SIDECAR_EXEMPT = {"_paint_roughness.png", "soil_relief_detail.normal.png"}
+SIDECAR_EXEMPT = {"_paint_roughness.png", "soil_relief_detail.normal.png",
+                  "w2_grit.normal.png", "w2_grit_o.data.png"}
 
 # Never ship editor/OS debris even from inside an included tree.
 EXCLUDE_NAMES = {".DS_Store", "Thumbs.db", "desktop.ini", ".gitkeep"}
@@ -114,7 +115,7 @@ def run_harness(luac: str) -> None:
 # the mod starts using a new engine global.
 LUA_STDLIB_GLOBALS = {
     "_G", "assert", "debug", "error", "ipairs", "math", "next", "os", "pairs",
-    "pcall", "print", "select", "string", "table", "tonumber", "tostring",
+    "pcall", "print", "select", "setmetatable", "string", "table", "tonumber", "tostring",
     "type", "unpack", "xpcall",
 }
 ENGINE_GLOBALS = {

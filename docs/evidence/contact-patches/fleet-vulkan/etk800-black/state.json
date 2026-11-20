@@ -1,0 +1,33 @@
+{
+  "model": "etk800",
+  "paint": "black",
+  "part": "etk800_skin_brushedtrim",
+  "source": "etk800.skin.brushedtrim",
+  "keys": [
+    "etk800",
+    "etk800_extra"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261120-111504_sideslide_fleet-etk800-black/report.md",
+    "contacts": "1682",
+    "passed": "926",
+    "impacts": "36",
+    "streams": "104",
+    "stamps": "42",
+    "projections": "42",
+    "bakes": "42",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "0",
+    "layersBaked": 42,
+    "bakeMsMax": 6.2,
+    "painterMsMax": 6.3,
+    "frameMsP95": 15.5,
+    "frameMsMax": 32.1,
+    "framesOver25ms": 1,
+    "slidePatches": 16,
+    "impactPatches": 21
+  }
+}

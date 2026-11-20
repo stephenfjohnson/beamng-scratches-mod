@@ -7,10 +7,10 @@ snow and it builds up behind the wheels. Drive into deep water and it washes
 off, while the scratches stay. Every mark comes from a physics contact that
 actually happened and is baked into the car's paint without touching its livery.
 
-![Scrapes, mud splashes, snow and washing, all captured in game](docs/showcase/hero.jpg)
+![Scrapes, mud fling, snow and washing, all captured in game](docs/showcase/hero.jpg)
 
 > **Status: development preview.** Everything on this page runs in game today on
-> BeamNG.drive 0.40.5.0, on **all 38 stock cars, trucks and buses that ship
+> BeamNG.drive 0.40.6.0, on **all 38 stock cars, trucks and buses that ship
 > Dynamic Textures**, with any paint colour or factory livery.
 > **[Download v0.2.0-preview](https://github.com/stephenfjohnson/beamng-scratches-mod/releases/tag/v0.2.0-preview)** (MIT licensed), or
 > [build the ZIP yourself](#packaging-for-release).
@@ -44,27 +44,37 @@ rebuilds them.
 
 ### Scrapes that follow the slide
 
-![Dark ETK 800 before and after one sideslide](docs/showcase/scrapes-before-after.jpg)
+![Black ETK 800 before and after one sideslide](docs/showcase/scrapes-before-after.jpg)
 
-Sustained sliding contact is tracked as a stream. Each contact point becomes a
-scrape band aligned with the direction of travel, 30–70 cm long, so neighbouring
-contacts join into one continuous rash instead of a row of stickers. Each band is
-layered like real paint: scuffed clearcoat haze, primer grey, then bare metal on
-harder or longer drags. Four variants per brush family avoid visible repeats,
-and on light paint the palette shifts darker so damage contrasts the right way.
+Sustained sliding contact is tracked per body node, then folded into **contact
+patches**: an oriented box on one panel that grows over every node scraping
+there. A patch is painted as one decal sized to that extent and aligned with the
+slide, so a sideslide leaves long continuous bands with combed ends instead of a
+scatter of small marks. A patch is worn in three tiers by how far it has been
+dragged: clear-coat hairlines, primer ground through along the streaks, then
+bands of bare metal inside a primer margin.
+
+![The scraped flank up close](docs/showcase/scrapes-closeup.jpg)
+
+Bare metal is really metallic and primer is matte: tier 2 and 3 brushes carry
+their own metallic and roughness maps, and a fine tiling detail layer adds
+abrasion relief and specks of surviving paint that the 1.5 mm canvas can't hold.
+On plain light paint the exposed tone is darker so damage contrasts the right way.
+
+![Door detail on a liveried rally car: brushed metal, primer margins, paint specks](docs/evidence/contact-patches/after-sideslide-detail.jpg)
 
 ### Impact chips and gouges
 
-![Front fender before and after a rollover](docs/showcase/impacts-before-after.jpg)
+![Black ETK 800 before and after being dropped on its roof](docs/showcase/impacts-before-after.jpg)
 
-Single hard hits past a normal-force threshold stamp chipped paint, plus a gouge
-on harder hits, sized by the impact force. Hits in the same frame are clustered
-into one job, so a rollover leaves a scatter of chips and dings exactly where
-the body struck the ground.
+Hard hits past a normal-force threshold gather into impact patches: every hit
+within about 17 cm becomes one cluster of flaked paint, sized by how hard and how
+often the spot was struck, with bare-metal cores on heavier hits. A glancing hit
+uses a scored brush dragged along the slip direction the detector reports.
 
 ### Your paint and livery stay underneath
 
-![Stock ETK Police livery before and after a slide](docs/showcase/livery-before-after.jpg)
+![Stock ETK Polizei livery before and after a slide](docs/showcase/livery-before-after.jpg)
 
 The body adapter clones the car's own body materials per vehicle and appends a
 damage stage and a soil stage. The original paint, palette, normal and detail
@@ -82,34 +92,39 @@ override, your own Dynamic Textures editor design) is skipped, never overwritten
 ![Six stock vehicles in six paint colours, each after one sideslide](docs/showcase/fleet-paints.jpg)
 
 The same crash on six different bodies and paints. Each car keeps its own factory
-finish; the scrapes take their colour from the paint layers underneath.
+finish. Exposed primer and metal read light on dark paint and darker on plain
+light paint.
 
 ![Four factory liveries after one sideslide](docs/showcase/fleet-liveries.jpg)
 
-Factory liveries survive too: two-tones, race stripes and the city bus's Transit
-artwork stay intact under the damage. Damage on busy liveries is subtler than on
-plain paint.
+Factory liveries survive too: two-tones, police and rally artwork and the city
+bus's Transit graphics are untouched wherever the car wasn't scraped. Damage on
+white livery panels is subtler than on plain paint.
 
-![Gunmetal Sunburst before and after one sideslide](docs/showcase/fleet-before-after.jpg)
+![Green Moonhawk before and after one sideslide](docs/showcase/fleet-before-after.jpg)
 
 In a sweep of every stock vehicle, **38 of 38** that ship Dynamic Textures attach
-to the adapter ([survey](docs/evidence/adapter-survey/survey.json)). The ten above
-were crashed and checked: every clone matched its source material in every
-original stage, with 0–2.4% of marks missed
-([fleet evidence](docs/evidence/showcase/fleet/README.md)). Mud, snow, washing and
-wet gloss use the same appended stages on every vehicle, but so far they've only
-been driven live on the ETK 800 and through Gridmap mud on a Covet.
+to the adapter ([survey](docs/evidence/adapter-survey/survey.json)). With contact
+patches, ten were crashed on Vulkan and six on D3D12: every clone matched its
+source material in every original stage and no mark was missed
+([Vulkan](docs/evidence/contact-patches/fleet-vulkan/fleet.json),
+[D3D12](docs/evidence/contact-patches/fleet-d3d12/fleet.json)). Mud, snow, washing
+and wet gloss use the same appended stages on every vehicle, but so far they've
+only been driven live on the ETK 800 and through Gridmap mud on a Covet.
 
 ### Mud, dirt and snow build up as you drive
 
-![Tapered mud splashes on the Police ETK](docs/showcase/mud-splashes.jpg)
+![Mud flung up and back from the wheels of an ETK 800](docs/showcase/mud-fling.jpg)
 
 Rolling over real `MUD`, `DIRT` or `SNOW` ground materials deposits soil around
 the wheels and lower panels. No wheelspin is needed, and stationary wheelspin adds
-nothing. Mud and dirt land as droplet heads with tapered tails aligned against
-travel. Faster driving gives longer, flatter trails, and reversing flips them.
-Snow lands as soft coverage patches. Soil lives on its own layer above the paint
-and damage, capped at 96 deposits per cycle and scheduled with the scratches.
+nothing. Mud and dirt are **flung**: each deposit is a fan thrown up and back from
+the rear of the tyre, with drops stretched along their flight. Successive deposits
+step through throw angles from about 25° to 85°, so a wheel builds a rooster tail
+up the panel behind it; faster driving flattens and lengthens the throw, and
+reversing flips it. Snow lands as soft coverage patches. Soil lives on its own
+2048×1024 layer above the paint and damage, capped at 96 deposits per cycle.
+(The [earlier flat splashes](docs/showcase/mud-splashes.jpg) are what this replaced.)
 
 ![Snow buildup on a dark ETK](docs/showcase/snow.jpg)
 
@@ -117,8 +132,9 @@ and damage, capped at 96 deposits per cycle and scheduled with the scratches.
 
 ![Before: mud stopped at the rear door. After: one splash crosses every panel](docs/showcase/panel-seams-before-after.jpg)
 
-Each wheel splash is a single elongated projection that spans neighbouring
-panels, oriented in body space rather than restarted per panel. The ETK's rear
+Each wheel fling is a single projection that spans neighbouring panels,
+oriented in body space rather than restarted per panel (the image predates the
+fling artwork). The ETK's rear
 quarters use a different material from the doors. The adapter now clones and
 binds that material too, so mud no longer stops dead at the rear door.
 
@@ -135,12 +151,12 @@ splash captures above predate this change, so they still show the orange tint.
 
 ### Soil that catches the light
 
-![Close-up: scrape streaks under lumpy mud on the Police livery](docs/showcase/closeup-relief.jpg)
+![Mud flung over fresh scrapes on the Polizei livery](docs/showcase/closeup-relief.jpg)
 
 The soil layer carries a masked detail normal, so lumps and grain pick up
 highlights while the factory body normal stays intact. The relief fades with the
-soil when it washes off. This close-up also shows the white scrape streaks from
-an earlier slide sitting under the mud, with the Police artwork untouched.
+soil when it washes off. This car slid first and drove through mud afterwards:
+the scrapes stay on their own layer under the fling.
 
 ### Water washes soil off; scratches stay
 
@@ -176,11 +192,32 @@ abrasive. The contact's ground material decides which applies.
   | Vulkan, contact to finished mark | 1,012 ms | **318 ms** |
   | D3D12, native call | 443.8 ms | 446–447 ms ([open](TODO.md#release-blockers)) |
 
+- **One rich decal per contact patch.** Every baked layer costs a full-canvas
+  pass in the engine, so the painter no longer bakes a decal per contact report.
+  Contacts fold into patches and at most one decal is baked every 70 ms. The
+  engine keeps only about two brush textures loaded and a reload costs time in
+  proportion to the image size, so brushes are small (512×256) and the painter
+  reuses the loaded brush for the next patch of the same kind. Measured on
+  BeamNG 0.40.6.0, RTX 3090, 4K, one 14 m/s sideslide in a fresh process:
+
+  | One sideslide | Before (Vulkan) | Now, Vulkan (6 runs) | Now, D3D12 (3 runs) |
+  | --- | ---: | ---: | ---: |
+  | Layers baked | 301 | 46–50 | 46–58 |
+  | Bake time in total | 623 ms | 78–101 ms | 314–426 ms |
+  | Worst painter frame | 81.7 ms | **5.0–8.0 ms** | 10.0–15.1 ms |
+  | Frame time p95 | 22.5 ms | 13.3–16.0 ms | 14.4–18.2 ms |
+  | Worst frame | 631 ms | 25–35 ms | 26–35 ms, and one 319 ms |
+
+  Rare long frames remain and are not explained: on Vulkan one 562 ms and one
+  638 ms GPU-side pause in 22 painted runs (none in six runs with painting off),
+  and on D3D12 one 309 ms bake and one 319 ms game-Lua frame in thirteen runs.
+  [All runs](docs/evidence/contact-patches/summary.json) and
+  [investigation 13](investigations/13-contact-patches.md).
 - **Composite only when needed.** The canvas is re-composited only on frames
   that baked or cleared, and the expensive texture-set re-bind (24–55 ms) happens
   only when the binding can actually be stale.
-- **Bounded everything.** 160 inputs, 64 queued jobs, 6 baked layers per frame,
-  96 soil deposits and per-cell repaint limits.
+- **Bounded everything.** 220 patches per kind, at most five decals per slide
+  patch and three per impact patch, one bake in flight, 96 soil deposits.
 
 Details: [investigation 12](investigations/12-synthetic-anchors.md) and the
 [measured cohorts](docs/evidence/milestone5/resumed-summary.md).
@@ -377,21 +414,22 @@ instance of the installed decal API keeps scratch clearing separate from editor
 artwork. Vehicles the adapter rejects fall back to the older `dynamicTextures`
 skin and colour-seed path when their paint slot is empty.
 
-Incoming batches become **capture jobs**: the decal layers for one cluster of
-impacts or one slide stream, captured under a synthetic camera aimed at the
-contact:
+Incoming batches feed the contact-patch aggregator (`patches.lua`, pure logic).
+When the painter is idle it takes the patch that has waited longest and bakes
+one decal for it:
 
-- **Impacts** → chipped paint (sharp flakes), plus a gouge on harder hits,
-  scaled by force. The frame's stamps are spatially clustered; each cluster is
-  one job.
-- **Slides** → a scrape band at the latest contact point, aligned with the
-  slide (the first→last movement of the contact, flattened onto the panel),
-  30–70 cm long so neighbouring contacts join into one rash. It's drawn as a
-  translucent clear-coat haze under parallel scrape lines, one brush and tone
-  per slide, in overlapping segments. Each stream is one job.
-- **Soil** → mud/dirt droplet-and-tail splashes or snow patches from rolling
+- **Impacts** → hits within ~17 cm on one panel share a patch. Its decal is a
+  chip cluster sized to the hits, in three severity tiers, or a scored brush
+  along the reported slip when the hit was glancing.
+- **Slides** → reports join a patch when they are on the same panel, slide the
+  same way and lie within 34 cm along / 15 cm across its box (up to 95 × 30 cm).
+  Its decal spans the box, aligned with the slide. A patch is repainted only when
+  it has been dragged a tier deeper or has grown past what was painted.
+- `scratches_paint.setContactPatches(false)` restores the previous
+  one-decal-per-contact pipeline for comparison.
+- **Soil** → mud/dirt flings (a fan thrown up and back) or snow patches from rolling
   wheel contacts on soft ground, tinted from the terrain under the wheel and
-  baked into a separate 1024×512 soil target that water can fade.
+  baked into a separate 2048×1024 soil target that water can fade.
 
 Damage is coloured like layered paint: scuffed clear coat (haze), primer grey,
 and bare metal on harder or longer contacts. On light paint the palette shifts
@@ -650,9 +688,14 @@ affect you:
 - **Slightly slower spawns.** Each supported vehicle gets private materials, so
   the mod clears the JBeam cache before it spawns: about +180 ms per spawn,
   traffic included.
-- **Scratches have no metal glint.** Damage reads as colour; the damage stage
-  uses fixed roughness and no metallic response, and its opacity follows the red
-  channel so very dark marks can look weak.
+- **Rare half-second pauses.** About one painted crash in ten had a single long
+  frame (0.3–0.6 s) with no painter time in it, on either renderer. Painting-off
+  controls had none, in far fewer runs. Not explained yet.
+- **Contact patches are new.** Checked on ten vehicles on Vulkan and six on
+  D3D12 with the sideslide only. The wash cycle was re-run on D3D12; snow and
+  dirt have not been driven since the damage stage and soil resolution changed.
+- **No dark marks on dark paint.** Damage opacity follows the canvas red channel,
+  so exposed material is always a grey lighter than black paint.
 - **First mud contact hitch.** The first terrain-texture read for soil tint takes
   about 99 ms; later lookups are cached (~0.03 ms).
 - **Marks don't persist.** Reset, vehicle switch, reload and editor use clear all

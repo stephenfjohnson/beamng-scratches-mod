@@ -1,0 +1,32 @@
+{
+  "model": "bluebuck",
+  "paint": null,
+  "part": "bluebuck_skin_twotone",
+  "source": "bluebuck.skin.twotone",
+  "keys": [
+    "bluebuck"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261120-111821_sideslide_fleet-bluebuck-livery/report.md",
+    "contacts": "3457",
+    "passed": "113",
+    "impacts": "17",
+    "streams": "17",
+    "stamps": "24",
+    "projections": "24",
+    "bakes": "24",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "0",
+    "layersBaked": 24,
+    "bakeMsMax": 5.5,
+    "painterMsMax": 5.5,
+    "frameMsP95": 15.0,
+    "frameMsMax": 24.3,
+    "framesOver25ms": 0,
+    "slidePatches": 10,
+    "impactPatches": 14
+  }
+}

@@ -121,6 +121,7 @@ getAllVehicles = function() return hasPlayer and {{getId=function() return 1 end
 -- Dynamic-decals projection + API mocks.
 local counters = { projects = 0, bakes = 0, bakeLayers = 0, combines = 0, apiUpdates = 0,
                    maxProjectsInFrame = 0, projectsThisFrame = 0, clears = 0 }
+counters.tex = {}
 local decalProjection = {}
 function decalProjection:projectDynamicDecals()
   counters.projects = counters.projects + 1
@@ -128,7 +129,8 @@ function decalProjection:projectDynamicDecals()
 end
 function decalProjection:getDecalData()
   return { cursorPosScreenUv = {x = 0.5, y = 0.5}, decalPos = {x = 0, y = 0, z = 0},
-    decalRotation=counters.rotation,decalScale=counters.scale }
+    decalRotation=counters.rotation,decalScale=counters.scale,
+    colorTex=counters.tex.color,metalTex=counters.tex.metallic,roughTex=counters.tex.roughness }
 end
 function decalProjection:bakeLayers(list)
   for _,layer in ipairs(list) do if layer.name=='soil' then counters.lastSoilLayer=layer end end
@@ -170,6 +172,7 @@ for _, n in ipairs({"setDecalTexturePath", "setMetallicIntensity", "setRoughness
   api[n] = function() end
 end
 api.setDecalLocalPos = function(decal) decal.cursorPosScreenUv = {x = 0.5, y = 0.5} end
+api.setDecalTexturePath = function(kind, path) counters.tex[kind]=path end
 api.setDecalRotation = function(value) counters.rotation=value end
 api.setDecalScale = function(value) counters.scale=value end
 
@@ -223,6 +226,10 @@ end
 local function projBudget() return paint.getStats().config.projBudget end
 
 paint.onExtensionLoaded()
+check(paint.getStats().config.contactPatches == true, "contact patches are the default pipeline")
+-- The scheduler checks below exercise the legacy one-decal-per-contact
+-- pipeline; contact patches are checked near the end.
+paint.setContactPatches(false)
 -- The scheduling checks below count native projection passes, so they run in
 -- the legacy projected-anchor mode; synthetic anchors are checked at the end.
 check(paint.getStats().config.syntheticAnchors == true, "projection-free synthetic anchors are the default")
@@ -561,9 +568,11 @@ for _,side in ipairs({-1,1}) do
     -- Reconstruct +texture X in the engine's surface-normal decal basis.
     local alignment=(-side*math.cos(layer.decalRotation))*sample.flowY
       -math.sin(layer.decalRotation)*sample.flowZ
-    check(alignment>0.999,'splash follows flow on side '..side..' at speed '..speed)
-    check(layer.decalScale.x>=1.8 and layer.decalScale.z<layer.decalScale.x,
-      'splash is long enough to cross panels with a bounded narrow width')
+    check(alignment>0.999,'fling follows its throw on side '..side..' at speed '..speed)
+    check(sample.flowZ>0.25 and layer.decalScale.x>=0.6 and layer.decalScale.x<=1.45
+      and math.abs(layer.decalScale.z-layer.decalScale.x*0.5)<1e-6,
+      'fling is thrown upward as a bounded 2:1 fan')
+    check(layer.colorTex:find('soil_mud_fling_',1,true)~=nil,'wheel mud uses a fling brush')
     check(layer.decalScale.y>1 and layer.decalScale.y<2,
       'soil slab reaches recessed bodywork but stays short of the vehicle centerline')
   end
@@ -814,6 +823,58 @@ paint.stampAtLocal(vec3(.9,.3,.9),vec3(1,0,0),{noJitter=true,scale=.05})
 for _=1,30 do frame(.02) end
 check(paint.getStats().perf.projectCalls==1 and paint.getStats().anchors.synthesized==0,"legacy projected anchors remain selectable for comparison")
 paint.setSyntheticAnchors(true)
+-- Contact patches: many node reports on one panel become one decal per patch,
+-- baked one layer at a time, after every brush set has been warmed while idle.
+paint.setContactPatches(true);paint.clearStamps();paint.resetPaintStats()
+bakedLayers={}
+local maxBatch=0
+local bakeBeforeCount=decalProjection.bakeLayers
+decalProjection.bakeLayers=function(self,list) maxBatch=math.max(maxBatch,#list);for _,l in ipairs(list) do bakedLayers[#bakedLayers+1]=l end;return bakeBeforeCount(self,list) end
+for _=1,150 do frame(1/60) end
+local warm=paint.getStats().wear
+local visibleWarm=false
+for _,l in ipairs(bakedLayers) do if l.name~="warm" or l.decalScale.x>0.02 then visibleWarm=true end end
+check(warm.warmed==20 and warm.warmPending==0 and #bakedLayers==20,"each wear brush set is warmed exactly once while idle ("..warm.warmed..")")
+check(not visibleWarm,"warm-up layers are tagged and too small to show")
+for _=1,60 do frame(1/60) end
+check(#bakedLayers==20,"warm-up does not repeat")
+bakedLayers={}
+-- Twelve door nodes dragged along +y, reported in four detector flushes.
+for _=1,4 do
+  local streams={}
+  for node=0,11 do
+    local y,z=-0.5+(node%6)*0.15,0.6+math.floor(node/6)*0.1
+    streams[#streams+1]={{101,y-0.3,z,-1,0,0},{101,y,z,-1,0,0}}
+  end
+  paint.ingest(playerVid,nil,streams)
+  for _=1,15 do frame(1/60) end
+end
+for _=1,120 do frame(1/60) end
+local w=paint.getStats().wear
+check(w.patches.slideSamples==48 and w.patches.slidePatches==1,"48 slide reports on one panel fold into one patch ("..w.patches.slidePatches..")")
+check(#bakedLayers>=1 and #bakedLayers<=3 and maxBatch==1,"a patch is painted as a few decals, one bake at a time ("..#bakedLayers.." layers, batch "..maxBatch..")")
+local deep=bakedLayers[#bakedLayers]
+check(deep.colorTex:find("w2_gouge_",1,true) and deep.metalTex:find("_m.png",1,true) and deep.roughTex:find("_r.png",1,true),"a long drag ends on a bare-metal brush with its own metal and roughness maps")
+check(deep.decalNorm.x==1 and math.abs(deep.decalPos.x-1)<1e-6,"patch decal is anchored on the panel with an outward normal")
+check(deep.decalScale.x>=0.9 and deep.decalScale.x<=1.35 and deep.decalScale.z>=0.15 and deep.decalScale.z<=0.44 and deep.decalScale.y<=0.34,"patch decal spans the contact extent with a bounded depth")
+check(not w.pending and paint.getStats().queue.bake==0,"patch queue drains")
+local settled=#bakedLayers
+paint.ingest(playerVid,nil,{{{101,-0.4,0.6,-1,0,0},{101,-0.1,0.6,-1,0,0}}})
+for _=1,90 do frame(1/60) end
+check(#bakedLayers==settled,"scraping an already bare patch bakes nothing more")
+-- Impacts: a burst on one spot is one chip decal; a glancing hit is scored along its slip.
+bakedLayers={}
+paint.ingest(playerVid,{{100.3,-1.2,1.8,0,0,-1,"i",3000,0,0,0},{100.33,-1.22,1.8,0,0,-1,"i",5000,0,0,0},{100.3,-1.18,1.8,0,0,-1,"i",4000,0,0,0}},nil)
+for _=1,60 do frame(1/60) end
+check(#bakedLayers==1 and bakedLayers[1].colorTex:find("w2_chip_",1,true),"an impact burst on one spot is a single chip decal")
+check(bakedLayers[1].decalNorm.z>0.99,"roof impact gets an outward normal that still defines a decal basis")
+bakedLayers={}
+paint.ingest(playerVid,{{100.3,1.5,1.8,0,0,-1,"i",9000,0,6,0}},nil)
+for _=1,60 do frame(1/60) end
+check(#bakedLayers==1 and bakedLayers[1].colorTex:find("w2_score_",1,true),"a glancing impact uses a scored brush aligned to its slip")
+paint.clearStamps()
+check(paint.getStats().wear.patches.slidesLive==0 and paint.getStats().wear.patches.impactsLive==0,"reset forgets every patch")
+decalProjection.bakeLayers=bakeBeforeCapture
 passes = passes + dofile("tools/sim/adapter_harness.lua")
 passes = passes + dofile("tools/sim/soil_color_harness.lua")
 

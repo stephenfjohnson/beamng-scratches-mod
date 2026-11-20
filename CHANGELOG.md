@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased — contact patches: realistic scrapes, no crash hitching (Vulkan)
+
+Measured on BeamNG 0.40.6.0, Vulkan and D3D12
+([numbers](docs/evidence/contact-patches/summary.json),
+[investigation 13](investigations/13-contact-patches.md)). The wash cycle was
+re-run on D3D12; snow and dirt have not been driven since these changes.
+
+- New `patches.lua`: contacts fold into slide and impact patches, and each patch
+  is baked as one decal sized to its extent. One sideslide bakes 47 layers
+  instead of 301; the worst painter frame drops from 81.7 ms to 16.0 ms and the
+  631 ms stall did not recur in eight runs.
+- Brush textures: the engine keeps about two loaded and a reload costs time in
+  proportion to pixel count. Brushes are now 512×256 (chips 256×256), the
+  painter reuses the loaded brush for the next patch of the same kind, and a
+  patch needing that brush may jump the queue by up to 0.35 s. Worst painter
+  frame in a sideslide: 5–8 ms on Vulkan (six fresh-process runs), 10–15 ms on
+  D3D12. The spawn-time warm-up stays for the one-time ~8 ms first load per file.
+- **Mud and dirt fling.** Wheel deposits are fans thrown up and back from the
+  rear of the tyre (`tools/generate_fling.py`), stepping through throw angles so
+  a wheel builds a rooster tail; flatter and longer when faster. Replaces the
+  horizontal splashes. Soil target raised to 2048×1024.
+- Plain light paint shows exposed material at 0.46 grey (0.30 read as black);
+  six scored-chip brushes instead of two.
+- Checked on ten vehicles on Vulkan and six on D3D12: every clone preserves its
+  original stages. `showcase_fleet.py --out` and timing columns.
+- README showcase re-shot with the new look (hero, scrapes, impacts, livery,
+  fleet grids, mud over scrapes, wash cycle); `tools/make_showcase.py` builds it
+  from `docs/evidence/contact-patches/`.
+- Not fixed: about one painted crash in ten has a single 0.3–0.6 s frame with no
+  painter time in it (both renderers); D3D12 still has its occasional ~310 ms bake.
+- New `w2_*` brushes from `tools/generate_wear.py`: three slide tiers and three
+  chip tiers plus scored chips, with metallic and roughness maps from tier 2.
+- Damage stage reads per-pixel metallic and roughness from the decals, uses
+  opacity factor 1 (1.6 overshot the layer blend), and adds static abrasion
+  relief and paint-speck break-up detail maps. Soil stage is unchanged.
+- Detector sends the slip velocity with each impact so glancing hits are scored
+  along it.
+- `setContactPatches(false)` keeps the previous pipeline; 394 mock checks.
+
 ## v0.2.0-preview — 2026-11-15: material-preserving adapter for every vehicle
 
 ZIP-only install, crash, mud and uninstall tested in game

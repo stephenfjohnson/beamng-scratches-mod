@@ -525,8 +525,13 @@ local function onScrapeContact(id1, pos, normal, nodeVel, perpVel, slipVec, slip
         -- (I) Pass normalForce so the GE synth camera can adapt distance to
         -- impact severity — heavy hits deform panels enough that a close
         -- camera plunges into the dent instead of grazing the outer edge.
+        -- The slip velocity orients a glancing blow's marks (0,0,0 if unusable).
+        local sx, sy, sz = 0, 0, 0
+        if slipVec and finite(slipVec.x) and finite(slipVec.y) and finite(slipVec.z) then
+          sx, sy, sz = slipVec.x, slipVec.y, slipVec.z
+        end
         pendingDetectEvents[#pendingDetectEvents + 1] = {
-          pos.x, pos.y, pos.z, normal.x, normal.y, normal.z, "i", normalForce,
+          pos.x, pos.y, pos.z, normal.x, normal.y, normal.z, "i", normalForce, sx, sy, sz,
         }
       end
       -- Fall through — slide branch can also fire on this tick.
@@ -604,8 +609,8 @@ local function flushDetectEvents()
   local parts = {}
   for i = 1, n do
     local e = pendingDetectEvents[i]
-    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%q,%.0f}",
-      e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8] or 0)
+    parts[i] = string.format("{%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%q,%.0f,%.2f,%.2f,%.2f}",
+      e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8] or 0, e[9] or 0, e[10] or 0, e[11] or 0)
   end
   local streams = table.concat(pendingStreams, ",")
   pendingDetectEvents = {}

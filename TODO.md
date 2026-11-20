@@ -22,9 +22,18 @@ not started. See [the release plan](docs/plans/release-sequence.md).
   contact (the grouping/coalescing tradeoffs are measured in
   [investigation 11](investigations/11-quality-throughput.md)); or find another
   bake path. Evidence: [investigation 12](investigations/12-synthetic-anchors.md#what-remains-per-layer-allocation-churn-inside-the-native-bake).
-- [ ] **Intermittent ~410 ms Vulkan render-phase pauses.** 2 of 18 short
-  fixtures, never inside a mod call, always within 0.4 s of mod GPU work, never
-  in painting-disabled controls. Probably the same allocation churn.
+- [ ] **Rare 0.3–0.6 s pauses with painting on.** Contact patches (2026-11-20)
+  cut layers per crash about sixfold, but the pause still happens: on Vulkan
+  562 ms (OtherRender) and 638 ms (UIpixelsToGPU) in 22 painted runs, plus one
+  91 ms; none in six painting-off runs. On D3D12 one 319 ms frame in game Lua
+  (the mod's ingest measures at most 0.3 ms). Not attributed. Next: a long
+  alternating on/off session, and the same at 2048×1024 damage resolution
+  ([investigation 13](investigations/13-contact-patches.md#rare-long-frames)).
+- [ ] **Snow and dirt after the stage change.** Mud fling was driven on both
+  renderers and the wash cycle on D3D12 (37 deposits washed to 0, 26 collected
+  again); snow and dirt were not, and soil is now 2048×1024.
+- [ ] **One 31 ms bake** in the Vulkan Scintilla run (others peak at 5–9 ms). Not
+  reproduced or explained.
 - [ ] **Long-session qualification.** No multi-hour D3D12 run yet. The Vulkan
   functional suite (lifecycle, traffic, maps, editor, washing) hasn't been
   rerun on the synthetic-anchor build; only D3D12 was
@@ -56,28 +65,35 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 
 - [ ] **Contrast on mixed liveries.** Scuffs across the white Police doors are
   still subtle ([visibility report](docs/evidence/visibility/report.md)).
-- [ ] **Metal glint.** Damage is color-only: the damage stage has fixed roughness
-  and no metallic response. Milestone 4 rejected the roughness- and
-  metallic-mask attempts
-  ([investigation 9](investigations/09-scratch-impact-polish.md)), so this needs
-  a new approach.
-- [ ] **Weak dark marks.** ETK damage opacity follows the canvas red channel,
-  so near-black marks barely show.
+- [x] **Metal glint.** The damage stage now takes metallic and roughness from
+  the decals' own maps (the canvases as material properties, not as opacity
+  masks, which is what milestone 4 rejected). Soft brush edges get a faint
+  metallic fringe because the metallic canvas clears to 1.
+- [ ] **Weak dark marks.** Damage opacity follows the canvas red channel, so
+  near-black marks can't be drawn; contact-patch brushes are full red and vary
+  only in tint, metal and roughness.
+- [ ] **Slide patches fill between contact nodes.** A patch box covers recessed
+  areas between the nodes that touched, and its decal is a straight band on a
+  curved panel.
 - [ ] **Crushed panels stay too clean.** Anchors use physics nodes, not the
   deformed visual mesh. On strongly curved or deformed panels, synthetic-anchor
   normals can be off by a few degrees.
-- [ ] **Repeated silhouettes.** Brush repeats are reduced, not eliminated.
+- [ ] **Repeated silhouettes.** Brush repeats are reduced, not eliminated:
+  eight slide and eight chip brushes, each mirrored at random.
 - [ ] **No waterline.** Washing is a uniform fade, and a partial wash weakens new
   deposits until that soil cycle is fully removed
   ([investigation 8](investigations/08-water-washing.md)).
-- [ ] **Static splashes.** Splash tails are baked art; they don't run or drip
+- [ ] **Fling is a placement rule.** Throw angle and length follow speed, but
+  the wheel-arch lip, the mud flaps and wheelspin are ignored, and nothing lands
+  on the car behind.
+- [ ] **Static splashes.** Fling drops are baked art; they don't run or drip
   after landing.
 
 ## Needs live verification
 
 - [ ] Terrain tint for **dirt and snow**, and on maps other than Gridmap v2.
   Only Gridmap mud has been checked.
-- [ ] Dirt splash artwork and **reverse-direction** splashes in game.
+- [ ] Dirt fling artwork and **reverse-direction** flings in game (mock-checked only).
 - [ ] The legacy non-ETK Dynamic Textures path on 0.40.5.0.
 
 ## Compatibility

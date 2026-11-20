@@ -1,0 +1,33 @@
+{
+  "model": "etki",
+  "paint": "white",
+  "part": "",
+  "source": "etki_main",
+  "keys": [
+    "etki",
+    "etki_modparts"
+  ],
+  "stage": 2,
+  "originalStageDifferences": 0,
+  "marks": {
+    "report": "bench/runs/20261120-112446_sideslide_fleet-etki-white/report.md",
+    "contacts": "3365",
+    "passed": "1068",
+    "impacts": "48",
+    "streams": "129",
+    "stamps": "35",
+    "projections": "35",
+    "bakes": "35",
+    "missed": "0.0%",
+    "dropped": "0",
+    "deferred": "0",
+    "layersBaked": 35,
+    "bakeMsMax": 7.4,
+    "painterMsMax": 7.5,
+    "frameMsP95": 14.3,
+    "frameMsMax": 17.6,
+    "framesOver25ms": 0,
+    "slidePatches": 13,
+    "impactPatches": 13
+  }
+}
