@@ -843,9 +843,9 @@ end
 -- projection can reach those faces, but a UV-space fill of that corner can, so
 -- the floor carries one even film whose strength steps up as the wheels roll
 -- through soil. `tick` is filled in below, once the fill exists.
-floorSoil = { on = true, cooldown = 0, steps = 6, max = 1, interval = 1.2,
+floorSoil = { on = true, cooldown = 0, steps = 6, interval = 1.2,
   gain = { mud = 0.03, dirt = 0.012, snow = 0.025 },
-  texture = "/art/dynamicDecals/textures/soil_floor_fill.png" }
+  texture = "/art/dynamicDecals/textures/soil_floor_fill_%d.png" }
 
 -- The colour to bake for a soil of colour c. The soil stage's opacity is the
 -- canvas red channel (bodyAdapter soilTone), so a dark soil baked as it is
@@ -877,7 +877,7 @@ local function updateSurface(dt)
         surfaceState.deposits = 0
         surfaceState.underDeposits, surfaceState.sillDeposits = 0, 0
         surfaceState.floorLevel, surfaceState.floorBakes = 0, 0
-        floorSoil.tone = nil
+        floorSoil.tone, floorSoil.again = nil, nil
         soilRemaining = 1
       end
     end
@@ -1734,8 +1734,11 @@ end
 -- Queued, not immediate: the stamp is projected and baked by onUpdate.
 -- Paint the soil canvas in UV space instead of projecting onto the car: one
 -- flat colour, or a texture laid over the whole canvas (scale/offset in UV).
--- This reaches texels no projection can. A texture fill maps texel for texel
--- (not stretched), ignores the colour's alpha, and replaces what was there.
+-- This reaches texels no projection can. Found in game (2026-11-20): a texture
+-- fill maps texel for texel (not stretched); the colour's alpha is ignored and
+-- the texture's alpha is the strength; and a fill whose texture path was
+-- already baked since the last clear is skipped, so a second fill needs
+-- another file.
 M.soilFill = function(r, g, b, a, texture, scaleX, scaleY, offsetX, offsetY)
   if not (ready and adapter and api) then return false, "not ready" end
   local types = api.layerTypes or {fill = 1, textureFill = 2}
@@ -1756,30 +1759,31 @@ M.soilFill = function(r, g, b, a, texture, scaleX, scaleY, offsetX, offsetY)
   return ok, err and tostring(err) or nil
 end
 
--- One film step at a time. A fill replaces the corner texel, and its strength
--- is its red channel, so the colour is scaled by the level. Each step is
--- written twice: a fill texture left unused for a few seconds is evicted, and
--- the first fill after that draws nothing (seen in game).
+-- One film step at a time. Each step has its own texture: the same block in
+-- the corner, a little more opaque, since a path already baked is skipped. A
+-- step is sent twice: a texture left unused for a few seconds is evicted and
+-- the first fill after that draws nothing; the repeat is skipped if it did.
 floorSoil.tick = function(dt)
   floorSoil.cooldown = math.max(0, floorSoil.cooldown - dt)
   if not (floorSoil.on and ready and adapter) or floorSoil.cooldown > 0 or surfaceWaterAge <= 0.5 then return end
   local want = math.min(floorSoil.steps, math.floor((surfaceState.floorLevel or 0) * floorSoil.steps + 1e-6))
-  local repeatFill = floorSoil.again and floorSoil.again == surfaceState.floorBakes
-  if want <= (surfaceState.floorBakes or 0) and not repeatFill then return end
+  local step = surfaceState.floorBakes or 0
+  local repeatFill = floorSoil.again == step and step > 0
+  if want <= step and not repeatFill then return end
   local kind = surfaceState.floorKind or "mud"
   local c = soilColor.resolve(kind, surfaceState.floorPos)
   if not c then return end
-  local r, g, b = floorSoil.ink(c)
   if repeatFill then
     floorSoil.again = nil
     floorSoil.cooldown = floorSoil.interval
   else
-    surfaceState.floorBakes = want
-    floorSoil.again = want
+    step = step + 1
+    surfaceState.floorBakes = step
+    floorSoil.again = step
     floorSoil.cooldown = 0.7
   end
-  local level = (surfaceState.floorBakes or 0) / floorSoil.steps * floorSoil.max
-  M.soilFill(r * level, g * level, b * level, 1, floorSoil.texture)
+  local r, g, b = floorSoil.ink(c)
+  M.soilFill(r, g, b, 1, string.format(floorSoil.texture, step))
 end
 
 M.stampAtLocal = function(localPos, localNormal, opts)
