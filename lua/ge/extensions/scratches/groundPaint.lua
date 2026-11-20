@@ -111,15 +111,15 @@ local function layStreak(ax, ay, az, bx, by, bz, colour, widthScale)
   local len = math.sqrt(dx * dx + dy * dy + dz * dz)
   if len < 1e-4 then return false end
   local tier = wearTier()
-  local tone, alpha = transferTone(colour), 0.62 + rnd() * 0.25
-  if tier == 1 then tone, alpha = PRIMER, 0.5 + rnd() * 0.2
-  elseif tier == 2 then tone, alpha = METAL, 0.55 + rnd() * 0.2 end
+  local tone, alpha = transferTone(colour), 0.55 + rnd() * 0.25
+  if tier == 1 then tone, alpha = PRIMER, 0.45 + rnd() * 0.2
+  elseif tier == 2 then tone, alpha = METAL, 0.5 + rnd() * 0.2 end
   -- Sideways jitter (perpendicular in the ground plane) and a varied width.
   local j = (rnd() - 0.5) * 0.03
   local px, py = -dy / len * j, dx / len * j
   local width = (0.09 + rnd() * 0.12) * (widthScale or 1)
   return addMark((ax + bx) * 0.5 + px, (ay + by) * 0.5 + py, (az + bz) * 0.5,
-    dx, dy, dz, len * (1.2 + rnd() * 0.25), width,
+    dx, dy, dz, len * (1.9 + rnd() * 0.5), width,
     tone[1], tone[2], tone[3], alpha, STREAKS[1 + math.floor(rnd() * #STREAKS) % #STREAKS])
 end
 

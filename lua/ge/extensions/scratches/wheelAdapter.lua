@@ -19,7 +19,7 @@ local skipFields = {name=true,mapTo=true,persistentId=true,parentGroup=true,
 -- "under" is the undercarriage: suspension, skid plates, exhaust, running boards.
 local GAIN = {mud={tyre=0.04,rim=0.014,under=0.03}, dirt={tyre=0.02,rim=0.007,under=0.012}, snow={tyre=0.035,rim=0.014,under=0.025}}
 local DEFAULT_TINT = {mud={0.23,0.17,0.11}, dirt={0.45,0.38,0.29}, snow={0.92,0.94,0.97}}
-local MAX_OPACITY = {tyre=0.95, rim=0.7, under=0.88}
+local MAX_OPACITY = {tyre=0.95, rim=0.7, under=1.0}
 
 local enabled = true
 local state
@@ -231,7 +231,8 @@ local function cloneWheel(vid, key, role, source)
   end
   stage(dirtStage, {baseColorMap=TEX .. "wheel_dirt.color.png", diffuseMapUseUV=0,
     baseColorFactor="0.4 0.33 0.25 1", instanceDiffuse="false", colorPaletteMap="",
-    opacityMap=TEX .. "wheel_dirt_o.data.png", opacityMapUseUV=0, opacityFactor=0,
+    opacityMap=TEX .. (role == "under" and "under_dirt_o.data.png" or "wheel_dirt_o.data.png"),
+    opacityMapUseUV=0, opacityFactor=0,
     metallicFactor=0, roughnessFactor=0.85, clearCoatFactor=0, normalMap=normal or ""})
   if scrapeStage then
     stage(scrapeStage, {baseColorMap=TEX .. "wheel_scrape.color.png", diffuseMapUseUV=0,

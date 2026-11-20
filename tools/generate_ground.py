@@ -56,7 +56,7 @@ def streak(seed, density, breakup):
     wander = (smooth_noise(rng, 1, H, 1, 40) - 0.5) * 0.35
     x = np.linspace(-1.0, 1.0, W, dtype=np.float32)[None, :]
     lane = np.clip((0.82 - np.abs(x - wander)) / 0.30, 0.0, 1.0)
-    alpha = bristle * body * lane * envelope(W, H, 0.35, 0.22)
+    alpha = bristle * body * lane * envelope(W, H, 0.35, 0.55)
     return alpha
 
 
@@ -65,7 +65,7 @@ def rubber(seed):
     grain = smooth_noise(rng, W, H, 3, 30)
     grit = smooth_noise(rng, W, H, 2, 2)
     body = np.clip(0.45 + grain * 0.55 - grit * 0.25, 0.0, 1.0)
-    return body * envelope(W, H, 0.55, 0.25)
+    return body * envelope(W, H, 0.55, 0.5)
 
 
 def chips(seed, size=128):

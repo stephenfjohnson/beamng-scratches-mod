@@ -4,6 +4,9 @@ Output (art/scratches/wheels/, no dynamic-decal sidecars needed: these are
 ordinary material textures, not brushes):
   wheel_dirt.color.png     near-white mottled albedo; the stage factor tints it
   wheel_dirt_o.data.png    red = soil coverage (caked clumps, thin film between)
+  under_dirt_o.data.png    red = undercarriage coverage: patchier, so a skid
+                           plate reads as caked lumps over a thin film rather
+                           than an even coat
   wheel_scrape.color.png   bare-metal albedo with darker gouge lines
   wheel_scrape_o.data.png  red = abrasion coverage (directional scuffs + pits)
 
@@ -49,6 +52,14 @@ def main():
     coverage = np.clip(0.42 + 0.3 * film + 0.5 * cake - 0.25 * (grain < 0.2), 0, 1)
     save("wheel_dirt_o.data.png", np.stack([coverage, coverage, coverage], -1))
     tone = 0.72 + 0.2 * grain + 0.1 * clumps - 0.12 * cake
+    # Undercarriage: big flat plates show an even coat as one flat colour, so
+    # keep the film thin and let separate caked lumps and spatter carry it.
+    lumps = periodic_noise(rng, SIZE, 1.9)
+    spatter = periodic_noise(rng, SIZE, 0.9)
+    caked = np.clip((lumps - 0.46) / 0.14, 0, 1)
+    specks = np.clip((spatter - 0.72) / 0.08, 0, 1)
+    under = np.clip(0.2 + 0.22 * film + 0.72 * caked + 0.4 * specks * (1 - caked) - 0.15 * (grain < 0.22), 0, 1)
+    save("under_dirt_o.data.png", np.stack([under, under, under], -1))
     save("wheel_dirt.color.png", np.stack([tone, tone * 0.985, tone * 0.96], -1))
 
     rng = np.random.default_rng(20261121)

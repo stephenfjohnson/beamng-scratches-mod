@@ -1025,7 +1025,7 @@ do
   local laid = ground.addStream({{0,0,0,0,0,1},{2,0,0,0,0,1}}, red)
   check(laid >= 5 and laid <= 9, "a 2 m ground scrape lays one mark per 0.25-0.4 m ("..laid..")")
   local first = ground._marks()[1]
-  check(first.dx > 0.99 and first.len > 0.25 and first.len < 0.7 and first.width < 0.25, "a ground mark lies along the scrape")
+  check(first.dx > 0.99 and first.len > 0.4 and first.len < 1.1 and first.width < 0.25, "a ground mark lies along the scrape")
   check(first.r > first.g + 0.2 and first.g > 0.1 and first.a < 0.9, "paint transfer keeps the car's hue, chalkier and translucent")
   ground.update(1/60)
   check(drawn == laid and ground.getStats().submitted == laid, "every nearby mark is submitted each frame ("..drawn..")")
