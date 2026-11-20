@@ -131,7 +131,10 @@ Sunburst rally car; wheel binding was also checked on eleven other vehicles.
   once (2 to 4 s from spawn to bound in these tests). A car you switch into
   later is not rebuilt, since that would repair it, so its wheels stay clean
   until you reload it. Traffic was not checked.
-- [ ] **D3D12** was not checked with any of this.
+- [x] **D3D12** (2026-11-20, one run each): the sideslide and the mud drive render the same
+  as on Vulkan (scrapes, muddy wheels and undercarriage, sill undersides, 251
+  ground marks). Worst bake 19.6 ms, worst painter frame 19.7 ms. Snow and the
+  belly flop were not run there.
 - [ ] Terrain tint for **dirt and snow**, and on maps other than Gridmap v2.
   Only Gridmap mud has been checked.
 - [ ] Dirt fling artwork and **reverse-direction** flings in game (mock-checked only).

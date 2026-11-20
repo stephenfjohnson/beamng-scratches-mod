@@ -6,7 +6,8 @@ Driven live on Vulkan, BeamNG 0.40.6.0: Gridmap mud strip, a simulated snow
 drive (Gridmap has no snow), the bench sideslide and a new `bellyflop` scenario,
 mostly on the Sunburst rally car, with wheel binding checked on eleven other
 vehicles. Painter worst frame with all of it on: 5.4 ms (sideslide) and 5.8 ms
-(bellyflop). Not run on D3D12.
+(bellyflop). On D3D12 the sideslide and the mud drive were run once each and
+render the same; worst bake there 19.6 ms.
 
 <!-- NEW-FEATURES-START -->
 - **Snow fling.** Snow wheel deposits take the fling path with their own powder
