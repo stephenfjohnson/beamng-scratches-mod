@@ -848,6 +848,41 @@ do
   check(wa.snapshot().applies == applies + 1, "a new wheel soil step updates materials once")
   wa.update(0.5, 0); wa.update(0.5, 0)
   check(wa.snapshot().applies == applies + 1 and resolves == 1, "unchanged wheel steps cost nothing")
+  -- Only the clone whose own values moved is reloaded, one per update.
+  do
+    local reloads, realFind = {}, scenetree.findObject
+    scenetree.findObject = function(name)
+      if type(name) == "string" and name:match("^mock_whl_") then
+        return {setField=function() end, flush=function() end,
+          reload=function() reloads[name] = (reloads[name] or 0) + 1 end}
+      end
+      return realFind and realFind(name)
+    end
+    local w2 = dofile(ROOT .. "/lua/ge/extensions/scratches/wheelAdapter.lua")
+    w2._attachEntries(7, {
+      {name="mock_whl_tyre", role="tyre", count=1, dirtStage=1},
+      {name="mock_whl_rim", role="rim", count=1, dirtStage=1, scrapeStage=2},
+      {name="mock_whl_under", role="under", count=1, dirtStage=1, scrapeStage=2}})
+    check(reloads.mock_whl_tyre == 1 and reloads.mock_whl_rim == 1 and reloads.mock_whl_under == 1,
+      "attaching writes every wheel clone once")
+    for _ = 1, 4 do w2.scrapeUnder(0.03) end
+    for _ = 1, 6 do w2.update(0.6, 0) end
+    check(reloads.mock_whl_under == 2 and reloads.mock_whl_tyre == 1 and reloads.mock_whl_rim == 1,
+      "a belly scrape reloads the undercarriage clone only")
+    w2.scrape(0, 8); w2.scrape(0, 8)
+    for _ = 1, 6 do w2.update(0.6, 0) end
+    check(reloads.mock_whl_rim == 2 and reloads.mock_whl_tyre == 1 and reloads.mock_whl_under == 2,
+      "a wheel-side scrape reloads the rim clone only")
+    for _ = 1, 3 do w2.expose("mud", function() return {0.4,0.3,0.2} end) end
+    w2.update(0.6, 0)
+    local afterOne = (reloads.mock_whl_tyre - 1) + (reloads.mock_whl_rim - 2) + (reloads.mock_whl_under - 2)
+    for _ = 1, 6 do w2.update(0.1, 0) end
+    check(afterOne == 1 and reloads.mock_whl_tyre == 2 and reloads.mock_whl_under == 3,
+      "clones that changed together are written one per update, not in one frame")
+    check(w2.classify("pickup_runningboard","") == "under" and w2.classify("sunburst2_mechanicals","") == "under"
+      and w2.classify("etk800_main","") == nil, "undercarriage material classification")
+    scenetree.findObject = realFind
+  end
   check(wa.classify("tire_01j","/vehicles/common/tires/main.materials.json") == "tyre"
     and wa.classify("wheel_26b","/vehicles/common/wheels/main.materials.json") == "rim"
     and wa.classify("pickup_steeringwheel","") == nil and wa.classify("character_primary","") == nil,

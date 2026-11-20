@@ -107,34 +107,39 @@ ground under your wheels, so grey mud leaves grey grime.
 
 ### Snow flies now
 
-<p align="center"><img src="docs/showcase/snow-fling.jpg" alt="A rally car with powder snow thrown up over the front arch and rear quarter, and snow packed on the tyres" width="100%"></p>
+<p align="center"><img src="docs/showcase/snow-fling.jpg" alt="A rally car with powder snow thrown up behind the rear wheel and over the bumper, and snow packed on the tyres and rims" width="100%"></p>
 
 Snow gets thrown up from the wheels as powder now, the way mud is, instead of
-landing in flat patches. It still packs into the arches, and the tyres go white.
+landing in flat patches. It still packs into the arches, and the tyres and rims
+go white.
 
 ### Muddy wheels, muddy belly
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/showcase/wheels-mud.jpg" alt="Mud on the tyres, rims and lower panels of a rally car parked in a mud pit"></td>
-    <td width="50%"><img src="docs/showcase/underside-mud.jpg" alt="The underside of the same car: skid plate, mud flaps and tyres caked in mud"></td>
+    <td width="50%"><img src="docs/showcase/wheels-mud.jpg" alt="Mud caked on the tyres and dusting the rims of a rally car parked in a mud pit"></td>
+    <td width="50%"><img src="docs/showcase/underside-mud.jpg" alt="The underside of the same car: skid plate, mud flaps and tyres caked in mud, with a muddy strip under each sill"></td>
   </tr>
   <tr>
     <td valign="top"><b>Wheels and tyres get dirty.</b> Tyres cake up fast, rims take a lighter dusting, and both rinse off in water with the rest of the car. Drag a wheel along on its side and the rim gets scuffed.</td>
-    <td valign="top"><b>So does the underside.</b> Skid plates, suspension, exhaust, mud flaps and running boards pick up mud as you drive. In deep mud it also cakes along the sills. Bottom out and the belly scrapes.</td>
+    <td valign="top"><b>So does the underside.</b> Skid plates, suspension, exhaust, mud flaps and running boards pick up mud as you drive, and it cakes under the sills. In deep mud it builds up along them too. Bottom out and the belly gets scuffed.</td>
   </tr>
 </table>
 
+Mud is also darker now. It used to be the colour of the dry ground, which was
+hard to see on bright paint. Wet mud is darker than the dirt it came from.
+
 ### You leave paint behind
 
-<p align="center"><img src="docs/showcase/ground-paint.jpg" alt="Grey and paint-coloured streaks left on the concrete beside a car that just slid on its side" width="520"></p>
+<p align="center"><img src="docs/showcase/ground-paint.jpg" alt="Streaks of blue paint left on the concrete along the path a blue rally car just slid down on its side" width="100%"></p>
 
 Scrape along the road and the road keeps some of it: streaks of your paint, then
 primer and bare metal as the panel wears through. Wheels dragged on their sides
 leave marks too. The marks fade after a few minutes.
 
-These four are fresh. They have been driven on one car so far, so expect rough
-edges. The [known issues](docs/known-issues.md) page says what is still missing.
+These are fresh. They have been driven on Vulkan on a handful of cars, with the
+snow fed in by hand because the test map has none. The
+[known issues](docs/known-issues.md) page says what is still missing.
 <!-- NEW-FEATURES-END -->
 
 ## Install

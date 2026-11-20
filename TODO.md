@@ -92,34 +92,46 @@ not started. See [the release plan](docs/plans/release-sequence.md).
 ## Needs live verification
 
 Added 2026-11-20 with snow fling, the wheel and undercarriage overlay, underside
-scrapes and ground transfer. All four were seen working once on the Sunburst
-rally car on Vulkan; none has been measured.
+scrapes and ground transfer. Driven on Vulkan, BeamNG 0.40.6.0, mostly on the
+Sunburst rally car; wheel binding was also checked on eleven other vehicles.
 
-- [ ] **Belly scrapes in game.** Underside patches and low-part contacts pass the
-  harness but no car has been bottomed out with them. A sideslide reports zero
-  underside contacts, as expected.
-- [ ] **The painted floor pan takes no canvas marks.** Soil stamped straight up
-  at the Sunburst's floor never shows, on either side of the skid plate. The
-  underside deposits are still baked and spend soil budget. Find out whether the
-  floor is outside the Dynamic Textures UV layout on every car, and drop those
-  deposits if so. The undercarriage material overlay is what shows underneath.
-- [ ] **Undercarriage overlay is uniform.** One strength for every undercarriage
-  material, picked by name (`mechanical`, `skidplate`, `exhaust`, `suspension`,
-  `rallyparts`, `runningboard`, `mudflap` ...). At full strength the skid plate
-  is evenly caked. Engine-bay parts on the same material get dirty too.
-- [ ] **Snow fling on real snow.** Gridmap has no snow; the capture fed snow
+- [ ] **Belly scrapes are counted, not yet seen.** The `bellyflop` bench
+  scenario (`tools/bench.py run bellyflop`) grounds the car: 52 underside
+  contacts, 40 patches painted, undercarriage abrasion at step 4 of 10. From
+  below the skid plate looks no different. Canvas marks can only land on
+  exterior panels (see the next item), and the abrasion overlay is grey on a
+  grey plate. Needs a car with painted bumper and sill undersides in view, and
+  probably a stronger abrasion look.
+- [x] **Why the painted floor stays clean.** A car's skin UV layout holds
+  exterior panels only (checked against `sunburst2_skin_UVs.png`), so nothing
+  projected at the floor pan can show. Underside soil now goes under the sills
+  instead, where a thin slab paints the sill's underside and bottom edge; the
+  undercarriage material overlay covers the rest.
+- [ ] **Undercarriage parts are found by name** (`mechanical`, `skidplate`,
+  `exhaust`, `suspension`, `rallyparts`, `runningboard`, `mudflap` ...). The
+  ETK 800 and the city bus have no material that matches, so only their wheels
+  get dirty. Engine-bay parts that share a matched material get dirty too.
+- [ ] **Snow fling on real snow.** Gridmap has no snow; the captures fed snow
   samples at the wheel positions of a moving car. Drive it on a snow map.
-- [ ] **Sill bands in deep mud** were not seen: Gridmap's mud strip is shallow.
-- [ ] **Ground marks look stamped.** Short dashes with square ends at speed, and
-  mostly primer and metal grey on a liveried car, whose base paint is not the
-  livery colour. They are redrawn every frame (up to 400); cost not measured.
-- [ ] **Wheel overlay first spawn.** Wheel materials are only known after the
-  first build, so the car is rebuilt once to bind the clones. Measure it, and
-  check traffic and vehicle switching.
+- [ ] **Sill bands in really deep mud.** Seen only with the deep flag fed in by
+  hand; Gridmap's mud strip is too shallow to set it. Sill and underside
+  heights now come from the car's own rest pose (Sunburst 0.26 m, D-Series
+  0.41 m).
+- [ ] **Mud on the body is thin at low speed.** Ten seconds through the mud
+  strip at 5 m/s leaves speckle on the arches and little on the doors, while
+  the tyres are caked. The throw grows with speed; the amount may want a boost.
+- [ ] **Ground marks use the car's base paint**, so a liveried panel leaves the
+  colour under its livery. Marks are also laid on loose ground (dirt, sand,
+  gravel), where paint transfer is unlikely.
+- [ ] **Ground mark cost.** Marks are resubmitted every frame while they live
+  (four minutes): submitting 225 costs 0.25 ms in the engine, plus the Lua loop.
+  Up to 1200 marks. Not measured at the cap.
+- [ ] **Wheel overlay needs one rebuild per new car.** A model's wheel materials
+  are only known after its first build, so a freshly spawned car is rebuilt
+  once (2 to 4 s from spawn to bound in these tests). A car you switch into
+  later is not rebuilt, since that would repair it, so its wheels stay clean
+  until you reload it. Traffic was not checked.
 - [ ] **D3D12** was not checked with any of this.
-- [ ] **Other vehicles.** Tyre, rim and undercarriage materials are found by
-  name; only the Sunburst's were looked at.
-
 - [ ] Terrain tint for **dirt and snow**, and on maps other than Gridmap v2.
   Only Gridmap mud has been checked.
 - [ ] Dirt fling artwork and **reverse-direction** flings in game (mock-checked only).
@@ -152,7 +164,7 @@ rally car on Vulkan; none has been measured.
 
 ## Tech debt
 
-- [ ] **No CI.** The 485-check harness and preflight only run locally
+- [ ] **No CI.** The 492-check harness and preflight only run locally
   (`python tools/package.py`). A GitHub Action with Lua 5.1 would guard `master`.
 - [ ] **`paint.lua` is near Lua's local limit.** About 3,500 lines and 163
   top-level locals; Lua 5.1 caps a function at 200. Split the scheduler, soil

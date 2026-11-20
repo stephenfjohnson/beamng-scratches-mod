@@ -208,7 +208,7 @@ bakes, backlog, composites) and sliders for every threshold and limit. See
   the mod logs an error.
 - [`tools/bench.py`](../tools/bench.py) runs scripted crash scenarios with
   per-frame timing and five-angle screenshots.
-- [`tools/sim/harness.lua`](../tools/sim/harness.lua) has **485 headless checks**
+- [`tools/sim/harness.lua`](../tools/sim/harness.lua) has **492 headless checks**
   against mocked engine objects. No game is needed.
 - [`tools/package.py`](../tools/package.py) builds the release ZIP behind a syntax,
   stray-global, harness and brush-sidecar preflight.

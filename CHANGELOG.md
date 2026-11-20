@@ -2,9 +2,11 @@
 
 ## Unreleased — underside, wheels, snow fling, ground transfer; README and docs split
 
-Driven live on Vulkan, BeamNG 0.40.6.0, on the Sunburst rally car only: Gridmap
-mud strip, a simulated snow drive (Gridmap has no snow) and the bench sideslide.
-Not measured for frame time and not run on D3D12.
+Driven live on Vulkan, BeamNG 0.40.6.0: Gridmap mud strip, a simulated snow
+drive (Gridmap has no snow), the bench sideslide and a new `bellyflop` scenario,
+mostly on the Sunburst rally car, with wheel binding checked on eleven other
+vehicles. Painter worst frame with all of it on: 5.4 ms (sideslide) and 5.8 ms
+(bellyflop). Not run on D3D12.
 
 <!-- NEW-FEATURES-START -->
 - **Snow fling.** Snow wheel deposits take the fling path with their own powder
@@ -26,6 +28,17 @@ Not measured for frame time and not run on D3D12.
   leave streaks on the road in the car's paint, then primer and metal as the
   scrape wears through; wheel-side scrapes leave dark marks. Up to 400 marks,
   fading after a few minutes. `scratches_paint.setGroundPaint(false)`.
+- **Wet mud tone.** Terrain-sampled mud is darkened and browned (`soilColor.wetTone`);
+  dry-ground colour was hard to see on bright paint.
+- Underside soil is projected under the sills, not at the floor pan: a car's
+  skin UV layout has no floor in it, so nothing showed there.
+- Fixed after a six-way code review of the above: wheel clones were all
+  reloaded on any change (13 to 16 ms frames; now one clone at a time, only the
+  ones that changed); a car replaced in place kept the previous car's wheel
+  materials; switching into a car rebuilt and repaired it; ground marks spent
+  the whole ring on the end of a slide (now one streak per 0.2 m cell, 1200
+  marks); wear ran to bare metal within a few frames; deep-soil sill bands
+  landed on the wrong side; sill height was fixed at a saloon's.
 <!-- NEW-FEATURES-END -->
 - README rewritten as a short, image-led front page for players (hero, tour,
   three-step install, plain-language caveats). The technical content moved,

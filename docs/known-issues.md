@@ -28,11 +28,13 @@ affect you:
   so exposed material is always a grey lighter than black paint.
 - **First mud contact hitch.** The first terrain-texture read for soil tint takes
   about 99 ms; later lookups are cached (~0.03 ms).
-- **Snow fling, dirty wheels, underside and ground paint are brand new.** Seen
-  working on one car (Sunburst, Vulkan). The painted floor pan under the car
-  stays clean; the mud underneath lands on the skid plates, suspension, exhaust
-  and mud flaps. Belly scrapes are untested in game. Ground marks are short
-  dashes and fade after a few minutes. See [TODO](../TODO.md#needs-live-verification).
+- **Snow fling, dirty wheels, underside and ground paint are brand new.** Driven
+  on Vulkan on a few cars. The painted floor pan under the car stays clean (the
+  game's skin layout has no floor in it); the mud underneath lands on the skid
+  plates, suspension, exhaust, mud flaps and under the sills. Belly scrapes are
+  counted but barely visible. A car you switch into, rather than spawn, keeps
+  clean wheels until you reload it. See
+  [TODO](../TODO.md#needs-live-verification).
 - **Marks don't persist.** Reset, vehicle switch, reload and editor use clear all
   cosmetic damage and soil.
 

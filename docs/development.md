@@ -79,7 +79,7 @@ Overrides: `BEAMNG_USER`, `BEAMNG_GAME`, `BEAMNG_MCP_PORT`, `BEAMNG_LEVEL`
 Scripted crashes for tuning, with the cost of every frame recorded:
 
 ```
-python tools/bench.py scenarios                    # baseline, roofdrop, sideslide, rollover, nosedive
+python tools/bench.py scenarios                    # baseline, roofdrop, sideslide, rollover, bellyflop, nosedive
 python tools/bench.py run sideslide
 python tools/bench.py run all --tag before
 python tools/bench.py run rollover --set paint.setProjectionBudget=3 --tag budget3
