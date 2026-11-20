@@ -176,6 +176,11 @@ local function discover(veh)
       end
     end
   end
+  -- The live game keeps listing the source name beside its bound clone, so a
+  -- key only counts as uncloned (worth a rebuild) when no clone of it is on
+  -- the meshes.
+  uncloned = 0
+  for key in pairs(keys) do if not cloned[key] then uncloned = uncloned + 1 end end
   local known = keysByVid[vid] or {}
   for key, role in pairs(keys) do known[key] = role end
   for key in pairs(cloned) do
