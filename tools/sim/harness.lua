@@ -636,6 +636,68 @@ check(counters.maxProjectsInFrame <= projBudget(), "soil respects shared project
 paint.clearStamps()
 check(paint.getSurfaceState().deposits == 0 and paint.getSurfaceState().wetness == 0,
   "clear resets surface state")
+
+-- Wheels and tyres: soil strength, quantised steps, side scrapes, wash, reset.
+do
+  local function wheels() return paint.getStats().wheels end
+  check(wheels().enabled and wheels().tyre == 0 and wheels().scrape == 0, "clear resets wheel soil and abrasion")
+  for i=1,5 do paint.ingestSurface(playerVid,{{"mud",100+i,0,0,0,0,1}},false,true) end
+  check(math.abs(wheels().tyre-0.2) < 1e-6 and wheels().rim > 0 and wheels().rim < wheels().tyre,
+    "tyres soil faster than rims")
+  check(wheels().steps.tyre == 2 and wheels().steps.rim == 1, "wheel soil is quantised to steps")
+  check(wheels().lastKind == "mud" and wheels().tintResolves <= 2, "wheel tint resolves lazily")
+  v.data.wheels = {[1]={node1=40,node2=41}}
+  local savedPos = obj.getNodePosition
+  obj.getNodePosition = function(_, id) return id == 40 and vec3(0.25,0,0.3) or vec3(0,0,0.3) end
+  local function wheelHit(normal, material)
+    _G.onNodeCollision(30,vec3(100,0,0.3),normal,vec3(0,0,0),0,vec3(0,0,0),6,0,300,0.01,material,METAL)
+  end
+  obj.simTime = obj.simTime + 1
+  wheelHit(vec3(0,0,1), ASPHALT); detect.updateGFX(1/60); runGE()
+  check(wheels().scrapes == 0, "an upright sliding wheel is not a side scrape")
+  wheelHit(vec3(1,0,0), 18); detect.updateGFX(1/60); runGE()
+  check(wheels().scrapes == 0, "soft ground does not abrade a wheel")
+  for _=1,10 do wheelHit(vec3(1,0,0), ASPHALT) end
+  detect.updateGFX(1/60)
+  local scrapeCalls = 0
+  for _, s in ipairs(queuedGE) do if s:find("ingestWheelScrape",1,true) then scrapeCalls = scrapeCalls + 1 end end
+  runGE()
+  check(scrapeCalls == 1 and wheels().scrapes == 1 and wheels().perWheel[1] == 1,
+    "wheel side scrapes are throttled per wheel and batched into one call")
+  obj.getNodePosition = savedPos
+  local scraped = wheels().scrape
+  check(scraped > 0, "side scrape raises rim abrasion")
+  paint.ingestWheelScrape(-1,{{100,0,0,1,0,0,1,6}})
+  paint.ingestWheelScrape(playerVid,{{100,0/0,0,1,0,0,1,6},"bogus",{1,2,3}})
+  check(wheels().scrape == scraped, "foreign and invalid wheel scrapes ignored")
+  local dirty = wheels().tyre
+  for _=1,4 do surfaceTick(true) end
+  check(wheels().tyre < dirty and wheels().scrape == scraped, "washing fades wheel soil but not abrasion")
+  paint.setWheelDirt(false)
+  paint.ingestSurface(playerVid,{{"mud",100,0,0,0,0,1}},false,true)
+  paint.ingestWheelScrape(playerVid,{{100,0,0,1,0,0,1,6}})
+  check(not wheels().enabled and wheels().tyre == 0 and wheels().scrape == 0, "setWheelDirt(false) switches wheels off")
+  paint.setWheelDirt(true)
+  paint.ingestWheelScrape(playerVid,{{100,0,0,1,0,0,1,6}})
+  paint.clearStamps()
+  check(wheels().scrape == 0 and wheels().tyre == 0, "reset clears wheel abrasion like body damage")
+  -- Material writes only happen when a quantised step changes.
+  local wa = dofile(ROOT .. "/lua/ge/extensions/scratches/wheelAdapter.lua")
+  wa._attachEntries(1, {})
+  local applies, resolves = wa.snapshot().applies, 0
+  wa.expose("dirt", function() resolves = resolves + 1; return {0.5,0.4,0.3} end); wa.update(0.5, 0)
+  check(wa.snapshot().applies == applies, "sub-step wheel soil does not touch materials")
+  for _=1,2 do wa.expose("dirt", function() resolves = resolves + 1; return {0.5,0.4,0.3} end) end
+  wa.update(0.5, 0)
+  check(wa.snapshot().applies == applies + 1, "a new wheel soil step updates materials once")
+  wa.update(0.5, 0); wa.update(0.5, 0)
+  check(wa.snapshot().applies == applies + 1 and resolves == 1, "unchanged wheel steps cost nothing")
+  check(wa.classify("tire_01j","/vehicles/common/tires/main.materials.json") == "tyre"
+    and wa.classify("wheel_26b","/vehicles/common/wheels/main.materials.json") == "rim"
+    and wa.classify("pickup_steeringwheel","") == nil and wa.classify("character_primary","") == nil,
+    "wheel material classification")
+  obj.inWater = function() return false end
+end
 soil(30,18); detect.setPaintEnabled(false); surfaceTick(false)
 check(paint.getSurfaceState().deposits == 0, "disable discards pending surface samples")
 detect.setPaintEnabled(true)
